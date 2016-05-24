@@ -11,7 +11,7 @@ from time import sleep
 import json
 import os
 from os.path import exists, join
-from os import mkdir, listdir, walk
+from os import mkdir, listdir, walk, unlink
 from Queue import Queue
 from threading import current_thread,Thread
 
@@ -27,6 +27,20 @@ from elasticsearch import Elasticsearch
 from elasticsearch.helpers import parallel_bulk
 from hashlib import md5
 
+"""
+find getty_entertainment/json/images|wc -l
+106434
+find getty_entertainment/json/images_not_found/|wc -l
+22
+
+
+azureuser@gentoo-6:/home/prod/dedupe$ find getty_archiv/json/images/|wc -l
+372581
+
+azureuser@gentoo-6:/home/prod/dedupe$ find getty_archiv/json/images_not_found/|wc -l
+58345
+
+"""
 
 def getty_scrape(INC_SIZE = 100,
                  NUM_WORKERS = 30,
@@ -36,7 +50,7 @@ def getty_scrape(INC_SIZE = 100,
     """
     
     if len(sys.argv) < 3:
-        print 'usage: python getty_scrape [archiv | entertainment | rf]'
+        print ('usage: python getty_scrape [archiv | entertainment | rf]')
         exit(-1)
     
     typ = sys.argv[2]
@@ -58,7 +72,7 @@ def getty_scrape(INC_SIZE = 100,
     
     ids = list(ids)
         
-    print 'DOING',len(ids)
+    print ('DOING',len(ids))
         
     shuffle(ids)
     
@@ -94,7 +108,7 @@ def getty_scrape(INC_SIZE = 100,
             try:
                 h, xh = qq.get(timeout=1)
             except:
-                print 'WORKER TIMEOUT',current_thread().name
+                print ('WORKER TIMEOUT',current_thread().name)
                 if all_done[0]:
                     return
                 else:
@@ -116,7 +130,7 @@ def getty_scrape(INC_SIZE = 100,
 
             good_i[0] += 1
 
-            print 'GOOD_i',good_i
+            print ('GOOD_i',good_i)
 
             if exists(fn):
                 continue
@@ -128,10 +142,15 @@ def getty_scrape(INC_SIZE = 100,
                              verify=False,
                              )
 
+            #Switched to loading whole file into RAM before writing:
+            
+            rr = ''
+            for chunk in r.iter_content(chunk_size=1024 * 64): 
+                if chunk: # filter out keep-alive new chunks
+                    rr += chunk
+            
             with open(fn, 'w') as f:
-                for chunk in r.iter_content(chunk_size=1024 * 64): 
-                    if chunk: # filter out keep-alive new chunks
-                        f.write(chunk)
+                f.write(rr)
 
             print ('WROTE',c,fn)
 
@@ -160,13 +179,14 @@ def getty_scrape(INC_SIZE = 100,
                 
                 fn = dd + 'images_not_found/' + ('/'.join(xid[:4])) + '/' + xid + '.json'
                 if exists(fn):
-                    xids.remove(xid)
-                    continue
+                    #xids.remove(xid)
+                    #continue
+                    unlink(fn)
 
         input_size = len(xids)
         
         if not xids:
-            print 'SKIPPING',c
+            print ('SKIPPING',c)
             continue
         
         if qq.qsize() > 500:
@@ -174,7 +194,7 @@ def getty_scrape(INC_SIZE = 100,
                 sleep(0.5)
                 continue
 
-        print 'DOING',c,len(xids)
+        print ('DOING',c,len(xids))
 
         while True:
 
@@ -200,7 +220,7 @@ def getty_scrape(INC_SIZE = 100,
         good += len(hh['images'])
         bad += len(hh['images_not_found'])
         
-        print 'GOT',c,'good:',good,'bad:',bad
+        print ('GOT',c,'good:',good,'bad:',bad)
         
         for h in hh['images']:
             
@@ -241,9 +261,9 @@ def getty_scrape(INC_SIZE = 100,
     
     for t in tt:
         t.join()
-        print 'JOINED'
+        print ('JOINED')
         
-    print 'DONE ALL'
+    print ('DONE ALL')
 
 
             
@@ -360,10 +380,10 @@ def getty_import(dd = 'getty/json/images/',
     print res['hits']['hits']
     
     for hit in res['hits']['hits']:
-
+        
         doc = hit['_source']['doc']
         
-        print 'HIT:',doc['_id'],doc['title'],'by',doc['artist']
+        print 'HIT:',doc['_id'],doc['title'],'by',doc['artist']        
         
         raw_input_enter()
 

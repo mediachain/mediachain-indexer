@@ -8,8 +8,23 @@ import json
 import fcntl, termios, struct
 import sys
 from time import time
-from os import system
+from os import system, walk
+from os.path import join
 
+
+def walk_files(dd, max_num = 0):
+    nn = 0
+    for dir_name, subdir_list, file_list in walk(dd):
+        for fn in file_list:
+            nn += 1
+            if max_num and (nn > max_num):
+                return
+            
+            fn = join(dir_name,
+                      fn,
+                      )
+
+            yield fn
 
 def group(seq, size):
     """

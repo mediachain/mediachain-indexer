@@ -5,13 +5,27 @@
 Prototype REST Indexer interface for search / dedupe.
 """
 
+from mc_generic import setup_main, pretty_print
+
 import json
 import tornado.ioloop
 import tornado.web
 from time import time
 from tornadoes import ESConnection
-from mc_generic import setup_main
 
+import tornado
+import tornado.options
+import tornado.web
+import tornado.template
+import tornado.gen
+import tornado.auth
+from tornado.web import RequestHandler
+from tornado.httpserver import HTTPServer
+from tornado.ioloop import IOLoop
+from tornado.options import define, options
+
+from os import mkdir,rename,unlink,listdir
+from os.path import exists,join,split,realpath,splitext,dirname
 
 class Application(tornado.web.Application):
     def __init__(self,
@@ -23,7 +37,7 @@ class Application(tornado.web.Application):
                     (r'/ping',handle_ping,),
                     (r'/(favicon.ico)', tornado.web.RedirectHandler,{'url':'/static/favicon.png?v=1','permanent':True}),
                     (r'/robots.txt', tornado.web.RedirectHandler,{'url':'/static/robots.txt','permanent':True}),
-                    (r'.*', handle_notfound,),
+                    #(r'.*', handle_notfound,),
                     ]
         
         settings = {'template_path':join(dirname(__file__), 'templates_mc'),
@@ -94,6 +108,25 @@ class BaseHandler(tornado.web.RequestHandler):
 
 INDEX_NAME = 'getty_test'
 DOC_TYPE = 'image'
+
+
+class handle_front(BaseHandler):
+    
+    @tornado.gen.coroutine
+    def get(self):
+        
+        #TODO
+        
+        self.write('FRONT_PAGE')
+        self.finish()
+
+class handle_ping(BaseHandler):
+    
+    @tornado.gen.coroutine
+    def post(self):
+        self.write('1')
+        self.finish()
+
 
 class handle_search(BaseHandler):
     
