@@ -6,7 +6,7 @@ Temporary experiments for scraper and importer testing.
 """
 
 
-from mc_generic import setup_main, group
+from mc_generic import setup_main, group, raw_input_enter, pretty_print
 from time import sleep
 import json
 import os
@@ -256,17 +256,17 @@ def getty_import(dd = 'getty/json/images/',
     """
     
     assert exists(dd),repr(dd)
-
-    def iter_json():
+    
+    def iter_json(max_num = 0):
         nn = 0
         for dir_name, subdir_list, file_list in walk(dd):
             
             for fn in file_list:
                 nn += 1
 
-                if nn > 1:
+                if max_num and (nn + 1 >= max_num):
                     print ('ENDING EARLY...')
-                    break
+                    return
                 
                 fn = join(dir_name,
                           fn,
@@ -333,7 +333,7 @@ def getty_import(dd = 'getty/json/images/',
     print('INSERTING...')
     
     for is_success,res in parallel_bulk(es,
-                                        iter_json(),
+                                        iter_json(max_num = 100),
                                         thread_count = 1,
                                         chunk_size = 500,
                                         max_chunk_bytes = 100 * 1024 * 1024, #100MB
@@ -351,15 +351,19 @@ def getty_import(dd = 'getty/json/images/',
                     body = {"query": {'match_all': {}
                                       },
                             'from':0,
-                            'size':10,                           
+                            'size':1,                           
                             },
                     )
     
     print('Results:', res['hits']['total'])
+
+    print res['hits']['hits']
     
     for hit in res['hits']['hits']:
+
+        doc = hit['_source']['doc']
         
-        print 'HIT:',hit['_id'],hit['_source']['title'],'by',hit['_source']['artist'],hit
+        print 'HIT:',doc['_id'],doc['title'],'by',doc['artist']
         
         raw_input_enter()
 

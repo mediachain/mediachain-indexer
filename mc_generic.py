@@ -8,6 +8,7 @@ import json
 import fcntl, termios, struct
 import sys
 from time import time
+from os import system
 
 
 def group(seq, size):
