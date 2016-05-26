@@ -13,6 +13,10 @@ from os.path import join
 
 
 def walk_files(dd, max_num = 0):
+    """
+    Simpler walking of all files under a directory.
+    """
+    
     nn = 0
     for dir_name, subdir_list, file_list in walk(dd):
         for fn in file_list:
@@ -34,6 +38,7 @@ def group(seq, size):
     lenseq=len(seq)
     if not hasattr(seq, 'next'):
         seq = iter(seq)
+    
     while True:
         if lenseq > size:
             yield [seq.next() for i in xrange(size)]
@@ -59,19 +64,21 @@ def pretty_print(val,
     except:
         raise
         r = repr(val)
-
+    
     if max_indent_depth is False:
         return r
-
+    
     zz = ' ' * (indent * (max_indent_depth))
-
+    
     xx = ' ' * (indent * (max_indent_depth + 1))
     
     rrr = []
     rr = []
     for line in r.splitlines():
         
-        if line.startswith(xx) or (line.startswith(zz) and line.endswith('[')) or (line.startswith(zz) and line.endswith('{')):
+        if line.startswith(xx) or (line.startswith(zz) and line.endswith('[')) \
+           or (line.startswith(zz) and line.endswith('{')):
+            
             if rr:
                 line = line.strip()
             rr.append(line)            
@@ -84,7 +91,23 @@ def pretty_print(val,
 
     return '\n'.join(rrr)
 
+def intget(x,
+           default = False,
+           ):
+    try:
+        return int(x)
+    except:
+        return default
 
+def floatget(x,
+             default = False,
+             ):
+    try:
+        return float(x)
+    except:
+        return default
+
+    
 def raw_input_enter():
     print 'PRESS ENTER...'
     raw_input()

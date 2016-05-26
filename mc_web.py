@@ -1,11 +1,36 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+__doc__ = \
 """
 Prototype REST Indexer interface for search / dedupe.
+
+The following apply to all REST API functions in this package:
+    
+    Media Identifiers:
+
+       Media works can be identified by strings in any of the following formats:
+       - IPFS ID string, starting with 'ipfs://'
+       - Base64-encoded PNG or JPG file, starting with 'base64://'
+
+    Input type:
+       Body of POST is JSON-encoded string. Keys and values are as specified below.
+    
+    Returns on success:
+       results:       List of results.
+       next_page:     Pagination link.
+       prev_page:     Pagination link.
+    
+    Returns on error:
+       error:         Error code.
+       error_message: Error message.
+
+
+TODO:
+    - Expose additional admin functionality, e.g. start dedupe batch jobs over REST?
+
 """
 
-from mc_generic import setup_main, pretty_print
 
 import json
 import tornado.ioloop
@@ -27,16 +52,21 @@ from tornado.options import define, options
 from os import mkdir,rename,unlink,listdir
 from os.path import exists,join,split,realpath,splitext,dirname
 
+from mc_generic import setup_main, pretty_print
+import mc_dedupe
+
+
 class Application(tornado.web.Application):
     def __init__(self,
                  ):
         
         handlers = [(r'/',handle_front,),
-                    (r'/search',handle_search,),
-                    (r'/distance',handle_distance,),
                     (r'/ping',handle_ping,),
-                    (r'/(favicon.ico)', tornado.web.RedirectHandler,{'url':'/static/favicon.png?v=1','permanent':True}),
-                    (r'/robots.txt', tornado.web.RedirectHandler,{'url':'/static/robots.txt','permanent':True}),
+                    (r'/search',handle_search,),
+                    (r'/dupe_lookup',handle_dupe_lookup,),
+                    (r'/score',handle_score,),
+                    (r'/record_dupes',handle_record_dupes,),
+                    (r'/record_relevance',handle_record_relevance,),
                     #(r'.*', handle_notfound,),
                     ]
         
@@ -44,7 +74,12 @@ class Application(tornado.web.Application):
                     'static_path':join(dirname(__file__), 'static_mc'),
                     'xsrf_cookies':False,
                     }
+        
         tornado.web.Application.__init__(self, handlers, **settings)
+        
+        self.INDEX_NAME = 'getty_test'
+        self.DOC_TYPE = 'image'
+
         
 
 class BaseHandler(tornado.web.RequestHandler):
@@ -73,7 +108,11 @@ class BaseHandler(tornado.web.RequestHandler):
         return self.application.es
     
     @tornado.gen.engine
-    def render_template(self,template_name, kwargs):  
+    def render_template(self,template_name, kwargs):
+        """
+        Central point to customize what variables get passed to templates.        
+        """
+        
         t0 = time()
         
         if 'self' in kwargs:
@@ -90,6 +129,10 @@ class BaseHandler(tornado.web.RequestHandler):
         self.finish()
     
     def render_template_s(self,template_s,kwargs):
+        """
+        Render template from string.
+        """
+        
         t=Template(template_s)
         r=t.generate(**kwargs)
         self.write(r)
@@ -98,6 +141,9 @@ class BaseHandler(tornado.web.RequestHandler):
     def write_json(self,
                    hh,
                    ):
+        """
+        Central point where we can customize the JSON output.
+        """
         self.set_header("Content-Type", "application/json")
         self.write(json.dumps(hh,
                               #sort_keys = True,
@@ -105,9 +151,18 @@ class BaseHandler(tornado.web.RequestHandler):
                               ) + '\n')
         self.finish()
 
-
-INDEX_NAME = 'getty_test'
-DOC_TYPE = 'image'
+    def write_json_pretty(self,
+                          hh,
+                          indent = 4,
+                          max_indent_depth = False,
+                          ):
+        
+        self.set_header("Content-Type", "text/plain")
+        self.write(pretty_print(hh,
+                                indent = indent,
+                                max_indent_depth = max_indent_depth,
+                                ).replace('\n','\r\n'))
+        self.finish()
 
 
 class handle_front(BaseHandler):
@@ -115,16 +170,17 @@ class handle_front(BaseHandler):
     @tornado.gen.coroutine
     def get(self):
         
-        #TODO
+        #TODO - 
         
         self.write('FRONT_PAGE')
         self.finish()
+
 
 class handle_ping(BaseHandler):
     
     @tornado.gen.coroutine
     def post(self):
-        self.write('1')
+        self.write("{'results':['pong']}")
         self.finish()
 
 
@@ -136,34 +192,26 @@ class handle_search(BaseHandler):
     
     @tornado.gen.coroutine
     def post(self):
-        """Search for images based on text query, media content, or a combination of both.
-           Parameters are encoded as JSON and sent as body of POST request.
+        """
+        Search for images based on text query, a media work, or a combination of both.
+        
+        Args, as JSON-encoded POST body:
+           q:             Query text.
+           q_id:          Query media. See `Media Identifiers`.
            
-           JSON-encoded      body arguments:
-              q_text:        text query for text-based query.
-              q_id:          IFPS media work address for content-based search.
-              q_base64:      base64-encoded media object.
-              q_facets:      TODO - dictionary for querying against specific fields.
-              limit:         maximum number of results to return.
-              inline_images: whether to include base64-encoded thumbnails of images directly in the results.
-           
-           Returns on success:
-              data:          list of found media objects.
-              next_page:     pagination link.
-
-           Returns on error:
-              error:         error code.
-              error_message: error message.
-
-           Example request body:
-              {'q_text':'girl holding a balloon', 'limit':5}  
-
-           Example response:
-              {'data': [{'addr':'ifps://1234...',
-                         'title':'An Image'},
-                       ],
-               'next_page': null,
-              }
+           limit:         Maximum number of results to return.
+           inline_images: Whether to include base64-encoded thumbnails of images directly in the results.
+        
+        Example:
+           {'q_text':'girl holding a balloon', 'limit':5}  
+        
+        Example response:
+           {'data': [{'addr':'ifps://1234...',
+                      'title':'An Image',
+                     },
+                    ],
+            'next_page': null,
+           }
         """
         
         d = self.request.body
@@ -171,41 +219,53 @@ class handle_search(BaseHandler):
         try:
             data = json.loads(d)
         except:
-            self.set_status('503')
-            self.write_json({'error':'PARSE_ERROR',
+            self.set_status(500)
+            self.write_json({'error':'JSON_PARSE_ERROR',
                              'error_message':'Could not parse JSON request.',
                             })
             return
 
-        q_text = data.get('q_text','')
+        q_text = data.get('q','') or self.get_argument('q','')
+        
+        limit = intget(data.get('q') or self.get_argument('limit',False), 10)
         
         if not q_text:
-            self.set_status('503')
+            self.set_status(500)
             self.write_json({'error':'MISSING_QUERY',
-                             'error_message':'`q_text` is only query type supported for now.',
+                             'error_message':'`q` is required.',
                              })
             return
         
         query = {"query": {"multi_match": {"query":    q_text,
-                                           "fields": [ "t_*" ],
+                                           "fields": [ "*" ],
                                            "type":     "cross_fields"
                                            },
                            },
                  'from':0,
-                 'size':10,
+                 'size':limit,
                  }
         
-        response = yield self.es.search(index = INDEX_NAME,
-                                        type = DOC_TYPE,
-                                        source = query,
-                                        )
-
-        hh = json.loads(response.body)
+        #query = {"query": {'match_all': {}},'from':0,'size':1,}
         
-        self.write_json(hh['hits']['hits'])
+        rr = yield self.es.search(index = self.application.INDEX_NAME,
+                                  type = self.application.DOC_TYPE,
+                                  source = query,
+                                  )
+    
+        hh = json.loads(rr.body)
+        
+        print pretty_print(hh)
+        
+        rr = {'results':hh['hits']['hits'],
+              'next_page':None,
+              'prev_page':None,
+              }
+        
+        self.write_json_pretty(rr)
+
         
 
-class handle_distance(BaseHandler):
+class handle_dupe_lookup(BaseHandler):
     
     #disable XSRF checking for this URL:
     def check_xsrf_cookie(self): 
@@ -213,24 +273,126 @@ class handle_distance(BaseHandler):
     
     @tornado.gen.coroutine
     def post(self):
-        """Metric distance between all pairs of media objects, in the embedded space.
+        """
+        Find all known duplicates of a media work.
         
-           JSON-Encoded POST Body:
-               q_ids:     comma-separated list of IFPS media content addresses.
-               q_base64s: comman-separated list of base64-encoded media objects.
+        Args:
+            q_media:     query media.
+            
+            force_dedupe:  If `True`, re-run dedupe calculations for all potential candidate duplicates of query media.
+                           NOTE: potentially inefficient. More efficient to pre-calculate for all known images in
+                           background.
+            incremental:   Attempt to dedupe never-before-seen media file versus pre-ingested media files.
+
+        Returns: 
+             See `mc_dedupe.dedupe_lookup_async`.            
+        """
+
+        d = self.request.body
+        
+        try:
+            data = json.loads(d)
+        except:
+            self.set_status(500)
+            self.write_json({'error':'JSON_PARSE_ERROR',
+                             'error_message':'Could not parse JSON request.',
+                            })
+            return
+        
+        rr = yield mc_dedupe.dedupe_lookup_async(q_media = d['q_media'],
+                                                 index_name = self.application.INDEX_NAME,
+                                                 doc_type = self.application.DOC_TYPE,
+                                                 duplicate_mode = 'baseline',
+                                                 es = self.es,
+                                                 )
+        
+        return json.dumps(rr)
+
+
+class handle_score(BaseHandler):
+    
+    #disable XSRF checking for this URL:
+    def check_xsrf_cookie(self): 
+        pass
+    
+    @tornado.gen.coroutine
+    def post(self):
+        """
+        Admin tool for peering deeper into the similarity / relevance measurements that are the basis of
+        dedupe / search calculations. Useful for e.g. getting a feel for why an image didn't show up in
+        the top 100 results for a query, or why a pair of images weren't marked as duplicates.
+        
+        Takes a "query" and list of "candidate" media, and does 1-vs-all score calculations for
+        all "candidate" media versus the "query".
+        
+        Args, as JSON-encoded POST body:
+            q_text:    query text.
+            q_id:      query media. See `Media Identifiers`.
+            
+            c_ids:     list of candidate media. See `Media Identifiers`.
+            
+            mode:      Type of similarity to measure. Should be one of:
+                       'search' - Search relevance score.
+                       'dupe'   - Duplicate probability.
+            
+            level:     Level of the model at which to measure the similarity.
+                       'distance' - Distance in the embedding space(s) (0.0 to 1.0).
+                                     May return multiple distances.
+                       'score'     - Final relevance score for "search" mode (1.0 to 5.0),
+                                     or final dupe probability score for "dupe" mode (0.0 to 1.0).
+        
+        Examples:
+            in:        {'mode':'search', 'level':'distance', 'q_text':'girl with baloon', 'c_ids':['ifps://123...']}
+            out:       {'results':[{'id':'ifps://123...', 'score':0.044}]}
+
+            in:        {'mode':'dupe', 'level':'score', 'q_id':'ifps://123...', 'c_ids':['ifps://123...']}
+            out:       {'results':[{'id':'ifps://123...', 'score':0.321}]}
+
         """
         
         q_text = self.get_argument('q_text','')
         
         query = {"query": {"match_all": {}}}
         
-        response = yield self.es.search(index = INDEX_NAME,
-                                        type = DOC_TYPE,
-                                        source = query,
-                                        )
+        rr = yield self.es.search(index = self.application.INDEX_NAME,
+                                  type = self.application.DOC_TYPE,
+                                  source = query,
+                                  )
         
         self.content_type = 'application/json'
-        self.write(json.loads(response.body))
+        self.write_json(json.loads(rr.body))
+
+
+
+class handle_record_dupes(BaseHandler):
+    
+    #disable XSRF checking for this URL:
+    def check_xsrf_cookie(self): 
+        pass
+    
+    @tornado.gen.coroutine
+    def post(self):
+        """
+        Record dupe / non-dupes. May factor this out later.
+        """
+        self.set_status(500)
+        self.write('NOT_IMPLEMENTED')
+        self.finish()
+
+
+class handle_record_relevance(BaseHandler):
+    
+    #disable XSRF checking for this URL:
+    def check_xsrf_cookie(self): 
+        pass
+    
+    @tornado.gen.coroutine
+    def post(self):
+        """        
+        Record relevance feedback. May factor this out later.
+        """
+        self.set_status(500)
+        self.write('NOT_IMPLEMENTED')
         self.finish()
 
 
