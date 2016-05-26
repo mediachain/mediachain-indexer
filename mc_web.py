@@ -306,7 +306,7 @@ class handle_dupe_lookup(BaseHandler):
                                                  es = self.es,
                                                  )
         
-        return json.dumps(rr)
+        self.write_json(json.dumps(rr))
 
 
 class handle_score(BaseHandler):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-__doc__ =
+__doc__ = \
 """
 Functions for ingestion of media files into Indexer.
 
@@ -45,23 +45,33 @@ def getty_create_dumps(INC_SIZE = 100,
     """
     
     if len(sys.argv) < 3:
-        print ('usage: python getty_scrape [archiv | entertainment | rf]')
+        print ('NOTE: set GETTY_KEY to Getty API key.')
+        print ('Usage: python getty_scrape [archiv | entertainment | rf | small]')
         exit(-1)
     
     typ = sys.argv[2]
 
-    assert typ in ['archiv', 'entertainment', 'rf']           
+    assert typ in ['archiv', 'entertainment', 'rf', 'small']
     
     ids = set()
+    
     if typ == 'archiv':
         set_archiv = [x.strip() for x in open('Archive IDs.txt').read().split(',')]
         ids.update(set_archiv)
+        
     elif typ == 'entertainment':
         set_entertainment = [x.strip() for x in open('Entertainment IDs.txt').read().split(',')]
         ids.update(set_entertainment)
+        
     elif typ == 'rf':
         set_rf = [x.strip() for x in open('Royalty-free Creative IDs.txt').readlines()]
         ids.update(set_rf)
+        
+    elif typ == 'small':
+        #small 100-sample portion of `entertainment` dataset.
+        set_entertainment = [x.strip() for x in open('Entertainment IDs.txt').read().split(',')[:100]]
+        ids.update(set_entertainment)
+        
     else:
         assert False,typ
     
@@ -262,6 +272,13 @@ def getty_create_dumps(INC_SIZE = 100,
     print ('DONE ALL')
 
 
+def resize_image(max_area = 128 * 128,
+                 ):
+    """
+    Resize image to at most
+    """
+    pass
+
             
 def ingest_getty_dumps(dd = 'getty/json/images/',
                        index_name = 'getty_test',
@@ -294,7 +311,7 @@ def ingest_getty_dumps(dd = 'getty/json/images/',
 
                 with open(fn) as f:
                     h = json.load(f)
-                    
+                
                 hh = {'_id':'getty_' + h['id'],
                       'title':h['title'],
                       'artist':h['artist'],
@@ -325,7 +342,7 @@ def ingest_getty_dumps(dd = 'getty/json/images/',
     
     print ('CONNECTING...')
     es = Elasticsearch()
-
+    
     if es.indices.exists(index_name):
         print ('DELETE_INDEX...', index_name)
         es.indices.delete(index = index_name)
