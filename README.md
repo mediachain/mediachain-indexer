@@ -1,7 +1,7 @@
 
 Search & Dedupe for Mediachain
 
-                |
+Package         | Purpose
 ----------------|----------------
 mc_ingest.py    | Ingest media from data dumps or Mediachain API.
 mc_dedupe.py    | Generate deduplication clustering. Deduplication lookup API.
