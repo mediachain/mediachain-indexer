@@ -272,41 +272,45 @@ class handle_dupe_lookup(BaseHandler):
         pass
     
     @tornado.gen.coroutine
-    def post(self):
+    def get(self):
         """
         Find all known duplicates of a media work.
         
         Args:
-            q_media:     query media.
-            
-            force_dedupe:  If `True`, re-run dedupe calculations for all potential candidate duplicates of query media.
-                           NOTE: potentially inefficient. More efficient to pre-calculate for all known images in
-                           background.
-            incremental:   Attempt to dedupe never-before-seen media file versus pre-ingested media files.
+            q_media:         Media file to query for..
+            duplicate_mode:  Semantic duplicate type or matching mode. For now, defaults to 'baseline'.
+             
+            incremental:     Attempt to dedupe never-before-seen media file versus all pre-ingested media files.
+                             NOTE: potentially inefficient. More efficient to pre-calculate for all known images in
+                             background.
 
         Returns: 
              See `mc_dedupe.dedupe_lookup_async`.            
         """
 
-        d = self.request.body
+        if False:
+            d = self.request.body
+
+            try:
+                data = json.loads(d)
+            except:
+                self.set_status(500)
+                self.write_json({'error':'JSON_PARSE_ERROR',
+                                 'error_message':'Could not parse JSON request.',
+                                })
+                return
+
+        data = {'q_media':'getty_531746790'}
         
-        try:
-            data = json.loads(d)
-        except:
-            self.set_status(500)
-            self.write_json({'error':'JSON_PARSE_ERROR',
-                             'error_message':'Could not parse JSON request.',
-                            })
-            return
-        
-        rr = yield mc_dedupe.dedupe_lookup_async(q_media = d['q_media'],
-                                                 index_name = self.application.INDEX_NAME,
-                                                 doc_type = self.application.DOC_TYPE,
+        rr = yield mc_dedupe.dedupe_lookup_async(media_id = data['q_media'],
                                                  duplicate_mode = 'baseline',
                                                  es = self.es,
                                                  )
         
-        self.write_json(json.dumps(rr))
+        self.write_json({'results':rr,
+                         'next_page':None,
+                         'prev_page':None,
+                         })
 
 
 class handle_score(BaseHandler):

@@ -36,6 +36,15 @@ from elasticsearch import Elasticsearch
 from elasticsearch.helpers import parallel_bulk
 from hashlib import md5
 
+from PIL import Image
+from cStringIO import StringIO
+
+import binascii
+import base64
+
+import numpy as np
+
+import imagehash
 
 def getty_create_dumps(INC_SIZE = 100,
                        NUM_WORKERS = 30,
@@ -271,16 +280,30 @@ def getty_create_dumps(INC_SIZE = 100,
         
     print ('DONE ALL')
 
-
-def resize_image(max_area = 128 * 128,
-                 ):
+    
+data_pat = 'data:image/jpeg;base64,'
+    
+def shrink_and_encode_image(s):
     """
-    Resize image to at most
-    """
-    pass
+    Resize image to small size & base64 encode it.
+    
+    For now, we assume input is a Getty `thumb` images, which is small enough that we can skip resizing.
+    """    
+    return data_pat + base64.urlsafe_b64encode(s)
 
-            
-def ingest_getty_dumps(dd = 'getty/json/images/',
+def decode_image(s):
+    assert s.startswith(data_pat),('BAD_DATA_URL',s[:15])
+    
+    return base64.urlsafe_b64decode(s[len(data_pat):])
+
+
+def es_connect():
+    print ('CONNECTING...')
+    es = Elasticsearch()
+    print ('CONNECTED')
+    return es
+
+def ingest_getty_dumps(dd = 'getty_small/json/images/',
                        index_name = 'getty_test',
                        doc_type = 'image',
                        ):
@@ -291,6 +314,8 @@ def ingest_getty_dumps(dd = 'getty/json/images/',
     
     Mostly for testing purposes.
     """
+
+    dd3 = dd.replace('/json/images/','/downloads/')
     
     assert exists(dd),repr(dd)
     
@@ -311,7 +336,22 @@ def ingest_getty_dumps(dd = 'getty/json/images/',
 
                 with open(fn) as f:
                     h = json.load(f)
+
+                fn = dd3 + 'thumb/' + ('/'.join(h['id'][:4])) + '/' + h['id'] + '.jpg'
+
+                if not exists(fn):
+                    print ('NOT_FOUND',fn)
+                    nn -= 1
+                    continue
                 
+                with open(fn) as f:
+                    img_data = f.read()
+                
+                img = Image.open(StringIO(img_data))
+                    
+                hsh = binascii.b2a_hex(np.packbits(imagehash.dhash(img, hash_size = 16).hash).tobytes())
+        
+
                 hh = {'_id':'getty_' + h['id'],
                       'title':h['title'],
                       'artist':h['artist'],
@@ -319,14 +359,16 @@ def ingest_getty_dumps(dd = 'getty/json/images/',
                       'caption':h['caption'],
                       'editorial_source':h['editorial_source'].get('name',None),
                       'keywords':' '.join([x['text'] for x in h['keywords'] if 'text' in x]),
-                      'date_created':date_parser.parse(h['date_created'])
+                      'date_created':date_parser.parse(h['date_created']),
+                      'image_thumb':shrink_and_encode_image(img_data),
+                      'dedupe_hsh':hsh,
                       #'artist_id':[md5(x['uri']).hexdigest() for x in h['links'] if x['rel'] == 'artist'][0],                
                       #'dims':h['max_dimensions']
                       #'dims_thumb':[{'width':x['width'],'height':x['height']}
                       #               for x in h['display_sizes']
                       #               if x['name'] == 'thumb'][0],
-                      }
-
+                      }                
+                
                 rr = {'_op_type': 'index',
                       '_index': index_name,
                       '_type': doc_type,
@@ -340,8 +382,7 @@ def ingest_getty_dumps(dd = 'getty/json/images/',
         
         print ('DONE_YIELD',nn)
     
-    print ('CONNECTING...')
-    es = Elasticsearch()
+    es = es_connect()
     
     if es.indices.exists(index_name):
         print ('DELETE_INDEX...', index_name)
@@ -360,6 +401,7 @@ def ingest_getty_dumps(dd = 'getty/json/images/',
                                                                      'editorial_source':{'type':'string'},
                                                                      'keywords':{'type':'string', 'index':'not_analyzed'},
                                                                      'created_date':{'type':'date'},
+                                                                     'dedupe_hsh':{'type':'string'},
                                                                      },
                                                       },
                                            },
@@ -370,6 +412,8 @@ def ingest_getty_dumps(dd = 'getty/json/images/',
     print('CREATED',index_name)
     
     print('INSERTING...')
+
+    list(iter_json(max_num = 100))
     
     for is_success,res in parallel_bulk(es,
                                         iter_json(max_num = 100),
@@ -405,6 +449,8 @@ def ingest_getty_dumps(dd = 'getty/json/images/',
         doc = hit['_source']['doc']
         
         print ('HIT:',doc['_id'],doc['title'],'by',doc['artist'])
+
+        print doc.keys()
         
         raw_input_enter()
 
