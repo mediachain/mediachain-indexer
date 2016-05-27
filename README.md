@@ -1,8 +1,9 @@
 
-Search & Dedupe for Mediachain
+#Search & Dedupe for Mediachain
 
-Package         | Purpose
+--              | --
 ----------------|----------------
+mc_config.py    | Configuration, except for authentication.
 mc_ingest.py    | Ingest media from data dumps or Mediachain API.
 mc_dedupe.py    | Generate deduplication clustering. Deduplication lookup API.
 mc_web.py       | REST search & dedupe API.

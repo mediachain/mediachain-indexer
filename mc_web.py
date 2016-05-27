@@ -54,6 +54,7 @@ from os.path import exists,join,split,realpath,splitext,dirname
 
 from mc_generic import setup_main, pretty_print
 import mc_dedupe
+import mc_config
 
 
 class Application(tornado.web.Application):
@@ -77,10 +78,9 @@ class Application(tornado.web.Application):
         
         tornado.web.Application.__init__(self, handlers, **settings)
         
-        self.INDEX_NAME = 'getty_test'
-        self.DOC_TYPE = 'image'
+        self.INDEX_NAME = mc_config.INDEX_NAME
+        self.DOC_TYPE = mc_config.DOC_TYPE
 
-        
 
 class BaseHandler(tornado.web.RequestHandler):
     

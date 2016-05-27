@@ -50,6 +50,8 @@ import imagehash
 import binascii
 import numpy as np
 
+import mc_config
+
 @tornado.gen.coroutine
 def dedupe_lookup_async(media_id,
                         duplicate_mode = 'baseline',
@@ -126,8 +128,8 @@ def dedupe_lookup_async(media_id,
         
         #Lookup cluster ID for media ID:    
         
-        rr = yield es.search(index = 'clustering_baseline_mid_to_cid',
-                             type = 'cluster_nums',
+        rr = yield es.search(index = mc_config.INDEX_NAME_MID_TO_CID,
+                             type = mc_config.DOC_TYPE_MID_TO_CID,
                              source = {"query" : {"constant_score":{"filter":{"term":{ "_id" : media_id}}}},
                                        'size':1,
                                        },
@@ -143,8 +145,8 @@ def dedupe_lookup_async(media_id,
             hit = rr['hits']['hits'][0]
             hh = hit['_source']['doc']
             
-            rr = yield es.multi_search(index = 'clustering_baseline_cid_to_cluster',
-                                       #type = 'clusters',
+            rr = yield es.multi_search(index = mc_config.INDEX_NAME_CID_TO_CLUSTER,
+                                       type = mc_config.DOC_TYPE_CID_TO_CLUSTER,
                                        source = {"query" : {"constant_score":{"filter":{"term":{ "_id" : hh['c_id']}}}}},
                                        )
 
@@ -156,9 +158,6 @@ def dedupe_lookup_async(media_id,
 
             raise tornado.gen.Return(hh['cluster'])
 
-
-INDEX_NAME = 'getty_test'
-DOC_TYPE = 'image'
 
 
 def dedupe_background(duplicate_mode = 'baseline',
@@ -203,8 +202,8 @@ def dedupe_background(duplicate_mode = 'baseline',
     es = es_connect()    
     
     res = scan(client = es,
-               index = INDEX_NAME,
-               doc_type = DOC_TYPE,
+               index = mc_config.INDEX_NAME,
+               doc_type = mc_config.DOC_TYPE,
                scroll = '5m', #TODO - hard coded.
                query = {"query": {'match_all': {}
                                  },
@@ -236,8 +235,8 @@ def dedupe_background(duplicate_mode = 'baseline',
             hash_to_ids[hsh].append(hh['_id'])
         
         rr.append({'_op_type': 'update',
-                   '_index': INDEX_NAME,
-                   '_type': DOC_TYPE,
+                   '_index': mc_config.INDEX_NAME,
+                   '_type': mc_config.DOC_TYPE,
                    '_id': hh['_id'],
                    'body': {'doc':{'dedupe_hsh': hsh}},
                    #'body':{
@@ -256,8 +255,8 @@ def dedupe_background(duplicate_mode = 'baseline',
     if rr:
         do_commit(rr)
 
-    print ('REFRESHING', INDEX_NAME)
-    es.indices.refresh(index = INDEX_NAME)
+    print ('REFRESHING', mc_config.INDEX_NAME)
+    es.indices.refresh(index = mc_config.INDEX_NAME)
     print ('REFRESHED')
 
     if False:
@@ -271,16 +270,16 @@ def dedupe_background(duplicate_mode = 'baseline',
             #Media ID -> Cluster ID:
             for mid in cluster:
                 rr.append({'_op_type': 'insert',
-                           '_index': 'clustering_baseline_mid_to_cid',
-                           '_type': 'cluster_nums',
+                           '_index': mc_config.INDEX_NAME_MID_TO_CID,
+                           '_type': mc_config.DOC_TYPE_MID_TO_CID,
                            '_id': mid,
                            'doc': {'c_id': cn},
                            })
 
             #Cluster ID -> Cluster:
             rr.append({'_op_type': 'insert',
-                       '_index': 'clustering_baseline_cid_to_cluster',
-                       '_type': 'clusters',
+                       '_index': mc_config.INDEX_NAME_CID_TO_CLUSTER,
+                       '_type': mc_config.DOC_TYPE_CID_TO_CLUSTER,
                        '_id': c_id,
                        'doc': {'cluster': cluster},
                        })
