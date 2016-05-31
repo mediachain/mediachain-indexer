@@ -206,15 +206,16 @@ class handle_search(BaseHandler):
             List of image IDs, possibly with relevancy scores.
         
         Example:
-           {'q_text':'girl holding a balloon', 'limit':5}  
-        
-        Example response:
-           {'data': [{'addr':'ifps://1234...',
-                      'title':'An Image',
-                     },
-                    ],
-            'next_page': null,
-           }
+           in:
+               curl "http://127.0.0.1:23456/search" -d '{"q_text":"girl holding a balloon", "limit":5}'
+
+           out:
+               {'data': [{'addr':'ifps://1234...',
+                          'title':'An Image',
+                         },
+                        ],
+                'next_page': null,
+               }
         """
         
         d = self.request.body
@@ -275,38 +276,44 @@ class handle_dupe_lookup(BaseHandler):
         pass
     
     @tornado.gen.coroutine
-    def get(self):
+    def post(self):
         """
         Find all known duplicates of a media work.
         
         Args:
-            q_media:         Media file to query for..
-            duplicate_mode:  Semantic duplicate type or matching mode. For now, defaults to 'baseline'.
-             
-            incremental:     Attempt to dedupe never-before-seen media file versus all pre-ingested media files.
-                             NOTE: potentially inefficient. More efficient to pre-calculate for all known images in
-                             background.
-
+            q_media:          Media file to query for..
+            duplicate_mode:   Semantic duplicate type or matching mode. For now, defaults to 'baseline'.
+            include_self:     Include ID of query document in results.
+            return_full_docs: Return entire indexed docs, instead of just IDs.
+            incremental:      Attempt to dedupe never-before-seen media file versus all pre-ingested media files.
+                              NOTE: potentially inefficient. More efficient to pre-calculate for all known images in
+                              background.
+        
         Returns: 
-             See `mc_dedupe.dedupe_lookup_async`.            
+             See `mc_dedupe.dedupe_lookup_async`.       
+
+        Example:
+             in: 
+                 curl "http://127.0.0.1:23456/dupe_lookup" -d '{"q_media":"getty_531746790"}'
+             out:
+                 {"next_page": null, "results": ["getty_9283423", "getty_2374230"], "prev_page": null}
         """
 
-        if False:
-            d = self.request.body
-
-            try:
-                data = json.loads(d)
-            except:
-                self.set_status(500)
-                self.write_json({'error':'JSON_PARSE_ERROR',
-                                 'error_message':'Could not parse JSON request.',
-                                })
-                return
-
-        data = {'q_media':'getty_531746790'}
+        d = self.request.body
+        
+        try:
+            data = json.loads(d)
+        except:
+            self.set_status(500)
+            self.write_json({'error':'JSON_PARSE_ERROR',
+                             'error_message':'Could not parse JSON request.',
+                            })
+            return
         
         rr = yield mc_dedupe.dedupe_lookup_async(media_id = data['q_media'],
-                                                 duplicate_mode = 'baseline',
+                                                 duplicate_mode = data.get('duplicate_mode', 'baseline'),
+                                                 return_full_docs = data.get('return_full_docs'),
+                                                 include_self = data.get('include_self'),
                                                  es = self.es,
                                                  )
         
@@ -352,13 +359,16 @@ class handle_score(BaseHandler):
         Returns:
             List of similarities or duplicate probabilities, one per similarity or duplicate type.
 
-        Examples:
-            in:        {'mode':'search', 'level':'distance', 'q_text':'girl with baloon', 'c_ids':['ifps://123...']}
-            out:       {'results':[{'id':'ifps://123...', 'score':0.044}]}
+        Example:
+            in: 
+                curl "http://127.0.0.1:23456/score" -d '{"mode":"search", "level":"distance", "q_text":"girl with baloon", "c_ids":["ifps://123..."]}'
+            out:
+                {'results':[{'id':'ifps://123...', 'score':0.044}]}
 
-            in:        {'mode':'dupe', 'level':'score', 'q_id':'ifps://123...', 'c_ids':['ifps://123...']}
-            out:       {'results':[{'id':'ifps://123...', 'score':0.321}]}
-
+            in: 
+                curl "http://127.0.0.1:23456/score" -d '{"mode":"dupe", "level":"score", "q_id":"ifps://123...", "c_ids":["ifps://123..."]}'
+            out:
+                {'results':[{'id':'ifps://123...', 'score':0.321}]}
         """
         
         q_text = self.get_argument('q_text','')

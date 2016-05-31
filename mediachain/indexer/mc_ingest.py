@@ -16,6 +16,8 @@ Later may be extended to insert media that comes from off-chain into the chain.
 """
 
 from mc_generic import setup_main, group, raw_input_enter, pretty_print
+import mc_config
+
 from time import sleep
 import json
 import os
@@ -45,6 +47,7 @@ import base64
 import numpy as np
 
 import imagehash
+
 
 def getty_create_dumps(INC_SIZE = 100,
                        NUM_WORKERS = 30,
@@ -308,8 +311,6 @@ def es_connect():
     return es
 
 def ingest_getty_dumps(dd = 'getty_small/json/images/',
-                       index_name = 'getty_test',
-                       doc_type = 'image',
                        ):
     """
     Ingest Getty dumps from JSON files. 
@@ -318,7 +319,10 @@ def ingest_getty_dumps(dd = 'getty_small/json/images/',
     
     Mostly for testing purposes.
     """
-
+    
+    index_name = mc_config.INDEX_NAME
+    doc_type = mc_config.DOC_TYPE
+    
     dd3 = dd.replace('/json/images/','/downloads/')
     
     assert exists(dd),repr(dd)
@@ -352,10 +356,7 @@ def ingest_getty_dumps(dd = 'getty_small/json/images/',
                     img_data = f.read()
                 
                 img = Image.open(StringIO(img_data))
-                    
-                hsh = binascii.b2a_hex(np.packbits(imagehash.dhash(img, hash_size = 16).hash).tobytes())
-        
-
+                
                 hh = {'_id':'getty_' + h['id'],
                       'title':h['title'],
                       'artist':h['artist'],
@@ -364,8 +365,7 @@ def ingest_getty_dumps(dd = 'getty_small/json/images/',
                       'editorial_source':h['editorial_source'].get('name',None),
                       'keywords':' '.join([x['text'] for x in h['keywords'] if 'text' in x]),
                       'date_created':date_parser.parse(h['date_created']),
-                      'image_thumb':shrink_and_encode_image(img_data),
-                      'dedupe_hsh':hsh,
+                      'image_thumb':shrink_and_encode_image(img_data),                      
                       #'artist_id':[md5(x['uri']).hexdigest() for x in h['links'] if x['rel'] == 'artist'][0],                
                       #'dims':h['max_dimensions']
                       #'dims_thumb':[{'width':x['width'],'height':x['height']}
@@ -373,12 +373,20 @@ def ingest_getty_dumps(dd = 'getty_small/json/images/',
                       #               if x['name'] == 'thumb'][0],
                       }                
                 
+                if True:
+                    # Add these at ingestion time for V1, to save on ES re-indexing overhead:
+                    
+                    hsh = binascii.b2a_hex(np.packbits(imagehash.dhash(img, hash_size = 16).hash).tobytes())
+                    
+                    hh['dedupe_hsh'] = hsh
+                                    
                 rr = {'_op_type': 'index',
                       '_index': index_name,
                       '_type': doc_type,
                       '_id': hh['_id'],
-                      'doc': hh,
+                      #'doc': hh,
                       }
+                rr.update(hh)
 
                 print ('YIELDING',rr['_id'])
                 
@@ -392,11 +400,11 @@ def ingest_getty_dumps(dd = 'getty_small/json/images/',
         print ('DELETE_INDEX...', index_name)
         es.indices.delete(index = index_name)
         print ('DELETED')
-    
+            
     print ('CREATE_INDEX...',index_name)
     es.indices.create(index = index_name,
-                      body = {'settings': {'number_of_shards': 1,
-                                           'number_of_replicas': 0,                             
+                      body = {'settings': {'number_of_shards': mc_config.NUMBER_OF_SHARDS,
+                                           'number_of_replicas': mc_config.NUMBER_OF_REPLICAS,                             
                                            },
                               'mappings': {doc_type: {'properties': {'title':{'type':'string'},
                                                                      'artist':{'type':'string'},
@@ -407,10 +415,16 @@ def ingest_getty_dumps(dd = 'getty_small/json/images/',
                                                                      'created_date':{'type':'date'},
                                                                      'image_thumb':{'type':'string', 'index':'no'},
                                                                      'dedupe_hsh':{'type':'string', 'index':'not_analyzed'},
+                                                                     #'dedupe_hsh':{"type": "string",
+                                                                     #              "fields": {"raw": {"type": "string",
+                                                                     #                                 "index": "not_analyzed"
+                                                                     #                                 }
+                                                                     #                         },
+                                                                     #              },
                                                                      },
                                                       },
                                            },
-                              },                      
+                              },
                       #ignore = 400, # ignore already existing index
                       )
     
@@ -418,10 +432,11 @@ def ingest_getty_dumps(dd = 'getty_small/json/images/',
     
     print('INSERTING...')
 
-    list(iter_json(max_num = 100))
+    # TODO: parallel_bulk silently eats exceptions.
+    #list(iter_json(max_num = False))
     
     for is_success,res in parallel_bulk(es,
-                                        iter_json(max_num = 100),
+                                        iter_json(max_num = False),
                                         thread_count = 1,
                                         chunk_size = 500,
                                         max_chunk_bytes = 100 * 1024 * 1024, #100MB
@@ -436,26 +451,45 @@ def ingest_getty_dumps(dd = 'getty_small/json/images/',
     print ('REFRESHED')
 
     print ('SEARCH...')
+
+    #q_body = {"query": {'match_all': {}}}
+    q_body = {"query" : {"constant_score":{"filter":{"term":
+                            { "dedupe_hsh" : '87abc00064dc7e780e0683110488a620e9503ceb9bfccd8632d39823fffcffff'}}}}}
+
+
+    #q_body = {"query" :{"filtered":{'query':{'match_all': {}},
+    #                                'filter': {"term": {"dedupe_hsh": \
+    #                                        '87abc00064dc7e780e0683110488a620e9503ceb9bfccd8632d39823fffcffff'}},
+    #                                },
+    #                    }
+    #          }
+                         
+
+    q_body['from'] = 0
+    q_body['size'] = 1
+
+    print ('CLUSTER_STATE:')
+    print pretty_print(es.cluster.state())
+    
+    print ('QUERY:',repr(q_body))
     
     res = es.search(index = index_name,
-                    body = {"query": {'match_all': {}
-                                      },
-                            'from':0,
-                            'size':1,                           
-                            },
+                    body = q_body,
                     )
     
-    print ('Results:', res['hits']['total'])
+    print ('RESULTS:', res['hits']['total'])
 
-    print (res['hits']['hits'])
+    #print (res['hits']['hits'])
     
     for hit in res['hits']['hits']:
         
-        doc = hit['_source']['doc']
-        
-        print ('HIT:',doc['_id'],doc['title'],'by',doc['artist'])
+        doc = hit['_source']#['doc']
 
-        print doc.keys()
+        if 'image_thumb' in doc:
+            doc['image_thumb'] = '<removed>'
+        
+        print 'HIT:'
+        print pretty_print(doc)
         
         raw_input_enter()
 

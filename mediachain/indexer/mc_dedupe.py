@@ -40,7 +40,7 @@ import tornado.gen
 import json
 
 from mc_generic import setup_main, pretty_print
-from mc_ingestion import es_connect, decode_image
+from mc_ingest import es_connect, decode_image
 from elasticsearch.helpers import parallel_bulk, scan
 
 from PIL import Image
@@ -56,6 +56,8 @@ import mc_config
 def dedupe_lookup_async(media_id,
                         duplicate_mode = 'baseline',
                         incremental = False,
+                        return_full_docs = False,
+                        include_self = False,
                         es = False,
                         ):
     """
@@ -99,14 +101,13 @@ def dedupe_lookup_async(media_id,
             raise tornado.gen.Return([])
         
         hit = rr['hits']['hits'][0]
-        hh = hit['_source']['doc']
+        hh = hit['_source']#['doc']
 
         print ('GOT_HASH',hh['dedupe_hsh'])
         
         rr = yield es.search(index = 'getty_test',
                              #type = 'image',
-                             source = {"query" : {"constant_score":
-                                                  {"filter":{"term":{ "dedupe_hsh" : hh['dedupe_hsh']}}}}},
+                             source = {"query" : {"constant_score":{"filter":{"term":{ "dedupe_hsh" : hh['dedupe_hsh']}}}}},
                              )
 
         rr = json.loads(rr.body)
@@ -114,11 +115,24 @@ def dedupe_lookup_async(media_id,
         if not rr['hits']['hits']:            
             raise tornado.gen.Return([])
         
-        rr = [hit['_source']['doc']['_id']
-              for hit
-              in rr['hits']['hits']
-              #if hit['_source']['doc']['_id'] != media_id
-              ]
+        rr = rr['hits']['hits']
+        
+        if not include_self:
+            
+            rr = [hit
+                  for hit
+                  in rr
+                  if hit['_id'] != media_id
+                  ]
+        
+        if not return_full_docs:
+            
+            rr = [hit['_id']
+                  for hit
+                  in rr
+                  ]
+
+                  
         
         raise tornado.gen.Return(rr)
     
@@ -143,7 +157,7 @@ def dedupe_lookup_async(media_id,
             #Lookup all media IDs in that cluster:
             
             hit = rr['hits']['hits'][0]
-            hh = hit['_source']['doc']
+            hh = hit['_source']#['doc']
             
             rr = yield es.multi_search(index = mc_config.INDEX_NAME_CID_TO_CLUSTER,
                                        type = mc_config.DOC_TYPE_CID_TO_CLUSTER,
@@ -154,7 +168,7 @@ def dedupe_lookup_async(media_id,
                 raise tornado.gen.Return([])
 
             hit = rr['hits']['hits'][0]
-            hh = hit['_source']['doc']
+            hh = hit['_source']#['doc']
 
             raise tornado.gen.Return(hh['cluster'])
 
@@ -220,7 +234,7 @@ def dedupe_background(duplicate_mode = 'baseline',
 
     for c,hit in enumerate(res):
         
-        hh = hit['_source']['doc']
+        hh = hit['_source']#['doc']
                 
         img = Image.open(StringIO(decode_image(hh['image_thumb'].encode('utf8'))))
         
