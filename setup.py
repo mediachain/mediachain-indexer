@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 
 from setuptools import setup, find_packages
-from os.path import join, realpath
+from os.path import join, realpath, dirname
 
-reqs_file = join(os.path.dirname(realpath(__file__)),
-                 'requirements.txt',
-                 )
+reqs_file = join(dirname(realpath(__file__)), 'requirements.txt')
 
 with open(reqs_file) as f:
     reqs = f.readlines()

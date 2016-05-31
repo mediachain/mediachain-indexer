@@ -233,12 +233,12 @@ class handle_search(BaseHandler):
                             "_score": 0.08742375, 
                             "_source": {
                                 "artist": "Tristan Fewings", 
-                                "caption": "CANNES, FRANCE - MAY 16:  A policeman watches the crowd in front of the Palais des Festival during the red carpet arrivals of the 'Loving' premiere during the 69th annual Cannes Film Festival on May 16, 2016 in Cannes, France.  (Photo by Tristan Fewings/Getty Images)", 
+                                "caption": "CANNES:  A policeman watches the crowd in front of the Palais des Festival", 
                                 "collection_name": "Getty Images Entertainment", 
                                 "date_created": "2016-05-16T00:00:00-07:00", 
                                 "dedupe_hsh": "d665691fe66393d81c078ae1ff1467cf18f78070900e23ff87c98704cc007c00", 
                                 "editorial_source": "Getty Images Europe", 
-                                "keywords": "People Vertical Crowd Watching France Police Force Cannes Film Premiere Premiere Arrival Photography Film Industry Red Carpet Event Arts Culture and Entertainment International Cannes Film Festival Celebrities Annual Event Palais des Festivals et des Congres 69th International Cannes Film Festival Loving - 2016 Film", 
+                                "keywords": "People Vertical Crowd Watching France Police Force Cannes", 
                                 "title": "'Loving' - Red Carpet Arrivals - The 69th Annual Cannes Film Festival"
                             }, 
                             "_type": "image"
