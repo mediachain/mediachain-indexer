@@ -52,6 +52,10 @@ def getty_create_dumps(INC_SIZE = 100,
     """
     Quick and dirty Getty API scraper.
     """
+
+    if not mc_config.GETTY_KEY:
+        print ('ERROR: set GETTY_KEY environment variable.')
+        exit(-1)
     
     if len(sys.argv) < 3:
         print ('NOTE: set GETTY_KEY to Getty API key.')
@@ -216,7 +220,7 @@ def getty_create_dumps(INC_SIZE = 100,
 
             print ('ADOING',url)
             hh = requests.get(url,
-                              headers={'Api-Key':os.environ['GETTY_KEY']},
+                              headers={'Api-Key':mc_config.GETTY_KEY},
                               verify=False,
                               ).json()
 
@@ -401,7 +405,8 @@ def ingest_getty_dumps(dd = 'getty_small/json/images/',
                                                                      'editorial_source':{'type':'string'},
                                                                      'keywords':{'type':'string', 'index':'not_analyzed'},
                                                                      'created_date':{'type':'date'},
-                                                                     'dedupe_hsh':{'type':'string'},
+                                                                     'image_thumb':{'type':'string', 'index':'no'},
+                                                                     'dedupe_hsh':{'type':'string', 'index':'not_analyzed'},
                                                                      },
                                                       },
                                            },

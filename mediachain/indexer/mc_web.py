@@ -13,7 +13,7 @@ The following apply to all REST API functions in this package:
        - IPFS ID string, starting with 'ipfs://'
        - Base64-encoded PNG or JPG file, starting with 'base64://'
 
-    Input type:
+    Input format:
        Body of POST is JSON-encoded string. Keys and values are as specified below.
     
     Returns on success:
@@ -201,6 +201,9 @@ class handle_search(BaseHandler):
            
            limit:         Maximum number of results to return.
            inline_images: Whether to include base64-encoded thumbnails of images directly in the results.
+
+        Returns:
+            List of image IDs, possibly with relevancy scores.
         
         Example:
            {'q_text':'girl holding a balloon', 'limit':5}  
@@ -247,8 +250,8 @@ class handle_search(BaseHandler):
         
         #query = {"query": {'match_all': {}},'from':0,'size':1,}
         
-        rr = yield self.es.search(index = self.application.INDEX_NAME,
-                                  type = self.application.DOC_TYPE,
+        rr = yield self.es.search(index = mc_config.INDEX_NAME,
+                                  type = mc_config.DOC_TYPE,
                                   source = query,
                                   )
     
@@ -330,21 +333,25 @@ class handle_score(BaseHandler):
         all "candidate" media versus the "query".
         
         Args, as JSON-encoded POST body:
-            q_text:    query text.
-            q_id:      query media. See `Media Identifiers`.
+            q_text:    Query text.
+            q_id:      Query media. See `Media Identifiers`.
             
-            c_ids:     list of candidate media. See `Media Identifiers`.
+            c_ids:     List of candidate media. See `Media Identifiers`.
             
             mode:      Type of similarity to measure. Should be one of:
                        'search' - Search relevance score.
                        'dupe'   - Duplicate probability.
             
             level:     Level of the model at which to measure the similarity.
-                       'distance' - Distance in the embedding space(s) (0.0 to 1.0).
-                                     May return multiple distances.
+                       'similarity' - Similarity in the embedding space(s) (0.0 to 1.0).
+                                      May return multiple similarities, if multiple
+                                      similarity or duplicate types are in use.
                        'score'     - Final relevance score for "search" mode (1.0 to 5.0),
                                      or final dupe probability score for "dupe" mode (0.0 to 1.0).
         
+        Returns:
+            List of similarities or duplicate probabilities, one per similarity or duplicate type.
+
         Examples:
             in:        {'mode':'search', 'level':'distance', 'q_text':'girl with baloon', 'c_ids':['ifps://123...']}
             out:       {'results':[{'id':'ifps://123...', 'score':0.044}]}
@@ -358,8 +365,8 @@ class handle_score(BaseHandler):
         
         query = {"query": {"match_all": {}}}
         
-        rr = yield self.es.search(index = self.application.INDEX_NAME,
-                                  type = self.application.DOC_TYPE,
+        rr = yield self.es.search(index = mc_config.INDEX_NAME,
+                                  type = mc_config.DOC_TYPE,
                                   source = query,
                                   )
         

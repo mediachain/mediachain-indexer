@@ -4,5 +4,4 @@ elasticsearch==2.3.0
 python-dateutil==2.4.2
 Pillow==3.2.0
 numpy==1.11.0
-#The following package is from: https://github.com/JohannesBuchner/imagehash
 image-match==0.2.1 
