@@ -56,6 +56,9 @@ from mc_generic import setup_main, pretty_print, intget
 import mc_dedupe
 import mc_config
 
+data_pat = 'data:image/jpeg;base64,'
+data_pat_2 = 'data:image/png;base64,'
+
 
 class Application(tornado.web.Application):
     def __init__(self,
@@ -196,7 +199,7 @@ class handle_ping(BaseHandler):
         self.write("{'results':['pong']}")
         self.finish()
 
-
+        
 class handle_search(BaseHandler):
     
     #disable XSRF checking for this URL:
@@ -245,9 +248,16 @@ class handle_search(BaseHandler):
                         }
                     ]
                 }
+        
+            in:
+                curl "http://127.0.0.1:23456/search" -d '{"q_id":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==", "limit":5, "index_name":"mc_test", "doc_type":"mc_test_image"}'
+            out:
+                 <see_previous_example>
         """
         
         d = self.request.body
+
+        print ('BODY',d)
         
         try:
             data = json.loads(d)
@@ -258,33 +268,78 @@ class handle_search(BaseHandler):
                             })
             return
 
-        q_text = data.get('q','') or self.get_argument('q','')
+        q_text = data.get('q','')
+        q_id = data.get('q_id','')
+        limit = intget(data.get('q'), 10)
+        index_name = data.get('index_name', mc_config.INDEX_NAME)
+        doc_type = data.get('doc_type', mc_config.DOC_TYPE)
         
-        limit = intget(data.get('q') or self.get_argument('limit',False), 10)
-        
-        if not q_text:
+        if not (q_text or q_id):
             self.set_status(500)
-            self.write_json({'error':'MISSING_QUERY',
-                             'error_message':'`q` is required.',
+            self.write_json({'error':'BAD_QUERY',
+                             'error_message':'Either `q` or `q_id` is required.',
+                             })
+            return
+
+        if (q_text and q_id):
+            self.set_status(500)
+            self.write_json({'error':'BAD_QUERY',
+                             'error_message':'Simultaneous `q` and `q_id` not yet implemented.',
                              })
             return
         
-        query = {"query": {"multi_match": {"query":    q_text,
-                                           "fields": [ "*" ],
-                                           "type":     "cross_fields"
-                                           },
-                           },
-                 'from':0,
-                 'size':limit,
-                 }
+        elif q_id:
+            
+            if q_id.startswith(data_pat) or q_id.startswith(data_pat_2):
                 
-        rr = yield self.es.search(index = mc_config.INDEX_NAME,
-                                  type = mc_config.DOC_TYPE,
+                #Resolve ID(s) for query based on content:
+                
+                print ('HMM',q_id)
+                
+                content_based_search = mc_dedupe.img_to_hsh(q_id)
+                
+                print ('content_based_search',content_based_search)
+                
+                rr = yield self.es.search(index = index_name,
+                                          type = doc_type,
+                                          source = {"query": {"constant_score":{"filter":{"term":
+                                                                  { "dedupe_hsh" : content_based_search}}}}},
+                                          )
+                
+                rr = json.loads(rr.body)
+                
+                rr = [x['_id'] for x in rr['hits']['hits']]
+                
+                query = {"query":{ "ids": { "values": rr } } }
+                
+            else:
+                #ID-based search:
+                query = {"query":{ "ids": { "values": [ q_id ] } } }
+
+        elif q_text:
+
+            #text-based search:
+            query = {"query": {"multi_match": {"query":    q_text,
+                                               "fields": [ "*" ],
+                                               "type":     "cross_fields"
+                                               },
+                               },
+                     }
+
+        print ('QUERY',query)
+            
+        #query['from'] = 0,
+        #query['size'] = limit
+        
+        rr = yield self.es.search(index = index_name,
+                                  type = doc_type,
                                   source = query,
                                   )
-    
+        
         hh = json.loads(rr.body)
-                
+
+        print 'GOT',hh
+        
         rr = hh['hits']['hits']
 
         if False:
@@ -316,7 +371,7 @@ class handle_dupe_lookup(BaseHandler):
         Find all known duplicates of a media work.
         
         Args:
-            q_media:          Media file to query for..
+            q_media:          Media to query for. See `Media Identifiers`.
             duplicate_mode:   Semantic duplicate type or matching mode. For now, defaults to 'baseline'.
             include_self:     Include ID of query document in results.
             include_docs:     Return entire indexed docs, instead of just IDs.
@@ -346,11 +401,20 @@ class handle_dupe_lookup(BaseHandler):
                             })
             return
         
+        if not data.get('q_media'):
+            self.set_status(500)
+            self.write_json({'error':'BAD_ARGUMENTS',
+                             'error_message':'Missing required `q_media` argument.',
+                            })
+            return
+        
         rr = yield mc_dedupe.dedupe_lookup_async(media_id = data['q_media'],
                                                  duplicate_mode = data.get('duplicate_mode', 'baseline'),
                                                  include_docs = data.get('include_docs'),
                                                  include_self = data.get('include_self'),
                                                  include_thumb = data.get('include_thumb'),
+                                                 index_name = data.get('index_name', mc_config.INDEX_NAME),
+                                                 doc_type = data.get('doc_type', mc_config.DOC_TYPE),
                                                  es = self.es,
                                                  )
         

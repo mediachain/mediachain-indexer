@@ -52,6 +52,17 @@ import numpy as np
 
 import mc_config
 
+data_pat = 'data:image/jpeg;base64,'
+data_pat_2 = 'data:image/png;base64,'
+
+def img_to_hsh(img_data_uri):
+    """
+    Crude method only used for V1 dedupe.
+    """
+    img = Image.open(StringIO(decode_image(img_data_uri.encode('utf8'))))
+    hsh = binascii.b2a_hex(np.packbits(imagehash.dhash(img, hash_size = 16).hash).tobytes())
+    return hsh
+
 @tornado.gen.coroutine
 def dedupe_lookup_async(media_id,
                         duplicate_mode = 'baseline',
@@ -60,6 +71,8 @@ def dedupe_lookup_async(media_id,
                         include_self = False,
                         include_thumb = False,
                         es = False,
+                        index_name = mc_config.INDEX_NAME,
+                        doc_type = mc_config.DOC_TYPE,                
                         ):
     """
     Get list of all duplicates of a media work, from previously-generated duplicate lookup tables
@@ -82,33 +95,59 @@ def dedupe_lookup_async(media_id,
     """
     
     assert duplicate_mode == 'baseline','SELECTED_DUPLICATE_MODE_NOT_IMPLEMENTED'
-
+    
     #raise tornado.gen.Return([])
+    
+    content_based_search = False
+    
+    if media_id.startswith(data_pat) or media_id.startswith(data_pat_2):
 
+        #Search based on data URI:
+        content_based_search = img_to_hsh(media_id)
+    
+    elif media_id.startswith('getty_'):
+        
+        #ID-based search.
+        #TODO - identifier format.
+        pass
+    
+    else:
+        assert False,'BAD_MEDIA_ID_FORMAT'
+
+
+    print ('content_based_search',content_based_search,media_id[:40])
+    
     if True:
         
         ### Trivial baseline can take a shortcut that uses fewer indexes / fewer writes:
         
-        rr = yield es.search(index = 'getty_test',
-                             type = 'image',
-                             source = {'query':{"constant_score":{"filter":{"term":{ "_id" : media_id}}}},
-                                       'size':1,
-                                       },
-                             )
+        if not content_based_search:
+        
+            rr = yield es.search(index = index_name,
+                                 type = doc_type,
+                                 #source = {'query':{"constant_score":{"filter":{"term":{ "_id" : media_id}}}},
+                                 #          'size':1,
+                                 #          },
+                                 source = {"query":{ "ids":{ "values": [ media_id ] } } }
+                                 )
 
-        rr = json.loads(rr.body)
-        
-        if not rr['hits']['hits']:
-            raise tornado.gen.Return([])
-        
-        hit = rr['hits']['hits'][0]
-        hh = hit['_source']#['doc']
+            rr = json.loads(rr.body)
 
-        print ('GOT_HASH',hh['dedupe_hsh'])
+            if not rr['hits']['hits']:
+                raise tornado.gen.Return([])
         
-        rr = yield es.search(index = 'getty_test',
-                             #type = 'image',
-                             source = {"query" : {"constant_score":{"filter":{"term":{ "dedupe_hsh" : hh['dedupe_hsh']}}}}},
+            hit = rr['hits']['hits'][0]
+            hh = hit['_source']#['doc']
+            
+            content_based_search = hh['dedupe_hsh']
+            
+            print ('GOT_HASH',hh['dedupe_hsh'])
+
+        #print ('QUERY',index_name,doc_type,{"query" : {"constant_score":{"filter":{"term":{ "dedupe_hsh" : content_based_search}}}}})
+            
+        rr = yield es.search(index = index_name,
+                             type = doc_type,
+                             source = {"query" : {"constant_score":{"filter":{"term":{ "dedupe_hsh" : content_based_search}}}}},
                              )
 
         rr = json.loads(rr.body)
@@ -180,14 +219,16 @@ def dedupe_lookup_async(media_id,
 
 
 
-def dedupe_background(duplicate_mode = 'baseline',
-                      incremental = False,
-                      batch_size = 100,
-                      ):
+def dedupe_reindex(duplicate_mode = 'baseline',
+                   incremental = False,
+                   batch_size = 100,
+                   index_name = mc_config.INDEX_NAME,
+                   doc_type = mc_config.DOC_TYPE,
+                   ):
     """
     Regenerate duplicate lookup tables.
     
-    Currently implements a dumb, simple, greedy, in-memory baseline.
+    Currently implements V1 - a dumb, simple, greedy, in-memory baseline.
     
     Performance Note:
     Usually it's considerably more efficient to do this in large batches rather than to attempt to dedupe online, for
@@ -222,8 +263,8 @@ def dedupe_background(duplicate_mode = 'baseline',
     es = es_connect()    
     
     res = scan(client = es,
-               index = mc_config.INDEX_NAME,
-               doc_type = mc_config.DOC_TYPE,
+               index = index_name,
+               doc_type = doc_type,
                scroll = '5m', #TODO - hard coded.
                query = {"query": {'match_all': {}
                                  },
@@ -237,36 +278,28 @@ def dedupe_background(duplicate_mode = 'baseline',
     hash_to_ids = {}
     
     rr = []
-
+    
     for c,hit in enumerate(res):
         
         hh = hit['_source']#['doc']
+        #hh['_id'] = hit['_id']
                 
-        img = Image.open(StringIO(decode_image(hh['image_thumb'].encode('utf8'))))
+        hsh = img_to_hsh(hh['image_thumb'])
         
-        hsh = binascii.b2a_hex(np.packbits(imagehash.dhash(img, hash_size = 16).hash).tobytes())
-        
-        if False:
-            
+        if False:            
             ### Can skip this for the trivial baseline:
             
             if hsh not in hash_to_ids:
                 hash_to_ids[hsh] = []
             hash_to_ids[hsh].append(hh['_id'])
-        
+                
         rr.append({'_op_type': 'update',
-                   '_index': mc_config.INDEX_NAME,
-                   '_type': mc_config.DOC_TYPE,
-                   '_id': hh['_id'],
+                   '_index': index_name,
+                   '_type': doc_type,
+                   '_id': hit['_id'],
                    'body': {'doc':{'dedupe_hsh': hsh}},
-                   #'body':{
-                   #    "script" : "ctx._source.dedupe_hsh = hsh",
-                   #    "params" : {
-                   #        "dedupe_hsh" : hsh,
-                   #    }
-                   #   }
-                   })                       
-        
+                   })
+                
         print ('ADD',c,rr)
         
         if len(rr) >= batch_size:
@@ -275,8 +308,8 @@ def dedupe_background(duplicate_mode = 'baseline',
     if rr:
         do_commit(rr)
 
-    print ('REFRESHING', mc_config.INDEX_NAME)
-    es.indices.refresh(index = mc_config.INDEX_NAME)
+    print ('REFRESHING', index_name)
+    es.indices.refresh(index = index_name)
     print ('REFRESHED')
 
     if False:
@@ -315,7 +348,7 @@ def dedupe_background(duplicate_mode = 'baseline',
     
 
 
-functions=['dedupe_background',
+functions=['dedupe_reindex',
            ]
 
 def main():    

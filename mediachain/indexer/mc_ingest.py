@@ -16,6 +16,7 @@ Later may be extended to insert media that comes from off-chain into the chain.
 """
 
 from mc_generic import setup_main, group, raw_input_enter, pretty_print
+
 import mc_config
 
 from time import sleep
@@ -47,6 +48,7 @@ import base64
 import numpy as np
 
 import imagehash
+import itertools
 
 
 def getty_create_dumps(INC_SIZE = 100,
@@ -289,6 +291,7 @@ def getty_create_dumps(INC_SIZE = 100,
 
     
 data_pat = 'data:image/jpeg;base64,'
+data_pat_2 = 'data:image/png;base64,'
     
 def shrink_and_encode_image(s):
     """
@@ -299,9 +302,17 @@ def shrink_and_encode_image(s):
     return data_pat + base64.urlsafe_b64encode(s)
 
 def decode_image(s):
-    assert s.startswith(data_pat),('BAD_DATA_URL',s[:15])
-    
-    return base64.urlsafe_b64decode(s[len(data_pat):])
+
+    if s.startswith(data_pat):
+        ss = s[len(data_pat):]
+        
+    elif s.startswith(data_pat_2):
+        ss = s[len(data_pat_2):]
+        
+    else:
+        assert False,('BAD_DATA_URL',s[:15])
+        
+    return base64.urlsafe_b64decode(ss)
 
 
 def es_connect():
@@ -310,89 +321,103 @@ def es_connect():
     print ('CONNECTED')
     return es
 
-def ingest_getty_dumps(dd = 'getty_small/json/images/',
-                       ):
-    """
-    Ingest Getty dumps from JSON files. 
     
-    Currently does not attempt to import media to the chain.
-    
-    Mostly for testing purposes.
-    """
-    
-    index_name = mc_config.INDEX_NAME
-    doc_type = mc_config.DOC_TYPE
-    
+def iter_json_getty(max_num = 0,
+                    dd = 'getty_small/json/images/',
+                    index_name = mc_config.INDEX_NAME,
+                    doc_type = mc_config.DOC_TYPE,                
+                    ):
+
     dd3 = dd.replace('/json/images/','/downloads/')
     
     assert exists(dd),repr(dd)
+
+    nn = 0
+    for dir_name, subdir_list, file_list in walk(dd):
+
+        for fn in file_list:
+            nn += 1
+
+            if max_num and (nn + 1 >= max_num):
+                print ('ENDING EARLY...')
+                return
+
+            fn = join(dir_name,
+                      fn,
+                      )
+
+            with open(fn) as f:
+                h = json.load(f)
+
+            fn = dd3 + 'thumb/' + ('/'.join(h['id'][:4])) + '/' + h['id'] + '.jpg'
+
+            if not exists(fn):
+                print ('NOT_FOUND',fn)
+                nn -= 1
+                continue
+
+            with open(fn) as f:
+                img_data = f.read()
+
+            hh = {'_id':'getty_' + h['id'],
+                  'title':h['title'],
+                  'artist':h['artist'],
+                  'collection_name':h['collection_name'],
+                  'caption':h['caption'],
+                  'editorial_source':h['editorial_source'].get('name',None),
+                  'keywords':' '.join([x['text'] for x in h['keywords'] if 'text' in x]),
+                  'date_created':date_parser.parse(h['date_created']),
+                  'img_data':img_data,
+                  #'artist_id':[md5(x['uri']).hexdigest() for x in h['links'] if x['rel'] == 'artist'][0],                
+                  #'dims':h['max_dimensions']
+                  #'dims_thumb':[{'width':x['width'],'height':x['height']}
+                  #               for x in h['display_sizes']
+                  #               if x['name'] == 'thumb'][0],
+                  }                
+
+            rr = {'_op_type': 'index',
+                  '_index': index_name,
+                  '_type': doc_type,
+                  '_id': hh['_id'],
+                  #'doc': hh,
+                  }
+            rr.update(hh)
+
+            print ('YIELDING',rr['_id'])
+
+            yield rr
+
+    print ('DONE_YIELD',nn)
+
     
-    def iter_json(max_num = 0):
-        nn = 0
-        for dir_name, subdir_list, file_list in walk(dd):
-            
-            for fn in file_list:
-                nn += 1
+def ingest_bulk(iter_json = False,
+                thread_count = 1,
+                index_name = mc_config.INDEX_NAME,
+                doc_type = mc_config.DOC_TYPE,
+                search_after = False,
+                ):
+    """
+    Ingest Getty dumps from JSON files.
 
-                if max_num and (nn + 1 >= max_num):
-                    print ('ENDING EARLY...')
-                    return
-                
-                fn = join(dir_name,
-                          fn,
-                          )
+    Currently does not attempt to import media to the Mediachain chain.
+    
+    Args:
+        iter_json:     Iterable of media objects, with `img_data` containing the raw-bytes image data.
+        thread_count:  Number of parallel threads to use for ES insertion.
+        index_name:    ES index name to use.
+        doc_type:      ES document type to use.
 
-                with open(fn) as f:
-                    h = json.load(f)
+    Returns:
+        Number of inserted records.
 
-                fn = dd3 + 'thumb/' + ('/'.join(h['id'][:4])) + '/' + h['id'] + '.jpg'
+    Examples:
+        See `mc_test.py`
+    """
 
-                if not exists(fn):
-                    print ('NOT_FOUND',fn)
-                    nn -= 1
-                    continue
-                
-                with open(fn) as f:
-                    img_data = f.read()
-                
-                img = Image.open(StringIO(img_data))
-                
-                hh = {'_id':'getty_' + h['id'],
-                      'title':h['title'],
-                      'artist':h['artist'],
-                      'collection_name':h['collection_name'],
-                      'caption':h['caption'],
-                      'editorial_source':h['editorial_source'].get('name',None),
-                      'keywords':' '.join([x['text'] for x in h['keywords'] if 'text' in x]),
-                      'date_created':date_parser.parse(h['date_created']),
-                      'image_thumb':shrink_and_encode_image(img_data),                      
-                      #'artist_id':[md5(x['uri']).hexdigest() for x in h['links'] if x['rel'] == 'artist'][0],                
-                      #'dims':h['max_dimensions']
-                      #'dims_thumb':[{'width':x['width'],'height':x['height']}
-                      #               for x in h['display_sizes']
-                      #               if x['name'] == 'thumb'][0],
-                      }                
-                
-                if True:
-                    # Add these at ingestion time for V1, to save on ES re-indexing overhead:
-                    
-                    hsh = binascii.b2a_hex(np.packbits(imagehash.dhash(img, hash_size = 16).hash).tobytes())
-                    
-                    hh['dedupe_hsh'] = hsh
-                                    
-                rr = {'_op_type': 'index',
-                      '_index': index_name,
-                      '_type': doc_type,
-                      '_id': hh['_id'],
-                      #'doc': hh,
-                      }
-                rr.update(hh)
-
-                print ('YIELDING',rr['_id'])
-                
-                yield rr
-        
-        print ('DONE_YIELD',nn)
+    if not iter_json:
+        iter_json = iter_json_getty(index_name = index_name,
+                                    doc_type = doc_type,
+                                    )
     
     es = es_connect()
     
@@ -426,70 +451,99 @@ def ingest_getty_dumps(dd = 'getty_small/json/images/',
     
     print('INSERTING...')
 
-    # TODO: parallel_bulk silently eats exceptions.
-    #list(iter_json(max_num = False))
+    def iter_json_wrapper():
+        """
+        Extra processing for each media work.
+        """
+        
+        for hh in iter_json:
+
+            assert 'img_data' in hh,'`img_data` required for ingestion.'
+            
+            img_data = hh['img_data']
+
+            img_data_uri = shrink_and_encode_image(img_data)
+                
+            hh['image_thumb'] = img_data_uri 
+            
+            # Added for V1, to save on ES re-indexing overhead:
+            #hh['dedupe_hsh'] = mc_dedupe.img_to_hsh(img_data_uri)
+            
+            del hh['img_data']
+            
+            yield hh
+
+    gen = iter_json_wrapper()
+
+    # TODO: parallel_bulk silently eats exceptions. Here's a quick hack to watch for errors:
+        
+    first = gen.next()
     
     for is_success,res in parallel_bulk(es,
-                                        iter_json(max_num = False),
-                                        thread_count = 1,
+                                        itertools.chain([first], gen),
+                                        thread_count = thread_count,
                                         chunk_size = 500,
                                         max_chunk_bytes = 100 * 1024 * 1024, #100MB
                                         ):
-        #FORMAT: (True, {u'index': {u'status': 201, u'_type': u'image', u'_shards':
-        #{u'successful': 1, u'failed': 0, u'total': 1}, u'_index': u'getty_test',
-        # u'_version': 1, u'_id': u'getty_100113781'}})
+        """
+        #FORMAT:
+        (True,
+            {u'index': {u'_id': u'getty_100113781',
+                        u'_index': u'getty_test',
+                        u'_shards': {u'failed': 0, u'successful': 1, u'total': 1},
+                        u'_type': u'image',
+                        u'_version': 1,
+                        u'status': 201}})
+        """
         pass
         
     print ('REFRESHING', index_name)
     es.indices.refresh(index = index_name)
     print ('REFRESHED')
 
-    print ('SEARCH...')
-
-    #q_body = {"query": {'match_all': {}}}
-    q_body = {"query" : {"constant_score":{"filter":{"term":
-                            { "dedupe_hsh" : '87abc00064dc7e780e0683110488a620e9503ceb9bfccd8632d39823fffcffff'}}}}}
-
-
-    #q_body = {"query" :{"filtered":{'query':{'match_all': {}},
-    #                                'filter': {"term": {"dedupe_hsh": \
-    #                                        '87abc00064dc7e780e0683110488a620e9503ceb9bfccd8632d39823fffcffff'}},
-    #                                },
-    #                    }
-    #          }
-                         
-
-    q_body['from'] = 0
-    q_body['size'] = 1
-
-    print ('CLUSTER_STATE:')
-    print pretty_print(es.cluster.state())
-    
-    print ('QUERY:',repr(q_body))
-    
-    res = es.search(index = index_name,
-                    body = q_body,
-                    )
-    
-    print ('RESULTS:', res['hits']['total'])
-
-    #print (res['hits']['hits'])
-    
-    for hit in res['hits']['hits']:
+    if search_after:
         
-        doc = hit['_source']#['doc']
+        print ('SEARCH...')
+        
+        q_body = {"query": {'match_all': {}}}
+        
+        #q_body = {"query" : {"constant_score":{"filter":{"term":
+        #                        { "dedupe_hsh" : '87abc00064dc7e780e0683110488a620e9503ceb9bfccd8632d39823fffcffff'}}}}}
 
-        if 'image_thumb' in doc:
-            doc['image_thumb'] = '<removed>'
-        
-        print 'HIT:'
-        print pretty_print(doc)
-        
-        raw_input_enter()
+        q_body['from'] = 0
+        q_body['size'] = 1
+
+        print ('CLUSTER_STATE:')
+        print pretty_print(es.cluster.state())
+
+        print ('QUERY:',repr(q_body))
+
+        res = es.search(index = index_name,
+                        body = q_body,
+                        )
+
+        print ('RESULTS:', res['hits']['total'])
+
+        #print (res['hits']['hits'])
+
+        for hit in res['hits']['hits']:
+
+            doc = hit['_source']#['doc']
+
+            if 'image_thumb' in doc:
+                doc['image_thumb'] = '<removed>'
+
+            print 'HIT:'
+            print pretty_print(doc)
+
+            raw_input_enter()
+
+
+    return es.count(index_name)['count']
 
 
 functions=['getty_create_dumps',
-           'ingest_getty_dumps',
+           'ingest_bulk',
            ]
 
 def main():
