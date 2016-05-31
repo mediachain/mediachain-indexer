@@ -52,7 +52,7 @@ from tornado.options import define, options
 from os import mkdir,rename,unlink,listdir
 from os.path import exists,join,split,realpath,splitext,dirname
 
-from mc_generic import setup_main, pretty_print
+from mc_generic import setup_main, pretty_print, intget
 import mc_dedupe
 import mc_config
 
@@ -151,6 +151,17 @@ class BaseHandler(tornado.web.RequestHandler):
                               ) + '\n')
         self.finish()
 
+    def write_error(self,
+                    status_code,
+                    **kw):
+
+        rr = {'error':'INTERNAL_ERROR',
+              'error_message':'Unexpected server error.',
+              }
+
+        self.write_json(rr)
+        
+
     def write_json_pretty(self,
                           hh,
                           indent = 4,
@@ -163,6 +174,8 @@ class BaseHandler(tornado.web.RequestHandler):
                                 max_indent_depth = max_indent_depth,
                                 ).replace('\n','\r\n'))
         self.finish()
+
+    
 
 
 class handle_front(BaseHandler):
@@ -200,22 +213,38 @@ class handle_search(BaseHandler):
            q_id:          Query media. See `Media Identifiers`.
            
            limit:         Maximum number of results to return.
-           inline_images: Whether to include base64-encoded thumbnails of images directly in the results.
+           include_thumb: Whether to include base64-encoded thumbnails in returned results.
 
         Returns:
             List of image IDs, possibly with relevancy scores.
         
         Example:
            in:
-               curl "http://127.0.0.1:23456/search" -d '{"q_text":"girl holding a balloon", "limit":5}'
+               curl "http://127.0.0.1:23456/search" -d '{"q":"crowd", "limit":5}'
 
            out:
-               {'data': [{'addr':'ifps://1234...',
-                          'title':'An Image',
-                         },
-                        ],
-                'next_page': null,
-               }
+                {
+                    "next_page": null, 
+                    "prev_page": null, 
+                    "results": [
+                        {
+                            "_id": "getty_531746924", 
+                            "_index": "getty_test", 
+                            "_score": 0.08742375, 
+                            "_source": {
+                                "artist": "Tristan Fewings", 
+                                "caption": "CANNES, FRANCE - MAY 16:  A policeman watches the crowd in front of the Palais des Festival during the red carpet arrivals of the 'Loving' premiere during the 69th annual Cannes Film Festival on May 16, 2016 in Cannes, France.  (Photo by Tristan Fewings/Getty Images)", 
+                                "collection_name": "Getty Images Entertainment", 
+                                "date_created": "2016-05-16T00:00:00-07:00", 
+                                "dedupe_hsh": "d665691fe66393d81c078ae1ff1467cf18f78070900e23ff87c98704cc007c00", 
+                                "editorial_source": "Getty Images Europe", 
+                                "keywords": "People Vertical Crowd Watching France Police Force Cannes Film Premiere Premiere Arrival Photography Film Industry Red Carpet Event Arts Culture and Entertainment International Cannes Film Festival Celebrities Annual Event Palais des Festivals et des Congres 69th International Cannes Film Festival Loving - 2016 Film", 
+                                "title": "'Loving' - Red Carpet Arrivals - The 69th Annual Cannes Film Festival"
+                            }, 
+                            "_type": "image"
+                        }
+                    ]
+                }
         """
         
         d = self.request.body
@@ -248,23 +277,29 @@ class handle_search(BaseHandler):
                  'from':0,
                  'size':limit,
                  }
-        
-        #query = {"query": {'match_all': {}},'from':0,'size':1,}
-        
+                
         rr = yield self.es.search(index = mc_config.INDEX_NAME,
                                   type = mc_config.DOC_TYPE,
                                   source = query,
                                   )
     
         hh = json.loads(rr.body)
+                
+        rr = hh['hits']['hits']
+
+        if False:
+            rr = [x['_source'] for x in rr]
         
-        print pretty_print(hh)
-        
-        rr = {'results':hh['hits']['hits'],
+        rr = {'results':rr,
               'next_page':None,
               'prev_page':None,
               }
-        
+
+        if not data.get('include_thumb'):
+            for x in rr['results']:
+                if 'image_thumb' in x['_source']:
+                    del x['_source']['image_thumb']
+                
         self.write_json_pretty(rr)
 
         
@@ -284,7 +319,8 @@ class handle_dupe_lookup(BaseHandler):
             q_media:          Media file to query for..
             duplicate_mode:   Semantic duplicate type or matching mode. For now, defaults to 'baseline'.
             include_self:     Include ID of query document in results.
-            return_full_docs: Return entire indexed docs, instead of just IDs.
+            include_docs:     Return entire indexed docs, instead of just IDs.
+            include_thumb:    Whether to include base64-encoded thumbnails in returned results.
             incremental:      Attempt to dedupe never-before-seen media file versus all pre-ingested media files.
                               NOTE: potentially inefficient. More efficient to pre-calculate for all known images in
                               background.
@@ -312,8 +348,9 @@ class handle_dupe_lookup(BaseHandler):
         
         rr = yield mc_dedupe.dedupe_lookup_async(media_id = data['q_media'],
                                                  duplicate_mode = data.get('duplicate_mode', 'baseline'),
-                                                 return_full_docs = data.get('return_full_docs'),
+                                                 include_docs = data.get('include_docs'),
                                                  include_self = data.get('include_self'),
+                                                 include_thumb = data.get('include_thumb'),
                                                  es = self.es,
                                                  )
         

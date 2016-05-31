@@ -56,8 +56,9 @@ import mc_config
 def dedupe_lookup_async(media_id,
                         duplicate_mode = 'baseline',
                         incremental = False,
-                        return_full_docs = False,
+                        include_docs = False,
                         include_self = False,
+                        include_thumb = False,
                         es = False,
                         ):
     """
@@ -125,14 +126,19 @@ def dedupe_lookup_async(media_id,
                   if hit['_id'] != media_id
                   ]
         
-        if not return_full_docs:
+        if not include_docs:
             
             rr = [hit['_id']
                   for hit
                   in rr
                   ]
-
-                  
+            
+        else:
+            
+            if not include_thumb:
+                for x in rr:
+                    if 'image_thumb' in x:
+                        del x['image_thumb']
         
         raise tornado.gen.Return(rr)
     

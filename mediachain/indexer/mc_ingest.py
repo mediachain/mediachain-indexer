@@ -415,12 +415,6 @@ def ingest_getty_dumps(dd = 'getty_small/json/images/',
                                                                      'created_date':{'type':'date'},
                                                                      'image_thumb':{'type':'string', 'index':'no'},
                                                                      'dedupe_hsh':{'type':'string', 'index':'not_analyzed'},
-                                                                     #'dedupe_hsh':{"type": "string",
-                                                                     #              "fields": {"raw": {"type": "string",
-                                                                     #                                 "index": "not_analyzed"
-                                                                     #                                 }
-                                                                     #                         },
-                                                                     #              },
                                                                      },
                                                       },
                                            },
