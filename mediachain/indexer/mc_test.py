@@ -66,6 +66,22 @@ def demo_end_to_end(index_name = TEST_INDEX_NAME,
     mc_dedupe.dedupe_reindex(index_name = index_name,
                              doc_type = doc_type,
                              )
+
+    print ('SEARCH_BY_TEXT...')
+    
+    hh = requests.post(MC_WEB_HOST + '/search',
+                       headers = {'User-Agent':'MC_TEST 1.0'},
+                       verify = False,
+                       json = {"q":'crowd',
+                               "limit":5,
+                               "include_self": True,
+                               "index_name":index_name,
+                               "doc_type":doc_type,
+                               },
+                       ).json()
+    
+    print pretty_print(hh)
+    assert hh['results'][0]['_id'] == img_id,hh
     
     print ('SEARCH_BY_CONTENT...')
     
@@ -114,9 +130,9 @@ def demo_end_to_end(index_name = TEST_INDEX_NAME,
                        ).json()
     
     print pretty_print(hh)
-    assert hh['results'][0] == img_id,hh
+    assert hh['results'][0]['_id'] == img_id,hh
 
-    sleep(1)
+    print ('DONE_DEMO')
 
 functions = ['demo_end_to_end',
              ]

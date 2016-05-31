@@ -216,6 +216,8 @@ class handle_search(BaseHandler):
            q_id:          Query media. See `Media Identifiers`.
            
            limit:         Maximum number of results to return.
+           include_self:  Include ID of query document in results.
+           include_docs:  Return entire indexed docs, instead of just IDs.
            include_thumb: Whether to include base64-encoded thumbnails in returned results.
 
         Returns:
@@ -273,6 +275,8 @@ class handle_search(BaseHandler):
         limit = intget(data.get('q'), 10)
         index_name = data.get('index_name', mc_config.INDEX_NAME)
         doc_type = data.get('doc_type', mc_config.DOC_TYPE)
+        include_docs = data.get('include_docs', True)
+        include_thumb = data.get('include_thumb', True)
         
         if not (q_text or q_id):
             self.set_status(500)
@@ -292,13 +296,10 @@ class handle_search(BaseHandler):
             
             if q_id.startswith(data_pat) or q_id.startswith(data_pat_2):
                 
-                #Resolve ID(s) for query based on content:
-                
-                print ('HMM',q_id)
+                #Resolve ID(s) for query based on content.
+                #Note that this is similar to `/dupe_lookup` with `include_docs` = True:
                 
                 content_based_search = mc_dedupe.img_to_hsh(q_id)
-                
-                print ('content_based_search',content_based_search)
                 
                 rr = yield self.es.search(index = index_name,
                                           type = doc_type,
@@ -338,10 +339,22 @@ class handle_search(BaseHandler):
         
         hh = json.loads(rr.body)
 
-        print 'GOT',hh
-        
         rr = hh['hits']['hits']
-
+        
+        if not include_docs:
+            
+            rr = [{'_id':hit['_id']}
+                  for hit
+                  in rr
+                  ]
+            
+        else:
+            
+            if not include_thumb:
+                for x in rr:
+                    if 'image_thumb' in x:
+                        del x['image_thumb']
+        
         if False:
             rr = [x['_source'] for x in rr]
         
@@ -387,7 +400,7 @@ class handle_dupe_lookup(BaseHandler):
              in: 
                  curl "http://127.0.0.1:23456/dupe_lookup" -d '{"q_media":"getty_531746790"}'
              out:
-                 {"next_page": null, "results": ["getty_9283423", "getty_2374230"], "prev_page": null}
+                 {"next_page": null, "results": [{'_id':"getty_9283423"}, {'_id':"getty_2374230"}], "prev_page": null}
         """
 
         d = self.request.body
