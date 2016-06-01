@@ -1,5 +1,5 @@
 
-##Search, Dedupe, and Media Ingestion for Mediachain
+## Search and Dedupe for Mediachain
 
 Entry Point               |  Info
 --------------------------|---------------------
@@ -27,7 +27,7 @@ $ elasticsearch
 3) Install Indexer:
 
 ```
-pip install git+https://github.com/mediachain/mediachain-indexer.git
+$ pip install git+https://github.com/mediachain/mediachain-indexer.git
 ```
 
 4) Inspect environment variables and adjust as necessary:
@@ -51,7 +51,7 @@ MC_NUMBER_OF_SHARDS="1"
 5) Run a basic end-to-end demo:
 
 ```
-mediachain-indexer-test demo_end_to_end
+$ mediachain-indexer-test demo_end_to_end
 ```
 
 #### Full Setup
@@ -59,26 +59,25 @@ mediachain-indexer-test demo_end_to_end
 6) Alternatively, grab small Getty testing dataset:
 
 ```
-GETTY_KEY="<your_getty_key>" mediachain-indexer-ingest getty_create_dumps
+$ GETTY_KEY="<your_getty_key>" mediachain-indexer-ingest getty_create_dumps
 ```
 
 7) Ingest Getty dataset:
 
 ```
-mediachain-indexer-ingest ingest_bulk
-
+$ mediachain-indexer-ingest ingest_bulk
 ```
 
 8) Deduplicate ingested media:
 
 ```
-mediachain-indexer-dedupe dedupe_reindex 
+$ mediachain-indexer-dedupe dedupe_reindex 
 ```
 
 9) Start REST API server:
 
 ```
-mediachain-indexer-web web
+$ mediachain-indexer-web web
 ```
 
 10) Query the REST API:
