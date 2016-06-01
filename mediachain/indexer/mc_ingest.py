@@ -58,7 +58,7 @@ def getty_create_dumps(INC_SIZE = 100,
     Quick and dirty Getty API scraper.
     """
 
-    if not mc_config.GETTY_KEY:
+    if not mc_config.MC_GETTY_KEY:
         print ('ERROR: set GETTY_KEY environment variable.')
         exit(-1)
     
@@ -225,7 +225,7 @@ def getty_create_dumps(INC_SIZE = 100,
 
             print ('ADOING',url)
             hh = requests.get(url,
-                              headers={'Api-Key':mc_config.GETTY_KEY},
+                              headers={'Api-Key':mc_config.MC_GETTY_KEY},
                               verify=False,
                               ).json()
 
@@ -324,8 +324,8 @@ def es_connect():
     
 def iter_json_getty(max_num = 0,
                     dd = 'getty_small/json/images/',
-                    index_name = mc_config.INDEX_NAME,
-                    doc_type = mc_config.DOC_TYPE,                
+                    index_name = mc_config.MC_INDEX_NAME,
+                    doc_type = mc_config.MC_DOC_TYPE,                
                     ):
 
     dd3 = dd.replace('/json/images/','/downloads/')
@@ -392,8 +392,8 @@ def iter_json_getty(max_num = 0,
     
 def ingest_bulk(iter_json = False,
                 thread_count = 1,
-                index_name = mc_config.INDEX_NAME,
-                doc_type = mc_config.DOC_TYPE,
+                index_name = mc_config.MC_INDEX_NAME,
+                doc_type = mc_config.MC_DOC_TYPE,
                 search_after = False,
                 ):
     """
@@ -428,8 +428,8 @@ def ingest_bulk(iter_json = False,
             
     print ('CREATE_INDEX...',index_name)
     es.indices.create(index = index_name,
-                      body = {'settings': {'number_of_shards': mc_config.NUMBER_OF_SHARDS,
-                                           'number_of_replicas': mc_config.NUMBER_OF_REPLICAS,                             
+                      body = {'settings': {'number_of_shards': mc_config.MC_NUMBER_OF_SHARDS,
+                                           'number_of_replicas': mc_config.MC_NUMBER_OF_REPLICAS,                             
                                            },
                               'mappings': {doc_type: {'properties': {'title':{'type':'string'},
                                                                      'artist':{'type':'string'},
@@ -542,8 +542,18 @@ def ingest_bulk(iter_json = False,
     return es.count(index_name)['count']
 
 
+def config():
+    """
+    Print current environment variables.
+    """
+    for x in dir(mc_config):
+        if x.startswith('MC_'):
+            print x + '="%s"' % str(getattr(mc_config, x))
+
+
 functions=['getty_create_dumps',
            'ingest_bulk',
+           'config',
            ]
 
 def main():

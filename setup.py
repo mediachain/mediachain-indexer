@@ -16,6 +16,7 @@ setup(version = '0.0.1',
       entry_points = {'console_scripts': ['mediachain-indexer-dedupe = mediachain.indexer.mc_dedupe:main',
                                           'mediachain-indexer-ingest = mediachain.indexer.mc_ingest:main',
                                           'mediachain-indexer-web = mediachain.indexer.mc_web:main',
+                                          'mediachain-indexer-test = mediachain.indexer.mc_test:main',
                                           ]
                       },
     url = 'http://mediachain.io',

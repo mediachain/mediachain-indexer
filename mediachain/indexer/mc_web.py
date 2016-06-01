@@ -175,7 +175,7 @@ class BaseHandler(tornado.web.RequestHandler):
         self.write(pretty_print(hh,
                                 indent = indent,
                                 max_indent_depth = max_indent_depth,
-                                ).replace('\n','\r\n'))
+                                ).replace('\n','\r\n') + '\n')
         self.finish()
 
     
@@ -252,7 +252,7 @@ class handle_search(BaseHandler):
                 }
         
             in:
-                curl "http://127.0.0.1:23456/search" -d '{"q_id":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==", "limit":5, "index_name":"mc_test", "doc_type":"mc_test_image"}'
+                curl "http://127.0.0.1:23456/search" -d '{"q_id":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==", "limit":5, "index_name":"mc_test", "doc_type":"mc_test_image"}'
             out:
                  <see_previous_example>
         """

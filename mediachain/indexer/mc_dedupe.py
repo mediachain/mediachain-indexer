@@ -71,8 +71,8 @@ def dedupe_lookup_async(media_id,
                         include_self = False,
                         include_thumb = False,
                         es = False,
-                        index_name = mc_config.INDEX_NAME,
-                        doc_type = mc_config.DOC_TYPE,                
+                        index_name = mc_config.MC_INDEX_NAME,
+                        doc_type = mc_config.MC_DOC_TYPE,                
                         ):
     """
     Get list of all duplicates of a media work, from previously-generated duplicate lookup tables from `dedupe_reindex`.
@@ -124,9 +124,6 @@ def dedupe_lookup_async(media_id,
         
             rr = yield es.search(index = index_name,
                                  type = doc_type,
-                                 #source = {'query':{"constant_score":{"filter":{"term":{ "_id" : media_id}}}},
-                                 #          'size':1,
-                                 #          },
                                  source = {"query":{ "ids":{ "values": [ media_id ] } } }
                                  )
 
@@ -141,9 +138,7 @@ def dedupe_lookup_async(media_id,
             content_based_search = hh['dedupe_hsh']
             
             print ('GOT_HASH',hh['dedupe_hsh'])
-
-        #print ('QUERY',index_name,doc_type,{"query" : {"constant_score":{"filter":{"term":{ "dedupe_hsh" : content_based_search}}}}})
-            
+        
         rr = yield es.search(index = index_name,
                              type = doc_type,
                              source = {"query" : {"constant_score":{"filter":{"term":{ "dedupe_hsh" : content_based_search}}}}},
@@ -186,8 +181,8 @@ def dedupe_lookup_async(media_id,
         
         #Lookup cluster ID for media ID:    
         
-        rr = yield es.search(index = mc_config.INDEX_NAME_MID_TO_CID,
-                             type = mc_config.DOC_TYPE_MID_TO_CID,
+        rr = yield es.search(index = mc_config.MC_INDEX_NAME_MID_TO_CID,
+                             type = mc_config.MC_DOC_TYPE_MID_TO_CID,
                              source = {"query" : {"constant_score":{"filter":{"term":{ "_id" : media_id}}}},
                                        'size':1,
                                        },
@@ -203,8 +198,8 @@ def dedupe_lookup_async(media_id,
             hit = rr['hits']['hits'][0]
             hh = hit['_source']#['doc']
             
-            rr = yield es.multi_search(index = mc_config.INDEX_NAME_CID_TO_CLUSTER,
-                                       type = mc_config.DOC_TYPE_CID_TO_CLUSTER,
+            rr = yield es.multi_search(index = mc_config.MC_INDEX_NAME_CID_TO_CLUSTER,
+                                       type = mc_config.MC_DOC_TYPE_CID_TO_CLUSTER,
                                        source = {"query" : {"constant_score":{"filter":{"term":{ "_id" : hh['c_id']}}}}},
                                        )
 
@@ -221,8 +216,8 @@ def dedupe_lookup_async(media_id,
 def dedupe_reindex(duplicate_mode = 'baseline',
                    incremental = False,
                    batch_size = 100,
-                   index_name = mc_config.INDEX_NAME,
-                   doc_type = mc_config.DOC_TYPE,
+                   index_name = mc_config.MC_INDEX_NAME,
+                   doc_type = mc_config.MC_DOC_TYPE,
                    ):
     """
     Regenerate duplicate lookup tables.
@@ -322,16 +317,16 @@ def dedupe_reindex(duplicate_mode = 'baseline',
             #Media ID -> Cluster ID:
             for mid in cluster:
                 rr.append({'_op_type': 'insert',
-                           '_index': mc_config.INDEX_NAME_MID_TO_CID,
-                           '_type': mc_config.DOC_TYPE_MID_TO_CID,
+                           '_index': mc_config.MC_INDEX_NAME_MID_TO_CID,
+                           '_type': mc_config.MC_DOC_TYPE_MID_TO_CID,
                            '_id': mid,
                            'doc': {'c_id': cn},
                            })
 
             #Cluster ID -> Cluster:
             rr.append({'_op_type': 'insert',
-                       '_index': mc_config.INDEX_NAME_CID_TO_CLUSTER,
-                       '_type': mc_config.DOC_TYPE_CID_TO_CLUSTER,
+                       '_index': mc_config.MC_INDEX_NAME_CID_TO_CLUSTER,
+                       '_type': mc_config.MC_DOC_TYPE_CID_TO_CLUSTER,
                        '_id': c_id,
                        'doc': {'cluster': cluster},
                        })
