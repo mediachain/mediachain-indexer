@@ -24,7 +24,11 @@ mediachain-indexer-test   | Simple ingestion, search, and dedupe tests.
 $ elasticsearch
 ```
 
-3. https://github.com/mediachain/mediachain-indexer.git
+3. Install Indexer:
+
+```
+pip install git+https://github.com/mediachain/mediachain-indexer.git
+```
 
 4. Inspect environment variables and adjust as necessary:
 
