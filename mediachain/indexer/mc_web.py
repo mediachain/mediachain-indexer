@@ -81,8 +81,8 @@ class Application(tornado.web.Application):
         
         tornado.web.Application.__init__(self, handlers, **settings)
         
-        self.INDEX_NAME = mc_config.INDEX_NAME
-        self.DOC_TYPE = mc_config.DOC_TYPE
+        self.INDEX_NAME = mc_config.MC_INDEX_NAME
+        self.DOC_TYPE = mc_config.MC_DOC_TYPE
 
 
 class BaseHandler(tornado.web.RequestHandler):
@@ -273,8 +273,8 @@ class handle_search(BaseHandler):
         q_text = data.get('q','')
         q_id = data.get('q_id','')
         limit = intget(data.get('q'), 10)
-        index_name = data.get('index_name', mc_config.INDEX_NAME)
-        doc_type = data.get('doc_type', mc_config.DOC_TYPE)
+        index_name = data.get('index_name', mc_config.MC_INDEX_NAME)
+        doc_type = data.get('doc_type', mc_config.MC_DOC_TYPE)
         include_docs = data.get('include_docs', True)
         include_thumb = data.get('include_thumb', True)
         
@@ -426,8 +426,8 @@ class handle_dupe_lookup(BaseHandler):
                                                  include_docs = data.get('include_docs'),
                                                  include_self = data.get('include_self'),
                                                  include_thumb = data.get('include_thumb'),
-                                                 index_name = data.get('index_name', mc_config.INDEX_NAME),
-                                                 doc_type = data.get('doc_type', mc_config.DOC_TYPE),
+                                                 index_name = data.get('index_name', mc_config.MC_INDEX_NAME),
+                                                 doc_type = data.get('doc_type', mc_config.MC_DOC_TYPE),
                                                  es = self.es,
                                                  )
         
@@ -489,8 +489,8 @@ class handle_score(BaseHandler):
         
         query = {"query": {"match_all": {}}}
         
-        rr = yield self.es.search(index = mc_config.INDEX_NAME,
-                                  type = mc_config.DOC_TYPE,
+        rr = yield self.es.search(index = mc_config.MC_INDEX_NAME,
+                                  type = mc_config.MC_DOC_TYPE,
                                   source = query,
                                   )
         

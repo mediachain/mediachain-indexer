@@ -83,7 +83,7 @@ mediachain-indexer-web web
 
 10. Query the REST API:
 
-Text-based media search:
+Search by text:
 
 ```
 $ curl "http://127.0.0.1:23456/search" -d '{"q":"crowd", "limit":5}'
@@ -111,7 +111,7 @@ $ curl "http://127.0.0.1:23456/search" -d '{"q":"crowd", "limit":5}'
 }
 ```
 
-Content-based media search:
+Search by media content:
 
 ```
 $ curl "http://127.0.0.1:23456/search" -d '{"q_id":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==", "limit":5, "index_name":"mc_test", "doc_type":"mc_test_image"}'
@@ -139,11 +139,47 @@ $ curl "http://127.0.0.1:23456/search" -d '{"q_id":"data:image/png;base64,iVBORw
 }
 ```
 
+Search by ID:
+
+```
+$ curl "http://127.0.0.1:23456/search" -d '{"q_id":"getty_1234", "limit":5, "index_name":"mc_test", "doc_type":"mc_test_image"}'
+{   
+    "next_page": null,
+    "prev_page": null,
+    "results": [
+        {   
+            "_id": "getty_1234",
+            "_index": "mc_test",
+            "_score": 1.0,
+            "_source": {
+                "artist": "test artist",
+                "caption": "test caption",
+                "collection_name": "test collection name",
+                "date_created": "2016-06-01T15:21:57.796894",
+                "dedupe_hsh": "3e600f30039800ee003f020cfde03e000e03b800cf9f03ef88f7c63bf30cf980",
+                "editorial_source": "test editorial source",
+                "keywords": "test keywords",
+                "title": "Crowd of People Walking"
+            },
+            "_type": "mc_test_image"
+        }
+    ]
+}
+```
+
 Duplicate lookup by ID:
 
 ```
 $ curl "http://127.0.0.1:23456/dupe_lookup" -d '{"q_media":"getty_531746790"}'
-{"next_page": null, "results": [], "prev_page": null}
+{
+    "next_page": null, 
+    "prev_page": null, 
+    "results": [
+        {
+            "_id": "getty_1234"
+        }
+    ]
+}
 ```
 
 
