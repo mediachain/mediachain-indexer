@@ -13,24 +13,24 @@ mediachain-indexer-test   | Simple ingestion, search, and dedupe tests.
 
 #### Core Setup
 
-1. Install Elasticsearch. Version 2.3.2 or higher recommended.
+1) Install Elasticsearch. Version 2.3.2 or higher recommended.
   - [General Instructions](https://www.elastic.co/guide/en/elasticsearch/reference/current/_installation.html).
   - OSX: `brew install elasticsearch`
   - Linux: Check with your distribution.
 
-2. Launch elasticsearch server.
+2) Launch elasticsearch server.
 
 ```
 $ elasticsearch
 ```
 
-3. Install Indexer:
+3) Install Indexer:
 
 ```
 pip install git+https://github.com/mediachain/mediachain-indexer.git
 ```
 
-4. Inspect environment variables and adjust as necessary:
+4) Inspect environment variables and adjust as necessary:
 
 ```
 $ mediachain-indexer-ingest config
@@ -48,7 +48,7 @@ MC_NUMBER_OF_SHARDS="1"
 
 #### Quick Test
 
-5. Run a basic end-to-end demo:
+5) Run a basic end-to-end demo:
 
 ```
 mediachain-indexer-test demo_end_to_end
@@ -56,32 +56,32 @@ mediachain-indexer-test demo_end_to_end
 
 #### Full Setup
 
-6. Alternatively, grab small Getty testing dataset:
+6) Alternatively, grab small Getty testing dataset:
 
 ```
 GETTY_KEY="<your_getty_key>" mediachain-indexer-ingest getty_create_dumps
 ```
 
-7. Ingest Getty dataset:
+7) Ingest Getty dataset:
 
 ```
 mediachain-indexer-ingest ingest_bulk
 
 ```
 
-8. Deduplicate ingested media:
+8) Deduplicate ingested media:
 
 ```
 mediachain-indexer-dedupe dedupe_reindex 
 ```
 
-9. Start REST API server:
+9) Start REST API server:
 
 ```
 mediachain-indexer-web web
 ```
 
-10. Query the REST API:
+10) Query the REST API:
 
 Search by text:
 
