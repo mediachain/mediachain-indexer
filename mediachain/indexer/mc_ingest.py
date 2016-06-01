@@ -545,7 +545,7 @@ def ingest_bulk(iter_json = False,
 def config():
     """
     Print current environment variables.
-    """
+    """    
     for x in dir(mc_config):
         if x.startswith('MC_'):
             print x + '="%s"' % str(getattr(mc_config, x))
