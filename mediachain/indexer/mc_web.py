@@ -241,7 +241,7 @@ class handle_search(BaseHandler):
                                 "caption": "CANNES:  A policeman watches the crowd in front of the Palais des Festival", 
                                 "collection_name": "Getty Images Entertainment", 
                                 "date_created": "2016-05-16T00:00:00-07:00", 
-                                "_dedupe_hsh": "d665691fe66393d81c078ae1ff1467cf18f78070900e23ff87c98704cc007c00", 
+                                "dedupe_hsh": "d665691fe66393d81c078ae1ff1467cf18f78070900e23ff87c98704cc007c00", 
                                 "editorial_source": "Getty Images Europe", 
                                 "keywords": "People Vertical Crowd Watching France Police Force Cannes", 
                                 "title": "'Loving' - Red Carpet Arrivals - The 69th Annual Cannes Film Festival"
@@ -298,13 +298,14 @@ class handle_search(BaseHandler):
                 
                 #Resolve ID(s) for query based on content.
                 #Note that this is similar to `/dupe_lookup` with `include_docs` = True:
+
+                model = mc_dedupe.REP_MODEL_NAMES['baseline']()
                 
-                content_based_search = mc_dedupe.img_to_hsh(q_id)
+                terms = model.img_to_terms(q_id)
                 
                 rr = yield self.es.search(index = index_name,
                                           type = doc_type,
-                                          source = {"query": {"constant_score":{"filter":{"term":
-                                                                  { "dedupe_hsh" : content_based_search}}}}},
+                                          source = {"query": {"constant_score":{"filter":{"term": terms}}}},
                                           )
                 
                 rr = json.loads(rr.body)
@@ -357,7 +358,16 @@ class handle_search(BaseHandler):
         
         if False:
             rr = [x['_source'] for x in rr]
+
         
+        # Remove terms from `dedupe_` models:
+        for xx in rr:
+            xx['_source']  = {x:y
+                              for x,y
+                              in xx['_source'].iteritems()
+                              if not x.startswith('dedupe_')
+                              }
+                  
         rr = {'results':rr,
               'next_page':None,
               'prev_page':None,
