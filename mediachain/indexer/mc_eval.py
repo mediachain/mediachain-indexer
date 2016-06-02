@@ -12,8 +12,7 @@ Starting with:
 
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.metrics import precision_recall_curve
-from sklearn.metrics import average_precision_score
+from sklearn.metrics import precision_recall_curve, average_precision_score, classification_report
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 
@@ -26,7 +25,7 @@ from os.path import exists
 from random import random, shuffle
 import requests
 import zipfile
-    
+
 
 def download_ukbench(fn_out = 'datasets/ukbench/ukbench.zip'):
     """
@@ -105,8 +104,8 @@ def iter_ukbench(max_num = 0,
             yield hh
 
 
-def eval(max_num = 2000,
-         num_queries = 1000,
+def eval(max_num = 500,
+         num_queries = 500,
          the_gen = iter_ukbench,
          rep_model_names = ['baseline_ng',
                             'baseline',
@@ -185,7 +184,7 @@ def eval(max_num = 2000,
 
         done[rep_model_name] = set()
         
-        p_at_k[rep_model_name] = {'at_4':0,
+        p_at_k[rep_model_name] = {'at_04':0,
                                   'at_10':0,
                                   'at_50':0,
                                   }
@@ -212,24 +211,16 @@ def eval(max_num = 2000,
         for c,hh in enumerate(iter_ukbench(num_queries, do_img_data = False)):
             
             group_num = hh['group_num']
-                        
-            terms = rep_model.img_to_terms(img_fn = hh['fn'])
             
-            if rep_model_name == 'baseline':
-                query = {"query": {"constant_score":{"filter":{"term": terms}}}}
-                
-            elif rep_model_name == 'baseline_ng':
-                query = {'query':{'filtered': {'query': {'bool': {'should': [{'term': {x:y}} for x,y in terms.items()] } } } } }
-            else:
-                assert False,rep_model_name
-                
+            query = rep_model.img_to_es_query(img_fn = hh['fn'])
+            
             #print query
             
             rr = es.search(index = index_name,
                            doc_type = doc_type,
                            body = query,
                            fields = ['_id', 'group_num'],
-                           size = 50,#max_num, #50,
+                           size = 100,#max_num, #50,
                            timeout = '5s',
                            )
             
@@ -253,7 +244,7 @@ def eval(max_num = 2000,
                          if (x['fields']['group_num'][0] == hh['group_num']) and (x['_id'] != hh['_id'])
                          ]) / 3.0
 
-            p_at_k[rep_model_name]['at_4'] += at_4
+            p_at_k[rep_model_name]['at_04'] += at_4
             p_at_k[rep_model_name]['at_10'] += at_10
             p_at_k[rep_model_name]['at_50'] += at_50
 
@@ -324,7 +315,7 @@ def eval(max_num = 2000,
                 
             print c, rep_model_name, p_at_k[rep_model_name]
 
-        print 'PRECISION_@_K:',rep_model_name,p_at_k[rep_model_name]
+        print 'PRECISION_@_K:',rep_model_name,[(x,100 * y / float(num_queries)) for x,y in p_at_k[rep_model_name].items()]
 
     ### Plot Precision-Recall curves:
 
@@ -338,9 +329,6 @@ def eval(max_num = 2000,
             # Failed to find any matches at all...
             continue
         
-        #dedupe_prob[mn] = [log(y+1) for y in dedupe_prob[mn]]
-        #dedupe_prob[mn] *= np.array((1.0/max(dedupe_prob[mn])))
-
         zz = MinMaxScaler(feature_range=(0, 1))
         dedupe_prob[mn] = zz.fit_transform(dedupe_prob[mn])
         
@@ -359,6 +347,16 @@ def eval(max_num = 2000,
         print mn,'PROB     ',dedupe_prob[mn][:10]
         print mn,'precision',list(precision[mn])[:10]
         print mn,'recall   ',list(recall[mn])[:10]
+
+        if False:
+            for thresh in np.linspace(0, 1, 20):
+                print
+                print 'THRESH:',thresh
+                print classification_report(dedupe_true[mn],
+                                            (np.array(dedupe_prob[mn]) > thresh),
+                                            target_names=['diff','same'],
+                                            )
+                raw_input_enter()
         
         ### Plot Precision-Recall curve for each class:
         
@@ -393,8 +391,8 @@ def eval(max_num = 2000,
         print ('DELETE_INDEX...', index_name)
         es.indices.delete(index = index_name)
         print ('DELETED')
-
-    print 'PRECISION_@_K:',p_at_k
+    
+    print 'PRECISION_@_K:',[(mm,[(x,100 * y / float(num_queries)) for x,y in zz.items()]) for mm,zz in p_at_k.items()]
         
     print 'DONE'
     

@@ -72,6 +72,14 @@ class model_reps_baseline(object):
         hsh = binascii.b2a_hex(np.packbits(imagehash.dhash(img, hash_size = hash_size).hash).tobytes())
         return {'dedupe_hsh': hsh}
 
+    def img_to_es_query(self, *args, **kw):
+        terms = self.img_to_terms(*args, **kw)
+        query = {"query": {"constant_score":{"filter":{"term": terms}}}}
+        return query
+    
+    
+            
+    
     
 from sklearn.feature_extraction.image import extract_patches_2d
 from math import sqrt
@@ -90,6 +98,7 @@ class model_reps_baseline_ng(object):
         else:
             img = Image.open(img_fn)
         hsh = imagehash.dhash(img, hash_size = hash_size).hash
+        #hsh = imagehash.phash(img, hash_size = hash_size).hash
         return hsh
 
     def hsh_to_patches(self, hsh, patch_size = 4, max_patches = 64):
@@ -123,6 +132,11 @@ class model_reps_baseline_ng(object):
         patches = self.hsh_to_patches(hsh, patch_size = patch_size, max_patches = max_patches)
         rr = self.patches_to_query(patches)
         return rr
+    
+    def img_to_es_query(self, *args, **kw):
+        terms = self.img_to_terms(*args, **kw)
+        query = {'query':{'filtered': {'query': {'bool': {'should': [{'term': {x:y}} for x,y in terms.items()] } } } } }
+        return query
 
 
 REP_MODEL_NAMES = {'baseline':model_reps_baseline,
