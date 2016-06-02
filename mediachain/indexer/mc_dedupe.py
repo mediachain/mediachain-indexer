@@ -92,7 +92,7 @@ class model_reps_baseline_ng(object):
         hsh = imagehash.dhash(img, hash_size = hash_size).hash
         return hsh
 
-    def hsh_to_patches(self, hsh, patch_size = 4, max_patches = 16):
+    def hsh_to_patches(self, hsh, patch_size = 4, max_patches = 64):
 
         pp = extract_patches_2d(hsh.astype(int), (patch_size, patch_size))
 

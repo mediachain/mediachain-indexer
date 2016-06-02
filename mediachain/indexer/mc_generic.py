@@ -22,7 +22,7 @@ def tcache(fn,
     Usage:
         To cache output of `str(1234)` in file 'cache_file', do the following:
         
-        d = tcache('some_file', str, 1234)
+        d = tcache('cache_file', str, 1234)
     """
     
     if exists(fn):

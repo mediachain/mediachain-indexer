@@ -40,24 +40,25 @@ def demo_end_to_end(index_name = TEST_INDEX_NAME,
     
     img_id = 'getty_1234'
     
-    test_ingest = [{'_id': img_id,
-                    'title':'Crowd of People Walking',
-                    'artist':'test artist',
-                    'collection_name':'test collection name',
-                    'caption':'test caption',
-                    'editorial_source':'test editorial source',
-                    'keywords':'test keywords',
-                    'date_created':datetime.datetime.now(),
-                    'img_data':img_uri,
-                    }]
+    def test_ingest():
+        yield {'_id': img_id,
+               'title':'Crowd of People Walking',
+               'artist':'test artist',
+               'collection_name':'test collection name',
+               'caption':'test caption',
+               'editorial_source':'test editorial source',
+               'keywords':'test keywords',
+               'date_created':datetime.datetime.now(),
+               'img_data':img_uri,
+               }
     
-    num_inserted = mc_ingest.ingest_bulk(test_ingest,
+    num_inserted = mc_ingest.ingest_bulk(test_ingest(),
                                          index_name = index_name,
                                          doc_type = doc_type,
                                          )
     
     print ('INSERTED',num_inserted)
-
+    
     mc_dedupe.dedupe_reindex(index_name = index_name,
                              doc_type = doc_type,
                              )
