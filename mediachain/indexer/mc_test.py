@@ -38,14 +38,9 @@ def demo_end_to_end(index_name = TEST_INDEX_NAME,
     
     img_uri = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
     
-    img_data = mc_ingest.decode_image(img_uri)
-
     img_id = 'getty_1234'
     
-    test_ingest = [{'_op_type': 'index',
-                    '_index': index_name,
-                    '_type': doc_type,
-                    '_id': img_id,
+    test_ingest = [{'_id': img_id,
                     'title':'Crowd of People Walking',
                     'artist':'test artist',
                     'collection_name':'test collection name',
@@ -53,7 +48,7 @@ def demo_end_to_end(index_name = TEST_INDEX_NAME,
                     'editorial_source':'test editorial source',
                     'keywords':'test keywords',
                     'date_created':datetime.datetime.now(),
-                    'img_data':img_data,
+                    'img_data':img_uri,
                     }]
     
     num_inserted = mc_ingest.ingest_bulk(test_ingest,
@@ -81,7 +76,7 @@ def demo_end_to_end(index_name = TEST_INDEX_NAME,
                        ).json()
     
     print pretty_print(hh)
-    assert hh['results'][0]['_id'] == img_id,hh
+    assert hh['results'][0]['_id'] == img_id,(2, hh)
     
     print ('SEARCH_BY_CONTENT...')
     
@@ -97,7 +92,7 @@ def demo_end_to_end(index_name = TEST_INDEX_NAME,
                        ).json()
     
     print pretty_print(hh)
-    assert hh['results'][0]['_id'] == img_id,hh
+    assert hh['results'][0]['_id'] == img_id,(3,hh)
 
     print ('SEARCH_BY_ID...')
     
@@ -113,7 +108,7 @@ def demo_end_to_end(index_name = TEST_INDEX_NAME,
                        ).json()
     
     print pretty_print(hh)
-    assert hh['results'][0]['_id'] == img_id,hh
+    assert hh['results'][0]['_id'] == img_id,(4,hh)
     
     print ('DEDUPE_LOOKUP...')
     
@@ -130,7 +125,7 @@ def demo_end_to_end(index_name = TEST_INDEX_NAME,
                        ).json()
     
     print pretty_print(hh)
-    assert hh['results'][0]['_id'] == img_id,hh
+    assert hh['results'][0]['_id'] == img_id,(5,hh)
 
     print ('DONE_DEMO')
 

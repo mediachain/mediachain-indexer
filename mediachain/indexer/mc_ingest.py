@@ -293,12 +293,20 @@ def getty_create_dumps(INC_SIZE = 100,
 data_pat = 'data:image/jpeg;base64,'
 data_pat_2 = 'data:image/png;base64,'
     
-def shrink_and_encode_image(s):
+def shrink_and_encode_image(s, size = (150, 150)):
     """
     Resize image to small size & base64 encode it.
+    """
     
-    For now, we assume input is a Getty `thumb` images, which is small enough that we can skip resizing.
-    """    
+    img = Image.open(StringIO(s))
+    
+    if (img.size[0] > size[0]) or (img.size[1] > size[1]):
+        f2 = StringIO()
+        img.thumbnail(size, Image.ANTIALIAS)
+        img.save(f2, "JPEG")
+        f2.seek(0)
+        s = f2.read()
+    
     return data_pat + base64.urlsafe_b64encode(s)
 
 def decode_image(s):
@@ -395,6 +403,7 @@ def ingest_bulk(iter_json = False,
                 index_name = mc_config.MC_INDEX_NAME,
                 doc_type = mc_config.MC_DOC_TYPE,
                 search_after = False,
+                redo_thumbs = True,
                 ):
     """
     Ingest Getty dumps from JSON files.
@@ -451,29 +460,45 @@ def ingest_bulk(iter_json = False,
     
     print('INSERTING...')
 
-    def iter_json_wrapper():
-        """
-        Extra processing for each media work.
-        """
+    def iter_wrap():
+        # Put in parallel_bulk() format:
         
         for hh in iter_json:
-
-            assert 'img_data' in hh,'`img_data` required for ingestion.'
             
-            img_data = hh['img_data']
+            xdoc = {'_op_type': 'index',
+                    '_index': index_name,
+                    '_type': doc_type,
+                    }
+            
+            hh.update(xdoc)
 
-            img_data_uri = shrink_and_encode_image(img_data)
+            if redo_thumbs:
+                # Check existing thumbs meet size & format requirements:
                 
-            hh['image_thumb'] = img_data_uri 
-            
-            # Added for V1, to save on ES re-indexing overhead:
-            #hh['dedupe_hsh'] = mc_dedupe.img_to_hsh(img_data_uri)
-            
-            del hh['img_data']
+                if 'img_data' in hh:
+                    hh['image_thumb'] = shrink_and_encode_image(decode_image(hh['img_data']))
+                    
+                elif 'image_thumb' in hh:
+                    hh['image_thumb'] = shrink_and_encode_image(decode_image(hh['image_thumb']))
+                
+                else:
+                    assert False,'CANT_GENERATE_THUMBNAILS'
+                    
+            elif 'image_thumb' not in hh:
+                # Generate thumbs from raw data:
+                
+                if 'img_data' in hh:
+                    hh['image_thumb'] = shrink_and_encode_image(decode_image(hh['img_data']))
+                    
+                else:
+                    assert False,'CANT_GENERATE_THUMBNAILS'
+                
+            if 'img_data' in hh:
+                del hh['img_data']
             
             yield hh
-
-    gen = iter_json_wrapper()
+    
+    gen = iter_wrap()
 
     # TODO: parallel_bulk silently eats exceptions. Here's a quick hack to watch for errors:
         
@@ -500,7 +525,7 @@ def ingest_bulk(iter_json = False,
     print ('REFRESHING', index_name)
     es.indices.refresh(index = index_name)
     print ('REFRESHED')
-
+    
     if search_after:
         
         print ('SEARCH...')

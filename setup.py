@@ -17,6 +17,7 @@ setup(version = '0.0.1',
                                           'mediachain-indexer-ingest = mediachain.indexer.mc_ingest:main',
                                           'mediachain-indexer-web = mediachain.indexer.mc_web:main',
                                           'mediachain-indexer-test = mediachain.indexer.mc_test:main',
+                                          'mediachain-indexer-eval = mediachain.indexer.mc_eval:main',
                                           ]
                       },
     url = 'http://mediachain.io',

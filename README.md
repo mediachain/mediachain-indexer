@@ -7,6 +7,7 @@ mediachain-indexer-dedupe | (Re-)Generate deduplication lookup indexes.
 mediachain-indexer-ingest | Ingest media from local sources or Mediachain API, for search & dedupe.
 mediachain-indexer-web    | Search & dedupe REST API.
 mediachain-indexer-test   | Simple ingestion, search, and dedupe tests.
+mediachain-indexer-eval   | Evaluate models against benchmarks.
 
 
 ## Getting Started

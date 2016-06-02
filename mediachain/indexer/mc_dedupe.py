@@ -55,14 +55,80 @@ import mc_config
 data_pat = 'data:image/jpeg;base64,'
 data_pat_2 = 'data:image/png;base64,'
 
-def img_to_hsh(img_data_uri):
+class model_reps_baseline(object):
     """
-    Crude method only used for V1 dedupe.
+    Crudest image-matching model. Low-precision, low-recall.
+    Does 1-to-1 matching of engineered feature hashes.
     """
-    img = Image.open(StringIO(decode_image(img_data_uri.encode('utf8'))))
-    hsh = binascii.b2a_hex(np.packbits(imagehash.dhash(img, hash_size = 16).hash).tobytes())
-    return hsh
+    
+    #was img_to_hsh()
+    def img_to_terms(self, img_data_uri = False, img_fn = False, hash_size = 16):
+        if img_data_uri:
+            if type(img_data_uri) is unicode:
+                img_data_uri = img_data_uri.encode('utf8')
+            img = Image.open(StringIO(decode_image(img_data_uri)))
+        else:
+            img = Image.open(img_fn)
+        hsh = binascii.b2a_hex(np.packbits(imagehash.dhash(img, hash_size = hash_size).hash).tobytes())
+        return {'dedupe_hsh': hsh}
 
+    
+from sklearn.feature_extraction.image import extract_patches_2d
+from math import sqrt
+
+class model_reps_baseline_ng(object):
+    """
+    Crude image-matching model. Slightly higher recall than `baseline` model.
+    Does approximate matching of engineered feature hashes.
+    """
+    
+    def img_to_hsh_bools(self, img_data_uri = False, img_fn = False, hash_size = 16):
+        if img_data_uri:
+            if type(img_data_uri) is unicode:
+                img_data_uri = img_data_uri.encode('utf8')
+            img = Image.open(StringIO(decode_image(img_data_uri)))
+        else:
+            img = Image.open(img_fn)
+        hsh = imagehash.dhash(img, hash_size = hash_size).hash
+        return hsh
+
+    def hsh_to_patches(self, hsh, patch_size = 4, max_patches = 16):
+
+        pp = extract_patches_2d(hsh.astype(int), (patch_size, patch_size))
+
+        # flatten 2nd and 3rd dimension:
+
+        pp = pp.reshape((pp.shape[0], -1))
+
+        # extract sample of patches:
+
+        max_patches = min(max_patches, pp.shape[0])
+        rr = [pp[x] for x in np.linspace(0, pp.shape[0], max_patches, endpoint=False).astype(int)]
+
+        # pack patches into numbers:
+
+        packed = [int(binascii.b2a_hex(''.join(np.packbits(x).view('c'))) or '0', 16) for x in rr]
+
+        return packed
+
+    def patches_to_query(self, packed):
+        query = {}
+        for c,zz in enumerate(packed):
+            query['dedupe_word_' + str(c)] = zz
+        return query
+    
+    def img_to_terms(self, img_data_uri = False, img_fn = False, patch_size = 5, max_patches = 64, hash_size = 16):
+        #was img_to_query
+        hsh = self.img_to_hsh_bools(img_data_uri = img_data_uri, img_fn = img_fn, hash_size = hash_size)
+        patches = self.hsh_to_patches(hsh, patch_size = patch_size, max_patches = max_patches)
+        rr = self.patches_to_query(patches)
+        return rr
+
+
+REP_MODEL_NAMES = {'baseline':model_reps_baseline,
+                   'baseline_ng':model_reps_baseline_ng,
+                   }
+    
 @tornado.gen.coroutine
 def dedupe_lookup_async(media_id,
                         duplicate_mode = 'baseline',
@@ -213,7 +279,7 @@ def dedupe_lookup_async(media_id,
 
 
 
-def dedupe_reindex(duplicate_mode = 'baseline',
+def dedupe_reindex(duplicate_modes = ['baseline', 'baseline_ng'],
                    incremental = False,
                    batch_size = 100,
                    index_name = mc_config.MC_INDEX_NAME,
@@ -229,17 +295,17 @@ def dedupe_reindex(duplicate_mode = 'baseline',
     each new media file.
     
     Args: 
-        duplicate_mode:  Semantic duplicate type. For now, defaults to 'baseline'.
-        incremental:     If True, only update clusters affected by newly ingested media. Otherwise, regenerate
-                         all dedupe clusters. Note: the more records that are deduped simultaneously, the greater
-                         the efficiency.
+        duplicate_modes:  List of semantic duplicate types to calculate. Defaults to ['baseline', 'baseline_ng'].
+        incremental:      If True, only update clusters affected by newly ingested media. Otherwise, regenerate
+                          all dedupe clusters. Note: the more records that are deduped simultaneously, the greater
+                          the efficiency.
     
     Returns:
         Check program exit status.
     """
     
-    assert duplicate_mode == 'baseline','DUPLICATE_MODE_NOT_IMPLEMENTED'
-
+    assert not set(duplicate_modes).difference(['baseline', 'baseline_ng']),'DUPLICATE_MODE_NOT_IMPLEMENTED'
+    
     def do_commit(rrr):
         print ('COMMITTING BATCH...',len(rrr))
         for is_success,res in parallel_bulk(es,
@@ -273,34 +339,38 @@ def dedupe_reindex(duplicate_mode = 'baseline',
     
     rr = []
     
+    nn = 0
+    
+    models = [REP_MODEL_NAMES[x]() for x in duplicate_modes]
+    
     for c,hit in enumerate(res):
+
+        nn += 1
         
         hh = hit['_source']#['doc']
         #hh['_id'] = hit['_id']
-                
-        hsh = img_to_hsh(hh['image_thumb'])
         
-        if False:            
-            ### Can skip this for the trivial baseline:
+        doc_update = {}
+
+        for model in models:
+            doc_update.update(model.img_to_terms(hh['image_thumb']))
             
-            if hsh not in hash_to_ids:
-                hash_to_ids[hsh] = []
-            hash_to_ids[hsh].append(hh['_id'])
-                
         rr.append({'_op_type': 'update',
                    '_index': index_name,
                    '_type': doc_type,
                    '_id': hit['_id'],
-                   'body': {'doc':{'dedupe_hsh': hsh}},
+                   'body': {'doc':doc_update},
                    })
                 
-        print ('ADD',c,rr)
+        #print ('ADD',c) #rr
         
         if len(rr) >= batch_size:
             do_commit(rr)
         
     if rr:
         do_commit(rr)
+
+    print ('UPDATED',nn)
 
     print ('REFRESHING', index_name)
     es.indices.refresh(index = index_name)
@@ -339,8 +409,8 @@ def dedupe_reindex(duplicate_mode = 'baseline',
     
     print ('DONE_DEDUPE')
     
+    return nn
     
-
 
 functions=['dedupe_reindex',
            ]

@@ -241,7 +241,7 @@ class handle_search(BaseHandler):
                                 "caption": "CANNES:  A policeman watches the crowd in front of the Palais des Festival", 
                                 "collection_name": "Getty Images Entertainment", 
                                 "date_created": "2016-05-16T00:00:00-07:00", 
-                                "dedupe_hsh": "d665691fe66393d81c078ae1ff1467cf18f78070900e23ff87c98704cc007c00", 
+                                "_dedupe_hsh": "d665691fe66393d81c078ae1ff1467cf18f78070900e23ff87c98704cc007c00", 
                                 "editorial_source": "Getty Images Europe", 
                                 "keywords": "People Vertical Crowd Watching France Police Force Cannes", 
                                 "title": "'Loving' - Red Carpet Arrivals - The 69th Annual Cannes Film Festival"

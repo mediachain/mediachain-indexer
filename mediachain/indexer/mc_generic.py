@@ -8,8 +8,85 @@ import json
 import fcntl, termios, struct
 import sys
 from time import time
-from os import system, walk
-from os.path import join
+from os import system, walk, rename
+from os.path import join, exists
+import requests
+
+def tcache(fn,
+           func,
+           *args,
+           **kw):
+    """
+    Cache function output. Use temporary file to be semi-atomic.
+    
+    Usage:
+        To cache output of `str(1234)` in file 'cache_file', do the following:
+        
+        d = tcache('some_file', str, 1234)
+    """
+    
+    if exists(fn):
+        with open(fn) as f:
+            d = f.read()
+    
+    else:
+        fn_temp = fn + '.temp'
+        
+        d = func(*args, **kw)
+
+        with open(fn_temp, 'w') as f:
+            f.write(d)
+
+        rename(fn_temp, fn)
+    
+    return d
+
+
+def download_streamed(url,
+                      fn,
+                      chunk_size = 1024 * 1024,
+                      headers = {'User-Agent':'Mediachain Indexer 1.0'},
+                      use_temp = True,
+                      skip_existing = True,
+                      verbose = False,
+                      ):
+    """
+    Streaming download with requests, memoization, progress, and temporary file.
+    """
+    
+    if skip_existing and exists(fn):
+        return
+    
+    if verbose:
+        print 'DOWNLOAD',url,'->',fn
+        
+    if use_temp:
+        xfn = fn + '.temp'
+    else:
+        xfn = fn
+
+    r = requests.get(url,
+                     verify = False,
+                     headers = headers,
+                     stream = True,
+                     )
+
+    nn = 0
+    with open(xfn, 'w') as f:
+        for chunk in r.iter_content(chunk_size = chunk_size): 
+            if chunk: # filter out keep-alive new chunks
+                nn += len(chunk)
+                
+                if verbose:
+                    print 'WROTE','%.2fMB' % (nn / (1024 * 1024.0)),'->',xfn
+                    
+                f.write(chunk)
+
+    if use_temp:
+        print 'DONE_DOWNLOAD',xfn,'->',fn
+        rename(xfn,
+               fn,
+               )
 
 
 def walk_files(dd, max_num = 0):
