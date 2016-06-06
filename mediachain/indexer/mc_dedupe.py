@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-__doc__ = \
 """
 Run dedupe on all ingested media, to generate two lookup tables:
 
@@ -88,6 +87,18 @@ class model_reps_baseline_ng(object):
     """
     Crude image-matching model. Slightly higher recall than `baseline` model.
     Does approximate matching of engineered feature hashes.
+    
+    Attempts to approximate hamming-distance nearest neighbors retrieval from the
+    Lucene / Elasticsearch inverted index. 
+
+    Details:
+        Word-ngrams are simulated by taking patches of 2d boolean array output by the hashing function
+        and converting these "words" to numbers. These numbers are inserted into each image document.
+        The documents are queried using the Lucene / ElasticSearch multiterm tf-idf querying method
+        via queries of the form: "{"query": {"bool": {"should": [ terms_list ] } } }".
+    
+    See Also:
+        `mc_eval.ScoringTFIDF`
     """
     
     def img_to_hsh_bools(self, img_data_uri = False, img_fn = False, hash_size = 16):

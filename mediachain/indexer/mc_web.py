@@ -143,16 +143,29 @@ class BaseHandler(tornado.web.RequestHandler):
         
     def write_json(self,
                    hh,
+                   sort_keys = True,
+                   indent = 0,
+                   pretty = False,
+                   max_indent_depth = False,
                    ):
         """
         Central point where we can customize the JSON output.
         """
         self.set_header("Content-Type", "application/json")
-        self.write(json.dumps(hh,
-                              #sort_keys = True,
-                              #indent = 4,
-                              ) + '\n')
+        
+        if pretty:
+            self.write(pretty_print(hh,
+                                    indent = indent,
+                                    max_indent_depth = max_indent_depth,
+                                    ).replace('\n','\r\n') + '\n')
+        
+        else:
+            self.write(json.dumps(hh,
+                                  sort_keys = sort_keys,
+                                  indent = indent,
+                                  ) + '\n')
         self.finish()
+        
 
     def write_error(self,
                     status_code,
@@ -163,21 +176,6 @@ class BaseHandler(tornado.web.RequestHandler):
               }
 
         self.write_json(rr)
-        
-
-    def write_json_pretty(self,
-                          hh,
-                          indent = 4,
-                          max_indent_depth = False,
-                          ):
-        
-        self.set_header("Content-Type", "text/plain")
-        self.write(pretty_print(hh,
-                                indent = indent,
-                                max_indent_depth = max_indent_depth,
-                                ).replace('\n','\r\n') + '\n')
-        self.finish()
-
     
 
 
@@ -186,7 +184,7 @@ class handle_front(BaseHandler):
     @tornado.gen.coroutine
     def get(self):
         
-        #TODO - 
+        #TODO -
         
         self.write('FRONT_PAGE')
         self.finish()
@@ -196,8 +194,10 @@ class handle_ping(BaseHandler):
     
     @tornado.gen.coroutine
     def post(self):
-        self.write("{'results':['pong']}")
-        self.finish()
+        
+        rr = yield self.es.ping()
+        
+        self.write_json({'results':[rr]})
 
         
 class handle_search(BaseHandler):
@@ -212,13 +212,16 @@ class handle_search(BaseHandler):
         Search for images based on text query, a media work, or a combination of both.
         
         Args, as JSON-encoded POST body:
-           q:             Query text.
-           q_id:          Query media. See `Media Identifiers`.
+            q:             Query text.
+            q_id:          Query media. See `Media Identifiers`.
            
-           limit:         Maximum number of results to return.
-           include_self:  Include ID of query document in results.
-           include_docs:  Return entire indexed docs, instead of just IDs.
-           include_thumb: Whether to include base64-encoded thumbnails in returned results.
+            limit:         Maximum number of results to return.
+            include_self:  Include ID of query document in results.
+            include_docs:  Return entire indexed docs, instead of just IDs.
+            include_thumb: Whether to include base64-encoded thumbnails in returned results.
+
+            pretty:              Pretty-print JSON output.
+            max_indent_depth:    Maximum depth at which to indent for pretty-printed JSON output.
 
         Returns:
             List of image IDs, possibly with relevancy scores.
@@ -378,7 +381,10 @@ class handle_search(BaseHandler):
                 if 'image_thumb' in x['_source']:
                     del x['_source']['image_thumb']
                 
-        self.write_json_pretty(rr)
+        self.write_json(rr,
+                        pretty = data.get('pretty', False),
+                        max_indent_depth = data.get('max_indent_depth', False),
+                        )
 
         
 
@@ -393,7 +399,7 @@ class handle_dupe_lookup(BaseHandler):
         """
         Find all known duplicates of a media work.
         
-        Args:
+        Args - passed as JSON-encoded body:
             q_media:          Media to query for. See `Media Identifiers`.
             duplicate_mode:   Semantic duplicate type or matching mode. For now, defaults to 'baseline'.
             include_self:     Include ID of query document in results.
@@ -402,6 +408,10 @@ class handle_dupe_lookup(BaseHandler):
             incremental:      Attempt to dedupe never-before-seen media file versus all pre-ingested media files.
                               NOTE: potentially inefficient. More efficient to pre-calculate for all known images in
                               background.
+             
+            pretty:              Pretty-print JSON output.
+            max_indent_depth:    Maximum depth at which to indent for pretty-printed JSON output.
+
         
         Returns: 
              See `mc_dedupe.dedupe_lookup_async`.       
@@ -444,7 +454,10 @@ class handle_dupe_lookup(BaseHandler):
         self.write_json({'results':rr,
                          'next_page':None,
                          'prev_page':None,
-                         })
+                         },
+                        pretty = data.get('pretty', False),
+                        max_indent_depth = data.get('max_indent_depth', False),
+                        )
 
 
 class handle_score(BaseHandler):
@@ -463,8 +476,8 @@ class handle_score(BaseHandler):
         Takes a "query" and list of "candidate" media, and does 1-vs-all score calculations for
         all "candidate" media versus the "query".
         
-        Args, as JSON-encoded POST body:
-            q_text:    Query text.
+        Args - passed as JSON-encoded POST body:
+            q:         Query text.
             q_id:      Query media. See `Media Identifiers`.
             
             c_ids:     List of candidate media. See `Media Identifiers`.
@@ -479,6 +492,9 @@ class handle_score(BaseHandler):
                                       similarity or duplicate types are in use.
                        'score'     - Final relevance score for "search" mode (1.0 to 5.0),
                                      or final dupe probability score for "dupe" mode (0.0 to 1.0).
+
+            pretty:              Pretty-print JSON output.
+            max_indent_depth:    Maximum depth at which to indent for pretty-printed JSON output.
         
         Returns:
             List of similarities or duplicate probabilities, one per similarity or duplicate type.
@@ -495,7 +511,16 @@ class handle_score(BaseHandler):
                 {'results':[{'id':'ifps://123...', 'score':0.321}]}
         """
         
-        q_text = self.get_argument('q_text','')
+        try:
+            data = json.loads(d)
+        except:
+            self.set_status(500)
+            self.write_json({'error':'JSON_PARSE_ERROR',
+                             'error_message':'Could not parse JSON request.',
+                            })
+            return
+        
+        q_text = data.get('q','')
         
         query = {"query": {"match_all": {}}}
         
@@ -505,7 +530,10 @@ class handle_score(BaseHandler):
                                   )
         
         self.content_type = 'application/json'
-        self.write_json(json.loads(rr.body))
+        self.write_json(json.loads(rr.body),
+                        pretty = data.get('pretty', False),
+                        max_indent_depth = data.get('max_indent_depth', False),
+                        )
 
 
 
