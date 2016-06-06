@@ -31,15 +31,15 @@ $ elasticsearch
 $ pip install git+https://github.com/mediachain/mediachain-indexer.git
 ```
 
-4) Run any of the entry points above to see sub-commands:
+4) Run any of the entry points list above, to see sub-command details:
 
 ```
 $ mediachain-indexer-ingest
 
-USAGE: python mc_ingest.py <function_name>
+USAGE: mediachain-indexer-ingest <function_name>
 
 Available Functions:
-getty_create_dumps...................... Quick and dirty Getty API scraper.
+getty_create_dumps...................... Quick and dirty Getty API downloader.
 ingest_bulk_blockchain.................. Ingest media from Mediachain blockchain.
 ingest_bulk_gettydump................... Ingest media from Getty data dumps into Indexer.
 config.................................. Print current environment variables.

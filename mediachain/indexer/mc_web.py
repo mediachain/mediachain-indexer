@@ -599,6 +599,7 @@ functions=['web',
 def main():    
     setup_main(functions,
                globals(),
+               'mediachain-indexer-web',
                )
 
 if __name__ == '__main__':

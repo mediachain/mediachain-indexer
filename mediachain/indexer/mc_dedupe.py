@@ -443,6 +443,7 @@ functions=['dedupe_reindex',
 def main():    
     setup_main(functions,
                globals(),
+               'mediachain-indexer-dedupe',
                )
 
 if __name__ == '__main__':

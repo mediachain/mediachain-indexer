@@ -16,12 +16,8 @@ import mc_dedupe
 
 from time import sleep
 
-MC_WEB_HOST = 'http://127.0.0.1:23456'
-TEST_INDEX_NAME = 'mc_test'
-TEST_DOC_TYPE = 'mc_test_image'
-
-def sanity_check(index_name = TEST_INDEX_NAME,
-                 doc_type = TEST_DOC_TYPE,
+def sanity_check(index_name = mc_config.MC_TEST_INDEX_NAME,
+                 doc_type = mc_config.MC_TEST_DOC_TYPE,
                  ):
     """
     Quick sanity check. WIP while API is being finalized. TODO: full tests.
@@ -64,7 +60,7 @@ def sanity_check(index_name = TEST_INDEX_NAME,
 
     print ('SEARCH_BY_TEXT...')
     
-    hh = requests.post(MC_WEB_HOST + '/search',
+    hh = requests.post(MC_TEST_WEB_HOST + '/search',
                        headers = {'User-Agent':'MC_TEST 1.0'},
                        verify = False,
                        json = {"q":'crowd',
@@ -80,7 +76,7 @@ def sanity_check(index_name = TEST_INDEX_NAME,
     
     print ('SEARCH_BY_CONTENT...')
     
-    hh = requests.post(MC_WEB_HOST + '/search',
+    hh = requests.post(MC_TEST_WEB_HOST + '/search',
                        headers = {'User-Agent':'MC_TEST 1.0'},
                        verify = False,
                        json = {"q_id":img_uri,
@@ -96,7 +92,7 @@ def sanity_check(index_name = TEST_INDEX_NAME,
 
     print ('SEARCH_BY_ID...')
     
-    hh = requests.post(MC_WEB_HOST + '/search',
+    hh = requests.post(MC_TEST_WEB_HOST + '/search',
                        headers = {'User-Agent':'MC_TEST 1.0'},
                        verify = False,
                        json = {"q_id":img_id,
@@ -112,7 +108,7 @@ def sanity_check(index_name = TEST_INDEX_NAME,
     
     print ('DEDUPE_LOOKUP...')
     
-    hh = requests.post(MC_WEB_HOST + '/dupe_lookup',
+    hh = requests.post(MC_TEST_WEB_HOST + '/dupe_lookup',
                        headers = {'User-Agent':'MC_TEST 1.0'},
                        verify = False,
                        #json = {"q_media":img_uri, "limit":5},
@@ -135,6 +131,7 @@ functions = ['sanity_check',
 def main():
     setup_main(functions,
                globals(),
+               'mediachain-indexer-test',
                )
 
 
