@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-__doc__ = \
 """
-Testing.
+Testing. Currently a quick end-to-end sanity check.
 """
 
 import datetime
@@ -21,11 +20,11 @@ MC_WEB_HOST = 'http://127.0.0.1:23456'
 TEST_INDEX_NAME = 'mc_test'
 TEST_DOC_TYPE = 'mc_test_image'
 
-def demo_end_to_end(index_name = TEST_INDEX_NAME,
-                    doc_type = TEST_DOC_TYPE,
-                    ):
+def sanity_check(index_name = TEST_INDEX_NAME,
+                 doc_type = TEST_DOC_TYPE,
+                 ):
     """
-    Quick end-to-end demos. WIP while API is being finalized. TODO: full tests.
+    Quick sanity check. WIP while API is being finalized. TODO: full tests.
     
     1. ingest images.
     2. search for images.
@@ -128,9 +127,9 @@ def demo_end_to_end(index_name = TEST_INDEX_NAME,
     print pretty_print(hh)
     assert hh['results'][0]['_id'] == img_id,(5,hh)
 
-    print ('DONE_DEMO')
+    print ('PASSED_SANITY_CHECK')
 
-functions = ['demo_end_to_end',
+functions = ['sanity_check',
              ]
 
 def main():

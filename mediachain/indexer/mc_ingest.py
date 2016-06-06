@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-__doc__ = \
 """
 Functions for ingestion of media files into Indexer.
 
@@ -324,18 +323,29 @@ def decode_image(s):
 
 
 def es_connect():
-    print ('CONNECTING...')
-    es = Elasticsearch()
+    
+    if mc_config.MC_ES_URLS:
+        
+        urls = mc_config.MC_ES_URLS.split(',')
+        print ('CONNECTING...', urls)
+        es = Elasticsearch(urls)
+        
+    else:
+        print ('CONNECTING... <default>')
+        es = Elasticsearch()
     print ('CONNECTED')
+    
     return es
 
     
-def iter_json_getty(max_num = 0,
-                    dd = 'getty_small/json/images/',
+def iter_json_getty(getty_path,
+                    max_num = 0,
                     index_name = mc_config.MC_INDEX_NAME,
                     doc_type = mc_config.MC_DOC_TYPE,                
                     ):
 
+    dd = getty_path
+    
     dd3 = dd.replace('/json/images/','/downloads/')
     
     assert exists(dd),repr(dd)
@@ -397,13 +407,14 @@ def iter_json_getty(max_num = 0,
 
     print ('DONE_YIELD',nn)
 
-    
+
 def ingest_bulk(iter_json = False,
                 thread_count = 1,
                 index_name = mc_config.MC_INDEX_NAME,
                 doc_type = mc_config.MC_DOC_TYPE,
                 search_after = False,
                 redo_thumbs = True,
+                ignore_thumbs = False,
                 ):
     """
     Ingest Getty dumps from JSON files.
@@ -415,6 +426,9 @@ def ingest_bulk(iter_json = False,
         thread_count:  Number of parallel threads to use for ES insertion.
         index_name:    ES index name to use.
         doc_type:      ES document type to use.
+        search_after:  Manually inspect ingested records after. Probably not needed anymore.
+        redo_thumbs:   Whether to recalcuate 'image_thumb' from 'img_data'.
+        ignore_thumbs: Whether to ignore thumbnail generation entirely.
 
     Returns:
         Number of inserted records.
@@ -422,11 +436,8 @@ def ingest_bulk(iter_json = False,
     Examples:
         See `mc_test.py`
     """
-
-    if not iter_json:
-        iter_json = iter_json_getty(index_name = index_name,
-                                    doc_type = doc_type,
-                                    )
+        
+    assert iter_json is not False
     
     es = es_connect()
     
@@ -472,27 +483,32 @@ def ingest_bulk(iter_json = False,
             
             hh.update(xdoc)
 
-            if redo_thumbs:
-                # Check existing thumbs meet size & format requirements:
-                
-                if 'img_data' in hh:
-                    hh['image_thumb'] = shrink_and_encode_image(decode_image(hh['img_data']))
-                    
-                elif 'image_thumb' in hh:
-                    hh['image_thumb'] = shrink_and_encode_image(decode_image(hh['image_thumb']))
-                
-                else:
-                    assert False,'CANT_GENERATE_THUMBNAILS'
-                    
-            elif 'image_thumb' not in hh:
-                # Generate thumbs from raw data:
-                
-                if 'img_data' in hh:
-                    hh['image_thumb'] = shrink_and_encode_image(decode_image(hh['img_data']))
-                    
-                else:
-                    assert False,'CANT_GENERATE_THUMBNAILS'
-                
+            if ignore_thumbs:
+                if 'image_thumb' in hh:
+                    del hh['image_thumb']
+            
+            else:
+                if redo_thumbs:
+                    # Check existing thumbs meet size & format requirements:
+
+                    if 'img_data' in hh:
+                        hh['image_thumb'] = shrink_and_encode_image(decode_image(hh['img_data']))
+
+                    elif 'image_thumb' in hh:
+                        hh['image_thumb'] = shrink_and_encode_image(decode_image(hh['image_thumb']))
+
+                    else:
+                        assert False,'CANT_GENERATE_THUMBNAILS'
+
+                elif 'image_thumb' not in hh:
+                    # Generate thumbs from raw data:
+
+                    if 'img_data' in hh:
+                        hh['image_thumb'] = shrink_and_encode_image(decode_image(hh['img_data']))
+
+                    else:
+                        assert False,'CANT_GENERATE_THUMBNAILS'
+
             if 'img_data' in hh:
                 del hh['img_data']
             
@@ -566,6 +582,79 @@ def ingest_bulk(iter_json = False,
 
     return es.count(index_name)['count']
 
+def ingest_bulk_blockchain(host,
+                           port,
+                           object_id,
+                           ):
+    """
+    Ingest media from Mediachain blockchain.
+
+    Args:
+        host:       Host.
+        port:       Port.
+        object_id:  ID of the artefact/entity to fetch.
+        index_name: Name of Indexer index to populate.
+        doc_type:   Name of Indexer doc_type.
+    """
+
+    assert False,'TODO - WIP stub, not ready yet. '
+    
+    from mediachain.reader import api
+    
+    aws = {'aws_access_key_id':mc_config.MC_AWS_ACCESS_KEY_ID,
+           'aws_secret_access_key':mc_config.MC_AWS_SECRET_ACCESS_KEY,
+           'endpoint_url':mc_config.MC_ENDPOINT_URL,
+           'region_name':mc_config.MC_REGION_NAME,
+           }
+    
+    def the_gen():
+        for object_id in []:
+
+            h = {#'_id': img_id,
+                 'title':'Crowd of People Walking',
+                 'artist':'test artist',
+                 'collection_name':'test collection name',
+                 'caption':'test caption',
+                 'editorial_source':'test editorial source',
+                 'keywords':'test keywords',
+                 #'date_created':datetime.datetime.now(),
+                 #'img_data':img_uri,
+                 }
+            
+            obj = api.get_object(host, port, object_id, aws)
+            
+            print 'obj',obj
+            
+            assert False,'TODO'
+            
+            h['title'] = obj['title']
+            
+            yield h
+    
+    ingest_bulk(iter_json = gen)
+    
+def ingest_bulk_gettydump(getty_path = 'getty_small/json/images/',
+                          index_name = mc_config.MC_INDEX_NAME,
+                          doc_type = mc_config.MC_DOC_TYPE,
+                          *args,
+                          **kw):
+    """
+    Ingest media from Getty data dumps into Indexer.
+    
+    Args:
+        getty_path: Path to getty image JSON.
+        index_name: Name of Indexer index to populate.
+        doc_type:   Name of Indexer doc_type.
+    """
+    
+    iter_json = iter_json_getty(getty_path = getty_path,
+                                index_name = index_name,
+                                doc_type = doc_type,
+                                *args,
+                                **kw)
+
+    ingest_bulk(iter_json = iter_json)
+    
 
 def config():
     """
@@ -577,7 +666,8 @@ def config():
 
 
 functions=['getty_create_dumps',
-           'ingest_bulk',
+           'ingest_bulk_blockchain',
+           'ingest_bulk_gettydump',
            'config',
            ]
 

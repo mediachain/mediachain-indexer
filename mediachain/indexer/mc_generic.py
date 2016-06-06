@@ -131,6 +131,14 @@ def pretty_print(val,
                  ):
     """
     Pretty print JSON, indenting up to a specified maximum depth.
+
+    Args:
+        val:              JSON input.
+        indent:           Number of additional spaces to indent per layer of depth.
+        max_indent_depth: Beyond this depth in the JSON structure, indentation doesn't get any greater.
+    
+    Use `max_indent_depth` for a middle-ground between no indentation, and excessive
+    indentation of very deep JSON that overflows the width of the screen.
     """
         
     try:
