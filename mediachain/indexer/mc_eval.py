@@ -935,6 +935,7 @@ functions=['eval',
 def main():
     setup_main(functions,
                globals(),
+               'mediachain-indexer-eval',
                )
 
 if __name__ == '__main__':

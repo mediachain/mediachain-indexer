@@ -60,15 +60,29 @@ class model_reps_baseline(object):
     Does 1-to-1 matching of engineered feature hashes.
     """
     
+    def __init__(self,
+                 hash_size = 16,
+                 use_hash = 'dhash',
+                 ):
+        
+        self.hash_size = hash_size
+        
+        if use_hash == 'dhash':
+            self.hash_func = imagehash.dhash
+        elif use_hash == 'phash':
+            self.hash_func = imagehash.phash
+        else:
+            self.hash_func = use_hash
+            
     #was img_to_hsh()
-    def img_to_terms(self, img_data_uri = False, img_fn = False, hash_size = 16):
+    def img_to_terms(self, img_data_uri = False, img_fn = False):
         if img_data_uri:
             if type(img_data_uri) is unicode:
                 img_data_uri = img_data_uri.encode('utf8')
             img = Image.open(StringIO(decode_image(img_data_uri)))
         else:
             img = Image.open(img_fn)
-        hsh = binascii.b2a_hex(np.packbits(imagehash.dhash(img, hash_size = hash_size).hash).tobytes())
+        hsh = binascii.b2a_hex(np.packbits(self.hash_func(img, hash_size = self.hash_size).hash).tobytes())
         return {'dedupe_hsh': hsh}
 
     def img_to_es_query(self, *args, **kw):
@@ -100,35 +114,52 @@ class model_reps_baseline_ng(object):
     See Also:
         `mc_eval.ScoringTFIDF`
     """
-    
-    def img_to_hsh_bools(self, img_data_uri = False, img_fn = False, hash_size = 16):
+
+    def __init__(self,
+                 hash_size = 16,
+                 use_hash = 'dhash',
+                 patch_size = 4,
+                 max_patches = 64,
+                 ):
+        if use_hash == 'dhash':
+            self.hash_func = imagehash.dhash
+        elif use_hash == 'phash':
+            self.hash_func = imagehash.phash
+        else:
+            self.hash_func = use_hash
+        
+        self.hash_size = hash_size
+        
+        self.patch_size = patch_size
+        self.max_patches = max_patches
+
+    def img_to_hsh_bools(self, img_data_uri = False, img_fn = False):
         if img_data_uri:
             if type(img_data_uri) is unicode:
                 img_data_uri = img_data_uri.encode('utf8')
             img = Image.open(StringIO(decode_image(img_data_uri)))
         else:
             img = Image.open(img_fn)
-        hsh = imagehash.dhash(img, hash_size = hash_size).hash
-        #hsh = imagehash.phash(img, hash_size = hash_size).hash
+        hsh = self.hash_func(img, hash_size = self.hash_size).hash
         return hsh
 
-    def hsh_to_patches(self, hsh, patch_size = 4, max_patches = 64):
+    def hsh_to_patches(self, hsh):
 
-        pp = extract_patches_2d(hsh.astype(int), (patch_size, patch_size))
-
+        pp = extract_patches_2d(hsh.astype(int), (self.patch_size, self.patch_size))
+        
         # flatten 2nd and 3rd dimension:
-
+        
         pp = pp.reshape((pp.shape[0], -1))
-
+        
         # extract sample of patches:
-
-        max_patches = min(max_patches, pp.shape[0])
+        
+        max_patches = min(self.max_patches, pp.shape[0])
         rr = [pp[x] for x in np.linspace(0, pp.shape[0], max_patches, endpoint=False).astype(int)]
-
+        
         # pack patches into numbers:
-
+        
         packed = [int(binascii.b2a_hex(''.join(np.packbits(x).view('c'))) or '0', 16) for x in rr]
-
+        
         return packed
 
     def patches_to_query(self, packed):
@@ -150,13 +181,12 @@ class model_reps_baseline_ng(object):
         return query
 
 
-REP_MODEL_NAMES = {'baseline':model_reps_baseline,
-                   'baseline_ng':model_reps_baseline_ng,
-                   }
     
 @tornado.gen.coroutine
 def dedupe_lookup_async(media_id,
-                        duplicate_mode = 'baseline',
+                        vectors_model = 'baseline',
+                        pairwise_model = None,
+                        cluster_model = None,
                         incremental = False,
                         include_docs = False,
                         include_self = False,
@@ -174,9 +204,16 @@ def dedupe_lookup_async(media_id,
     
     Args:
         q_media:         Media to look up. See `Media Identifiers`.
-        duplicate_mode:  Semantic duplicate type or matching mode. Defaults to 'baseline'.
-                         - `baseline`: Simple low-recall exact matching on an engineered content-based semantic hash.
-                         - `advanced`: TODO.
+        vectors_model:    Representation learning model to use. Can be either a string or dict with following forms:
+                          String:
+                              'baseline'
+                          Dictionary with model name as the key, and a sub-dictionary of hyper-parameters to pass
+                          to models:
+                              {'baseline_ng':{'use_hash':'dhash','patch_size':4}}
+        pairwise_model:   null - Only mark exact matches as dupes.
+                          'threshold' - Simple baseline for pairwise dupe classification.
+        cluster_model:    null - no cluster agglomeration.
+                          'greedy' - Simple greedy clustering.
         incremental:     Attempt to dedupe never-before-seen media file versus pre-ingested media files.
         es:              Database client handle. For `baseline`, it's an elasticsearch client handle.
 
@@ -184,8 +221,12 @@ def dedupe_lookup_async(media_id,
                          List of matching media IDs of form: [{'id':'ifps://123...'}, {'id':'ifps://456...'},...]
     """
     
-    assert duplicate_mode == 'baseline','SELECTED_DUPLICATE_MODE_NOT_IMPLEMENTED'
-    
+    assert vectors_model in VECTORS_MODEL_NAMES,('VECTORS_MODEL_NOT_IMPLEMENTED',vectors_model)
+
+    assert not pairwise_model,('PAIRWISE_MODEL_NOT_IMPLEMENTED',pairwise_model)
+        
+    assert not cluster_model,('CLUSTER_MODEL_NOT_IMPLEMENTED',cluster_model)
+
     #raise tornado.gen.Return([])
     
     content_based_search = False
@@ -234,7 +275,7 @@ def dedupe_lookup_async(media_id,
                              type = doc_type,
                              source = {"query" : {"constant_score":{"filter":{"term":{ "dedupe_hsh" : content_based_search}}}}},
                              )
-
+        
         rr = json.loads(rr.body)
         
         if not rr['hits']['hits']:            
@@ -303,24 +344,50 @@ def dedupe_lookup_async(media_id,
             raise tornado.gen.Return(hh['cluster'])
 
 
+def dedupe_train():
+    """
+    Train dedupe models. Not needed for unsupervised v1 baseline.
+    """
+    pass
 
-def dedupe_reindex(duplicate_modes = ['baseline', 'baseline_ng'],
+
+VECTORS_MODEL_NAMES = {'baseline':model_reps_baseline,
+                       'baseline_ng':model_reps_baseline_ng,
+                       }
+
+
+def dedupe_reindex(vectors_model = 'baseline',
+                   pairwise_model = None,
+                   cluster_model = None,
                    incremental = False,
                    batch_size = 100,
                    index_name = mc_config.MC_INDEX_NAME,
                    doc_type = mc_config.MC_DOC_TYPE,
                    ):
     """
-    Regenerate duplicate lookup tables.
+    Regenerate duplicate lookup tables. Currently implements v1 - a simple, greedy, in-memory baseline.
     
-    Currently implements V1 - a dumb, simple, greedy, in-memory baseline.
+    TODO - Baseline implementation done, more advanced modes still WIP.
     
-    Performance Note:
-    Usually it's considerably more efficient to do this in large batches rather than to attempt to dedupe online, for
-    each new media file.
+    General steps performed here, depending on chosen models:
     
-    Args: 
-        duplicate_modes:  List of semantic duplicate types to calculate. Defaults to ['baseline', 'baseline_ng'].
+        1) Generate vectors from artefacts.
+        2) Nearest-neighbor blocking from vectors.
+        3) Pairwise classify all pairs in each block.
+        4) Clustering based on pair classifications.
+        5) Output lookup tables for clustering info.
+    
+    Args:
+        vectors_model:    Representation learning model to use. Can be either a string or dict with following forms:
+                          String:
+                              'baseline'
+                          Dictionary with model name as the key, and a sub-dictionary of hyper-parameters to pass
+                          to models:
+                              {'baseline_ng':{'use_hash':'dhash','patch_size':4}}
+        pairwise_model:   null - Only mark exact matches as dupes.
+                          'threshold' - Simple baseline for pairwise dupe classification.
+        cluster_model:    null - no cluster agglomeration.
+                          'greedy' - Simple greedy clustering.
         incremental:      If True, only update clusters affected by newly ingested media. Otherwise, regenerate
                           all dedupe clusters. Note: the more records that are deduped simultaneously, the greater
                           the efficiency.
@@ -329,7 +396,13 @@ def dedupe_reindex(duplicate_modes = ['baseline', 'baseline_ng'],
         Check program exit status.
     """
     
-    assert not set(duplicate_modes).difference(['baseline', 'baseline_ng']),'DUPLICATE_MODE_NOT_IMPLEMENTED'
+    assert vectors_model in VECTORS_MODEL_NAMES,('VECTORS_MODEL_NOT_IMPLEMENTED',vectors_model)
+    
+    assert not pairwise_model,('PAIRWISE_MODEL_NOT_IMPLEMENTED',pairwise_model)
+    
+    assert not cluster_model,('CLUSTER_MODEL_NOT_IMPLEMENTED',cluster_model)
+    
+    assert not incremental,'INCREMENTAL_NOT_IMPLEMENTED'
     
     def do_commit(rrr):
         print ('COMMITTING BATCH...',len(rrr))
@@ -366,7 +439,22 @@ def dedupe_reindex(duplicate_modes = ['baseline', 'baseline_ng'],
     
     nn = 0
     
-    models = [REP_MODEL_NAMES[x]() for x in duplicate_modes]
+    ## Instantiate representation learning models:
+    
+    if type(vectors_model) in [str, unicode]:
+        vectors_model_name = vectors_model
+        vectors_model = {vectors_model:{}}
+        
+    elif type(vectors_model) == dict:
+        vectors_model_name = vectors_model.keys()[0]
+
+    print repr(vectors_model)
+        
+    vmodel = VECTORS_MODEL_NAMES[vectors_model_name](**vectors_model[vectors_model_name])
+    
+    print ('MODEL',vmodel)
+        
+    ## Run first pass of dedupe:
     
     for c,hit in enumerate(res):
 
@@ -377,8 +465,7 @@ def dedupe_reindex(duplicate_modes = ['baseline', 'baseline_ng'],
         
         doc_update = {}
 
-        for model in models:
-            doc_update.update(model.img_to_terms(hh['image_thumb']))
+        doc_update.update(vmodel.img_to_terms(hh['image_thumb']))
             
         rr.append({'_op_type': 'update',
                    '_index': index_name,
@@ -394,14 +481,17 @@ def dedupe_reindex(duplicate_modes = ['baseline', 'baseline_ng'],
         
     if rr:
         do_commit(rr)
-
+    
     print ('UPDATED',nn)
-
+    
     print ('REFRESHING', index_name)
     es.indices.refresh(index = index_name)
     print ('REFRESHED')
-
+    
+    
     if False:
+        
+        assert False,'TODO: WIP'
         
         ### Can skip these for the trivial baseline:
 
@@ -437,12 +527,14 @@ def dedupe_reindex(duplicate_modes = ['baseline', 'baseline_ng'],
     return nn
     
 
-functions=['dedupe_reindex',
+functions=['dedupe_train',
+           'dedupe_reindex',
            ]
 
 def main():    
     setup_main(functions,
                globals(),
+               'mediachain-indexer-dedupe',
                )
 
 if __name__ == '__main__':

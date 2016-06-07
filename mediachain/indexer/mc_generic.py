@@ -227,6 +227,7 @@ def terminal_size():
 
 def usage(functions,
           glb,
+          entry_point_name = False,
           ):
     try:
         tw,th = terminal_size()
@@ -234,7 +235,9 @@ def usage(functions,
         tw,th = 80,40
                    
     print
-    print 'USAGE:','python',sys.argv[0],'<function_name>'
+    
+    print 'USAGE:',(entry_point_name or ('python ' + sys.argv[0])) ,'<function_name>'
+        
     print
     print 'Available Functions:'
     
@@ -260,6 +263,7 @@ def set_console_title(title):
 
 def setup_main(functions,
                glb,
+               entry_point_name = False,
                ):
     """
     Helper for invoking functions from command-line.
@@ -268,6 +272,7 @@ def setup_main(functions,
     if len(sys.argv) < 2:
         usage(functions,
               glb,
+              entry_point_name = entry_point_name,
               )
         return
 
@@ -277,10 +282,12 @@ def setup_main(functions,
         print 'FUNCTION NOT FOUND:',f
         usage(functions,
               glb,
+              entry_point_name = entry_point_name,
               )
         return
 
-    title = sys.argv[0] + ' '+f
+    title = (entry_point_name or sys.argv[0]) + ' '+f
+    
     set_console_title(title)
     
     print 'STARTING ',f + '()'

@@ -54,16 +54,15 @@ def getty_create_dumps(INC_SIZE = 100,
                        NUM_WORKERS = 30,
                        ):
     """
-    Quick and dirty Getty API scraper.
+    Quick and dirty Getty API downloader.
     """
-
+    
     if not mc_config.MC_GETTY_KEY:
         print ('ERROR: set GETTY_KEY environment variable.')
         exit(-1)
     
     if len(sys.argv) < 3:
-        print ('NOTE: set GETTY_KEY to Getty API key.')
-        print ('Usage: python getty_scrape [archiv | entertainment | rf | small]')
+        print ('Usage: mediachain-indexer-ingest getty_create_dumps [archiv | entertainment | rf | small]')
         exit(-1)
     
     typ = sys.argv[2]
@@ -594,7 +593,9 @@ def ingest_bulk_blockchain(host,
         port:       Port.
         object_id:  ID of the artefact/entity to fetch.
         index_name: Name of Indexer index to populate.
-        doc_type:   Name of Indexer doc_type.
+        doc_type:   Name of Indexer doc type.
+
+    Looking at `mediachain-client/mediachain.reader.api.get_object_chain` as the main API call? 
     """
 
     assert False,'TODO - WIP stub, not ready yet. '
@@ -644,7 +645,7 @@ def ingest_bulk_gettydump(getty_path = 'getty_small/json/images/',
     Args:
         getty_path: Path to getty image JSON.
         index_name: Name of Indexer index to populate.
-        doc_type:   Name of Indexer doc_type.
+        doc_type:   Name of Indexer doc type.
     """
     
     iter_json = iter_json_getty(getty_path = getty_path,
@@ -674,6 +675,7 @@ functions=['getty_create_dumps',
 def main():
     setup_main(functions,
                globals(),
+               'mediachain-indexer-ingest',
                )
 
 if __name__ == '__main__':
