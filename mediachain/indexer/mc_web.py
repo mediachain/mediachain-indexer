@@ -401,7 +401,19 @@ class handle_dupe_lookup(BaseHandler):
         
         Args - passed as JSON-encoded body:
             q_media:          Media to query for. See `Media Identifiers`.
-            duplicate_modes:  List of dedupe modes to run. For now, defaults to ['baseline'].
+            vectors_model:    Representation learning model to use. Can be either a string or dict with following forms:
+                              String:
+                                  'baseline'
+                              Dictionary with model name as the key, and a sub-dictionary of hyper-parameters to pass
+                              to models:
+                                  {'baseline_ng':{'use_hash':'dhash','patch_size':4}}
+            pairwise_model:   'none' - Only mark exact matches as dupes.
+                              'threshold' - Simple baseline for pairwise dupe classification.
+            cluster_model:    'none' - no cluster agglomeration.
+                              'greedy' - Simple greedy clustering.
+            incremental:      If True, only update clusters affected by newly ingested media. Otherwise, regenerate
+                              all dedupe clusters. Note: the more records that are deduped simultaneously, the greater
+                              the efficiency.
             include_self:     Include ID of query document in results.
             include_docs:     Return entire indexed docs, instead of just IDs.
             include_thumb:    Whether to include base64-encoded thumbnails in returned results.
@@ -442,7 +454,9 @@ class handle_dupe_lookup(BaseHandler):
             return
         
         rr = yield mc_dedupe.dedupe_lookup_async(media_id = data['q_media'],
-                                                 duplicate_modes = data.get('duplicate_modes', ['baseline']),
+                                                 vectors_model = data.get('vectors_model', 'baseline'),
+                                                 pairwise_model = data.get('pairwise_model', None),
+                                                 cluster_model = data.get('cluster_model', None),
                                                  include_docs = data.get('include_docs'),
                                                  include_self = data.get('include_self'),
                                                  include_thumb = data.get('include_thumb'),

@@ -184,7 +184,9 @@ class model_reps_baseline_ng(object):
     
 @tornado.gen.coroutine
 def dedupe_lookup_async(media_id,
-                        duplicate_modes = ['baseline'],
+                        vectors_model = 'baseline',
+                        pairwise_model = None,
+                        cluster_model = None,
                         incremental = False,
                         include_docs = False,
                         include_self = False,
@@ -202,9 +204,16 @@ def dedupe_lookup_async(media_id,
     
     Args:
         q_media:         Media to look up. See `Media Identifiers`.
-        duplicate_mode:  Semantic duplicate type or matching mode. Defaults to 'baseline'.
-                         - `baseline`: Simple low-recall exact matching on an engineered content-based semantic hash.
-                         - `advanced`: TODO.
+        vectors_model:    Representation learning model to use. Can be either a string or dict with following forms:
+                          String:
+                              'baseline'
+                          Dictionary with model name as the key, and a sub-dictionary of hyper-parameters to pass
+                          to models:
+                              {'baseline_ng':{'use_hash':'dhash','patch_size':4}}
+        pairwise_model:   null - Only mark exact matches as dupes.
+                          'threshold' - Simple baseline for pairwise dupe classification.
+        cluster_model:    null - no cluster agglomeration.
+                          'greedy' - Simple greedy clustering.
         incremental:     Attempt to dedupe never-before-seen media file versus pre-ingested media files.
         es:              Database client handle. For `baseline`, it's an elasticsearch client handle.
 
@@ -212,8 +221,12 @@ def dedupe_lookup_async(media_id,
                          List of matching media IDs of form: [{'id':'ifps://123...'}, {'id':'ifps://456...'},...]
     """
     
-    assert duplicate_modes[0] == 'baseline','SELECTED_DUPLICATE_MODES_NOT_IMPLEMENTED'
-    
+    assert vectors_model in VECTORS_MODEL_NAMES,('VECTORS_MODEL_NOT_IMPLEMENTED',vectors_model)
+
+    assert not pairwise_model,('PAIRWISE_MODEL_NOT_IMPLEMENTED',pairwise_model)
+        
+    assert not cluster_model,('CLUSTER_MODEL_NOT_IMPLEMENTED',cluster_model)
+
     #raise tornado.gen.Return([])
     
     content_based_search = False
@@ -262,7 +275,7 @@ def dedupe_lookup_async(media_id,
                              type = doc_type,
                              source = {"query" : {"constant_score":{"filter":{"term":{ "dedupe_hsh" : content_based_search}}}}},
                              )
-
+        
         rr = json.loads(rr.body)
         
         if not rr['hits']['hits']:            
@@ -344,8 +357,8 @@ VECTORS_MODEL_NAMES = {'baseline':model_reps_baseline,
 
 
 def dedupe_reindex(vectors_model = 'baseline',
-                   pairwise_model = 'none',
-                   cluster_model = 'none',
+                   pairwise_model = None,
+                   cluster_model = None,
                    incremental = False,
                    batch_size = 100,
                    index_name = mc_config.MC_INDEX_NAME,
@@ -371,25 +384,25 @@ def dedupe_reindex(vectors_model = 'baseline',
                           Dictionary with model name as the key, and a sub-dictionary of hyper-parameters to pass
                           to models:
                               {'baseline_ng':{'use_hash':'dhash','patch_size':4}}
+        pairwise_model:   null - Only mark exact matches as dupes.
+                          'threshold' - Simple baseline for pairwise dupe classification.
+        cluster_model:    null - no cluster agglomeration.
+                          'greedy' - Simple greedy clustering.
         incremental:      If True, only update clusters affected by newly ingested media. Otherwise, regenerate
                           all dedupe clusters. Note: the more records that are deduped simultaneously, the greater
                           the efficiency.
-        pairwise_model:   'none' - Only mark exact matches as dupes.
-                          'threshold' - Simple baseline for pairwise dupe classification.
-        cluster_model:    'none' - no cluster agglomeration.
-                          'greedy' - Simple greedy clustering.
     
     Returns:
         Check program exit status.
     """
     
-    assert vectors_model in VECTORS_MODEL_NAMES,'VECTORS_MODE_NOT_IMPLEMENTED'
+    assert vectors_model in VECTORS_MODEL_NAMES,('VECTORS_MODEL_NOT_IMPLEMENTED',vectors_model)
     
-    assert pairwise_model == 'none','PAIRWISE_MODE_NOT_IMPLEMENTED'
+    assert not pairwise_model,('PAIRWISE_MODEL_NOT_IMPLEMENTED',pairwise_model)
     
-    assert cluster_model == 'none','CLUSTER_MODE_NOT_IMPLEMENTED'
+    assert not cluster_model,('CLUSTER_MODEL_NOT_IMPLEMENTED',cluster_model)
     
-    assert not incremental,'INCREMENTAL_MODE_NOT_IMPLEMENTED'
+    assert not incremental,'INCREMENTAL_NOT_IMPLEMENTED'
     
     def do_commit(rrr):
         print ('COMMITTING BATCH...',len(rrr))
