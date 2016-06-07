@@ -60,7 +60,7 @@ def sanity_check(index_name = mc_config.MC_TEST_INDEX_NAME,
 
     print ('SEARCH_BY_TEXT...')
     
-    hh = requests.post(MC_TEST_WEB_HOST + '/search',
+    hh = requests.post(mc_config.MC_TEST_WEB_HOST + '/search',
                        headers = {'User-Agent':'MC_TEST 1.0'},
                        verify = False,
                        json = {"q":'crowd',
@@ -76,7 +76,7 @@ def sanity_check(index_name = mc_config.MC_TEST_INDEX_NAME,
     
     print ('SEARCH_BY_CONTENT...')
     
-    hh = requests.post(MC_TEST_WEB_HOST + '/search',
+    hh = requests.post(mc_config.MC_TEST_WEB_HOST + '/search',
                        headers = {'User-Agent':'MC_TEST 1.0'},
                        verify = False,
                        json = {"q_id":img_uri,
@@ -92,7 +92,7 @@ def sanity_check(index_name = mc_config.MC_TEST_INDEX_NAME,
 
     print ('SEARCH_BY_ID...')
     
-    hh = requests.post(MC_TEST_WEB_HOST + '/search',
+    hh = requests.post(mc_config.MC_TEST_WEB_HOST + '/search',
                        headers = {'User-Agent':'MC_TEST 1.0'},
                        verify = False,
                        json = {"q_id":img_id,
@@ -108,7 +108,7 @@ def sanity_check(index_name = mc_config.MC_TEST_INDEX_NAME,
     
     print ('DEDUPE_LOOKUP...')
     
-    hh = requests.post(MC_TEST_WEB_HOST + '/dupe_lookup',
+    hh = requests.post(mc_config.MC_TEST_WEB_HOST + '/dupe_lookup',
                        headers = {'User-Agent':'MC_TEST 1.0'},
                        verify = False,
                        #json = {"q_media":img_uri, "limit":5},

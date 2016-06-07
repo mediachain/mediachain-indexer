@@ -144,7 +144,7 @@ class BaseHandler(tornado.web.RequestHandler):
     def write_json(self,
                    hh,
                    sort_keys = True,
-                   indent = 0,
+                   indent = 0, #Set to None to do without newlines.
                    pretty = False,
                    max_indent_depth = False,
                    ):
@@ -302,7 +302,7 @@ class handle_search(BaseHandler):
                 #Resolve ID(s) for query based on content.
                 #Note that this is similar to `/dupe_lookup` with `include_docs` = True:
 
-                model = mc_dedupe.REP_MODEL_NAMES['baseline']()
+                model = mc_dedupe.VECTORS_MODEL_NAMES['baseline']()
                 
                 terms = model.img_to_terms(q_id)
                 
@@ -401,7 +401,7 @@ class handle_dupe_lookup(BaseHandler):
         
         Args - passed as JSON-encoded body:
             q_media:          Media to query for. See `Media Identifiers`.
-            duplicate_mode:   Semantic duplicate type or matching mode. For now, defaults to 'baseline'.
+            duplicate_modes:  List of dedupe modes to run. For now, defaults to ['baseline'].
             include_self:     Include ID of query document in results.
             include_docs:     Return entire indexed docs, instead of just IDs.
             include_thumb:    Whether to include base64-encoded thumbnails in returned results.
@@ -442,7 +442,7 @@ class handle_dupe_lookup(BaseHandler):
             return
         
         rr = yield mc_dedupe.dedupe_lookup_async(media_id = data['q_media'],
-                                                 duplicate_mode = data.get('duplicate_mode', 'baseline'),
+                                                 duplicate_modes = data.get('duplicate_modes', ['baseline']),
                                                  include_docs = data.get('include_docs'),
                                                  include_self = data.get('include_self'),
                                                  include_thumb = data.get('include_thumb'),
