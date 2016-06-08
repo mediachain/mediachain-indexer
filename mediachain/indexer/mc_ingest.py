@@ -199,6 +199,8 @@ def ingest_bulk(iter_json = False,
                 if 'img_data' in hh:
                     del hh['img_data']
 
+                print 'INSERTING',hh
+                
                 yield hh
     
     gen = iter_wrap()
@@ -331,6 +333,7 @@ def ingest_bulk_blockchain(last_block_ref = None,
     def the_gen():
         
         while True:
+            
             print 'STREAMING FROM TRANSACTORCLIENT...',(mc_config.MC_TRANSACTOR_HOST,mc_config.MC_TRANSACTOR_PORT)
             
             try:
@@ -365,13 +368,15 @@ def ingest_bulk_blockchain(last_block_ref = None,
                     
                     rh['latest_ref'] = base58.b58encode(art['meta']['rawRef'][u'@link'])
                     
-                    #TODO - different created date?:
+                    ## TODO - different created date?:
                     rh['date_created'] = date_parser.parse(art['meta']['translatedAt']) 
                     
-                    #TODO: Using this placeholder until we get image data from canonical_stream:
+                    ## TODO: Using this placeholder until we get image data from canonical_stream:
                     rh['img_data'] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
-                    
-                    print 'INSERT',rh
+
+                    rhc = rh.copy()
+                    del rhc['img_data']
+                    print 'INSERT',rhc
                     
                     yield rh
             
