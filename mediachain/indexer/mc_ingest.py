@@ -358,6 +358,7 @@ def ingest_bulk_blockchain(last_block_ref = None,
                        u'keywords', u'collection_name', u'editorial_source',
                        '_id',
                        ('_id','getty_id'),
+                       ('thumbnail_base64','image_thumb'),
                        ]:
 
                 if type(kk) == tuple:
@@ -373,10 +374,10 @@ def ingest_bulk_blockchain(last_block_ref = None,
             rh['date_created'] = date_parser.parse(art['meta']['translatedAt']) 
 
             ## TODO: Using this placeholder until we get image data from canonical_stream:
-            rh['img_data'] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+            #rh['img_data'] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
 
             rhc = rh.copy()
-            del rhc['img_data']
+            #del rhc['img_data']
             print 'INSERT',rhc
 
             yield rh
@@ -393,10 +394,12 @@ def ingest_bulk_blockchain(last_block_ref = None,
                              )
             print 'REPEATING...'
             sleep(1)
+            
         except ExpirationError as e:
             print 'CAUGHT ExpirationError',e
             sleep(1)
             continue
+        
         except:
             #TODO... maybe not nice:
 
