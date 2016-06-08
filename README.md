@@ -3,12 +3,12 @@
 
 Entry Point                 |  Info
 ----------------------------|---------------------
-mediachain-indexer-dedupe   | (Re-)Generate deduplication lookup indexes. Train models.
 mediachain-indexer-datasets | Download training and ingestion datasets.
 mediachain-indexer-ingest   | Ingest media from local sources or Mediachain API, for search & dedupe.
+mediachain-indexer-dedupe   | (Re-)Generate deduplication lookup indexes. Train supervised models.
+mediachain-indexer-eval     | Hyper-parameter optimization and evaluation of models.
 mediachain-indexer-web      | Search & dedupe REST API.
-mediachain-indexer-eval     | Evaluate and score models against benchmarks.
-mediachain-indexer-test     | Demos and tests.
+mediachain-indexer-test     | Tests and sanity checks.
 
 
 ## Getting Started
@@ -63,7 +63,7 @@ MC_NUMBER_OF_SHARDS="1"
 
 #### Quick Test
 
-6) Run a basic sanity check demo:
+6) Run a basic sanity check:
 
 ```
 $ mediachain-indexer-test sanity_check
