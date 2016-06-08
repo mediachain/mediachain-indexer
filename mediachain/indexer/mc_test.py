@@ -12,7 +12,7 @@ from mc_generic import setup_main, pretty_print
 
 import mc_config
 import mc_ingest
-import mc_dedupe
+import mc_models
 
 from time import sleep
 
@@ -54,8 +54,8 @@ def sanity_check(index_name = mc_config.MC_TEST_INDEX_NAME,
     
     print ('INSERTED',num_inserted)
 
-    for name in mc_dedupe.VECTORS_MODEL_NAMES:
-        mc_dedupe.dedupe_reindex(index_name = index_name,
+    for name in mc_models.VECTORS_MODEL_NAMES:
+        mc_models.dedupe_reindex(index_name = index_name,
                                  doc_type = doc_type,
                                  vectors_model = name,
                                  )

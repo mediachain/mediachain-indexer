@@ -18,7 +18,7 @@ from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 
 import mc_ingest
-import mc_dedupe
+import mc_models
 import mc_datasets
 
 from mc_generic import group, setup_main, raw_input_enter, download_streamed, tcache, pretty_print
@@ -118,8 +118,8 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
 
     print 'DEDUPE...'
 
-    for name in mc_dedupe.VECTORS_MODEL_NAMES:
-        num_updated = mc_dedupe.dedupe_reindex(index_name = index_name,
+    for name in mc_models.VECTORS_MODEL_NAMES:
+        num_updated = mc_models.dedupe_reindex(index_name = index_name,
                                                doc_type = doc_type,
                                                vectors_model = name,
                                                )
@@ -144,7 +144,7 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
 
         ## Instantiate with passed `oargs`:
         
-        rep_model = mc_dedupe.VECTORS_MODEL_NAMES[rep_model_name](**oargs)
+        rep_model = mc_models.VECTORS_MODEL_NAMES[rep_model_name](**oargs)
         
         ## Evaluate recall @ N for on `max_queries` queries.
         
@@ -318,9 +318,9 @@ def eval_demo(max_num = 500,
     
     print 'DEDUPE...'
 
-    for name in mc_dedupe.VECTORS_MODEL_NAMES:
+    for name in mc_models.VECTORS_MODEL_NAMES:
 
-        num_updated = mc_dedupe.dedupe_reindex(index_name = index_name,
+        num_updated = mc_models.dedupe_reindex(index_name = index_name,
                                                doc_type = doc_type,
                                                vectors_model = name,
                                                )
@@ -357,7 +357,7 @@ def eval_demo(max_num = 500,
             dedupe_prob[rep_model_name] = [random() for x in xrange(1000)]
             continue
         
-        rep_model = mc_dedupe.VECTORS_MODEL_NAMES[rep_model_name]()
+        rep_model = mc_models.VECTORS_MODEL_NAMES[rep_model_name]()
         
         dedupe_true[rep_model_name] = []
         dedupe_prob[rep_model_name] = []

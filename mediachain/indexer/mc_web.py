@@ -53,7 +53,7 @@ from os import mkdir,rename,unlink,listdir
 from os.path import exists,join,split,realpath,splitext,dirname
 
 from mc_generic import setup_main, pretty_print, intget
-import mc_dedupe
+import mc_models
 import mc_config
 
 data_pat = 'data:image/jpeg;base64,'
@@ -310,7 +310,7 @@ class handle_search(BaseHandler):
                 #Resolve ID(s) for query based on content.
                 #Note that this is similar to `/dupe_lookup` with `include_docs` = True:
 
-                model = mc_dedupe.VECTORS_MODEL_NAMES['baseline']()
+                model = mc_models.VECTORS_MODEL_NAMES['baseline']()
                 
                 terms = model.img_to_terms(q_id)
                 
@@ -426,7 +426,7 @@ class handle_dupe_lookup(BaseHandler):
 
         
         Returns: 
-             See `mc_dedupe.dedupe_lookup_async`.       
+             See `mc_models.dedupe_lookup_async`.       
 
         Example:
              in: 
@@ -461,7 +461,7 @@ class handle_dupe_lookup(BaseHandler):
                             })
             return
 
-        rr = yield mc_dedupe.dedupe_lookup_async(media_id = data['q_media'],
+        rr = yield mc_models.dedupe_lookup_async(media_id = data['q_media'],
                                                  lookup_name = data.get('lookup_name', 'dedupe_hsh'),
                                                  include_docs = data.get('include_docs'),
                                                  include_self = data.get('include_self'),
