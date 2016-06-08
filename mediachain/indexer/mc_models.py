@@ -94,7 +94,7 @@ class VectorsBaseline(object):
     
     def __init__(self,
                  use_hash = 'dhash',
-                 hash_size = 16,
+                 hash_size = 8,
                  ):
         
         self.hash_size = int(hash_size)
@@ -405,6 +405,18 @@ PAIRWISE_MODEL_NAMES = {## For now, reusing the vector models, which have basic 
                         'baseline_ng':VectorsBaselineNG,
                         }
 
+
+def dedupe_reindex_all():
+    """
+    Convenience function to re-run all the major models with one call.
+    """
+    
+    for name in VECTORS_MODEL_NAMES:
+        dedupe_reindex(vectors_model = name,
+                       index_name = mc_config.MC_INDEX_NAME,
+                       doc_type = mc_config.MC_DOC_TYPE,
+                       )
+
 def dedupe_reindex(lookup_name = False,
                    vectors_model = 'baseline',
                    pairwise_model = False,
@@ -695,7 +707,7 @@ def dedupe_reindex(lookup_name = False,
     
 
 functions=['dedupe_train',
-           'dedupe_reindex',
+           'dedupe_reindex_all',
            ]
 
 def main():    
