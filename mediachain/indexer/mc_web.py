@@ -255,7 +255,7 @@ class handle_search(BaseHandler):
                 }
         
             in:
-                curl "http://127.0.0.1:23456/search" -d '{"q_id":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==", "limit":5, "index_name":"mc_test", "doc_type":"mc_test_image"}'
+                curl "http://127.0.0.1:23456/search" -d '{"q_id":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==", "limit":5, "index_name":"mc_test", "doc_type":"mc_test_image"}' 
             out:
                  <see_previous_example>
         """
@@ -452,7 +452,7 @@ class handle_dupe_lookup(BaseHandler):
                              'error_message':'Missing required `q_media` argument.',
                             })
             return
-        
+
         rr = yield mc_dedupe.dedupe_lookup_async(media_id = data['q_media'],
                                                  vectors_model = data.get('vectors_model', 'baseline'),
                                                  pairwise_model = data.get('pairwise_model', None),

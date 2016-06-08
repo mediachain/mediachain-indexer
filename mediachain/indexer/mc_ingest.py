@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+__doc__ = \
 """
 Functions for ingestion of media files into Indexer.
 
@@ -56,13 +57,14 @@ def getty_create_dumps(INC_SIZE = 100,
     """
     Quick and dirty Getty API downloader.
     """
-    
+
     if not mc_config.MC_GETTY_KEY:
         print ('ERROR: set GETTY_KEY environment variable.')
         exit(-1)
     
     if len(sys.argv) < 3:
-        print ('Usage: mediachain-indexer-ingest getty_create_dumps [archiv | entertainment | rf | small]')
+        print ('NOTE: set GETTY_KEY to Getty API key.')
+        print ('Usage: python mediachain-indexer-ingest getty_create_dumps [archiv | entertainment | rf | small]')
         exit(-1)
     
     typ = sys.argv[2]
@@ -322,29 +324,18 @@ def decode_image(s):
 
 
 def es_connect():
-    
-    if mc_config.MC_ES_URLS:
-        
-        urls = mc_config.MC_ES_URLS.split(',')
-        print ('CONNECTING...', urls)
-        es = Elasticsearch(urls)
-        
-    else:
-        print ('CONNECTING... <default>')
-        es = Elasticsearch()
+    print ('CONNECTING...')
+    es = Elasticsearch()
     print ('CONNECTED')
-    
     return es
 
     
-def iter_json_getty(getty_path,
-                    max_num = 0,
+def iter_json_getty(max_num = 0,
+                    dd = 'getty_small/json/images/',
                     index_name = mc_config.MC_INDEX_NAME,
                     doc_type = mc_config.MC_DOC_TYPE,                
                     ):
 
-    dd = getty_path
-    
     dd3 = dd.replace('/json/images/','/downloads/')
     
     assert exists(dd),repr(dd)
@@ -406,7 +397,7 @@ def iter_json_getty(getty_path,
 
     print ('DONE_YIELD',nn)
 
-
+    
 def ingest_bulk(iter_json = False,
                 thread_count = 1,
                 index_name = mc_config.MC_INDEX_NAME,
@@ -435,8 +426,11 @@ def ingest_bulk(iter_json = False,
     Examples:
         See `mc_test.py`
     """
-        
-    assert iter_json is not False
+
+    if not iter_json:
+        iter_json = iter_json_getty(index_name = index_name,
+                                    doc_type = doc_type,
+                                    )
     
     es = es_connect()
     
@@ -482,11 +476,7 @@ def ingest_bulk(iter_json = False,
             
             hh.update(xdoc)
 
-            if ignore_thumbs:
-                if 'image_thumb' in hh:
-                    del hh['image_thumb']
-            
-            else:
+            if not ignore_thumbs:
                 if redo_thumbs:
                     # Check existing thumbs meet size & format requirements:
 
@@ -508,10 +498,10 @@ def ingest_bulk(iter_json = False,
                     else:
                         assert False,'CANT_GENERATE_THUMBNAILS'
 
-            if 'img_data' in hh:
-                del hh['img_data']
-            
-            yield hh
+                if 'img_data' in hh:
+                    del hh['img_data']
+
+                yield hh
     
     gen = iter_wrap()
 
@@ -581,20 +571,20 @@ def ingest_bulk(iter_json = False,
 
     return es.count(index_name)['count']
 
+
+
 def ingest_bulk_blockchain(host,
                            port,
                            object_id,
                            ):
     """
     Ingest media from Mediachain blockchain.
-
     Args:
         host:       Host.
         port:       Port.
         object_id:  ID of the artefact/entity to fetch.
         index_name: Name of Indexer index to populate.
         doc_type:   Name of Indexer doc type.
-
     Looking at `mediachain-client/mediachain.reader.api.get_object_chain` as the main API call? 
     """
 
@@ -633,6 +623,7 @@ def ingest_bulk_blockchain(host,
             yield h
     
     ingest_bulk(iter_json = gen)
+
     
 def ingest_bulk_gettydump(getty_path = 'getty_small/json/images/',
                           index_name = mc_config.MC_INDEX_NAME,
@@ -657,6 +648,7 @@ def ingest_bulk_gettydump(getty_path = 'getty_small/json/images/',
     ingest_bulk(iter_json = iter_json)
     
 
+
 def config():
     """
     Print current environment variables.
@@ -675,7 +667,7 @@ functions=['getty_create_dumps',
 def main():
     setup_main(functions,
                globals(),
-               'mediachain-indexer-ingest',
+                'mediachain-indexer-ingest',
                )
 
 if __name__ == '__main__':

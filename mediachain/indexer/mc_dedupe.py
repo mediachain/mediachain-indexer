@@ -65,7 +65,7 @@ class model_reps_baseline(object):
                  use_hash = 'dhash',
                  ):
         
-        self.hash_size = hash_size
+        self.hash_size = int(hash_size)
         
         if use_hash == 'dhash':
             self.hash_func = imagehash.dhash
@@ -128,10 +128,10 @@ class model_reps_baseline_ng(object):
         else:
             self.hash_func = use_hash
         
-        self.hash_size = hash_size
+        self.hash_size = int(hash_size)
         
-        self.patch_size = patch_size
-        self.max_patches = max_patches
+        self.patch_size = int(patch_size)
+        self.max_patches = int(max_patches)
 
     def img_to_hsh_bools(self, img_data_uri = False, img_fn = False):
         if img_data_uri:
@@ -168,10 +168,10 @@ class model_reps_baseline_ng(object):
             query['dedupe_word_' + str(c)] = zz
         return query
     
-    def img_to_terms(self, img_data_uri = False, img_fn = False, patch_size = 5, max_patches = 64, hash_size = 16):
+    def img_to_terms(self, img_data_uri = False, img_fn = False):
         #was img_to_query
-        hsh = self.img_to_hsh_bools(img_data_uri = img_data_uri, img_fn = img_fn, hash_size = hash_size)
-        patches = self.hsh_to_patches(hsh, patch_size = patch_size, max_patches = max_patches)
+        hsh = self.img_to_hsh_bools(img_data_uri = img_data_uri, img_fn = img_fn)
+        patches = self.hsh_to_patches(hsh)
         rr = self.patches_to_query(patches)
         return rr
     

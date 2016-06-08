@@ -4,8 +4,10 @@
 """
 Evaluate dedupe and search models against labeled datasets. Do hyper-parameter tuning.
 
+For more datasets, see: https://github.com/mediachain/mediachain-indexer/issues/1
+
 Evaluation types:
-   - Precision @ k for search.
+   - Recall @ k for search.
    - Precision-recall-curve for dedupe.
 """
 
@@ -19,11 +21,175 @@ import mc_ingest
 import mc_dedupe
 from mc_generic import group, setup_main, raw_input_enter, download_streamed, tcache, pretty_print
 from random import sample
-from os import mkdir, listdir, makedirs
-from os.path import exists
+from os import mkdir, listdir, makedirs, walk
+from os.path import exists,join
 from random import random, shuffle
 import requests
+
 import zipfile
+import tarfile
+
+from collections import Counter, defaultdict
+
+
+def tarfile_extract_if_not_exists(fn_in,
+                                  directory,
+                                  ):
+    with tarfile.open(fn_in) as tar:
+        for name in tar.getnames():
+            if exists(join(directory, name)):
+                #print ('exists',name)
+                pass
+            else:
+                tar.extract(name, path=directory)
+
+
+copydays_links = {'original':'http://pascal.inrialpes.fr/data/holidays/copydays_original.tar.gz',
+                  'cropped':'http://pascal.inrialpes.fr/data/holidays/copydays_crop.tar.gz',
+                  'scale_attacked':'http://pascal.inrialpes.fr/data/holidays/copydays_jpeg.tar.gz',
+                  'strong_attacked':'http://pascal.inrialpes.fr/data/holidays/copydays_strong.tar.gz',
+                  }
+
+def download_copydays(check_extract = True):
+    """
+    Dataset:     Copydays
+    Credit:      Herve Jegou, Matthijs Douze and Cordelia Schmid. Hamming Embedding and Weak geometry consistency for large scale image search.
+    Project URL: http://lear.inrialpes.fr/~jegou/data.php#copydays
+    Description: Each image has suffered three kinds of artificial attacks: JPEG, cropping and "strong".
+    Stats:       Dataset size: 1491 images in total: 500 queries and 991 corresponding relevant images
+
+    Naming Format: E.g. `200001.jpg`. Files that share the same first 5 digits are in the same group.
+    """
+
+    try:
+        #TODO - better check.
+        if len(listdir('datasets/copydays/cropped/crops/80')) == 157:
+            check_extract = False
+    except KeyboardInterrupt:
+        raise                                 
+    except:
+        pass
+    
+    for name, url in copydays_links.items():
+        
+        fn_out = 'datasets/copydays/' + name + '.tar.gz'
+        
+        dir_out_full = 'datasets/copydays/' + name + '/'
+        
+        if not exists(dir_out_full):
+            makedirs(dir_out_full)
+        
+        download_streamed(url = url,
+                          fn = fn_out,
+                          use_temp = True,
+                          verbose = True,
+                          skip_existing = True,
+                          )
+
+        if check_extract:
+            print 'CHECK_EXTRACT...',fn_out
+
+            tarfile_extract_if_not_exists(fn_out,
+                                          dir_out_full,
+                                          )
+
+            print 'EXTRACTED'
+
+cache_groups_copydays = [False]
+            
+def iter_copydays(max_num = 0,
+                  do_img_data = False,
+                  check_extract = True,
+                  ):
+    print 'iter_copydays()'
+        
+    cache_dir = 'datasets/copydays/cache/'
+    
+    if not exists(cache_dir):
+        makedirs(cache_dir)
+
+    if cache_groups_copydays[0]:
+        groups = cache_groups_copydays[0]
+        
+    else:
+
+        download_copydays(check_extract = check_extract)
+
+        groups = {}
+        tot = 0
+
+        for name, url in copydays_links.items():
+
+            dir_out_full = 'datasets/copydays/' + name + '/'
+
+            for dir_name, subdir_list, file_list in walk(dir_out_full):
+
+                for fn in file_list:
+
+                    if not fn.endswith('.jpg'):
+                        continue
+
+                    num = fn[:fn.index('.jpg')]
+
+                    int(num)
+                    
+                    id = name + '|' + num
+                    
+                    grp = num[:-1]
+
+                    fn = join(dir_name,
+                              fn,
+                              )
+
+                    if grp not in groups:
+                        groups[grp] = []
+
+                    groups[grp].append((id, fn))
+
+                    tot += 1
+
+            #print 'LOADED',name,len(groups),tot
+
+        #print 'LOADED_ALL',len(groups),tot
+        
+        cache_groups_copydays[0] = groups
+        
+    nn = 0
+    for group_id, grp in groups.iteritems():
+
+        assert len(grp) == len(set(grp)),grp
+        
+        for id,fn in grp:
+            
+            if nn % 100 == 0:
+                print 'iter_copydays()',len(grp),id,fn
+            
+            if max_num and (nn == max_num):
+                return
+                        
+            hh = {'_id': unicode(id),
+                  'group_num':group_id,
+                  'fn':fn,
+                  }
+            
+            if do_img_data:
+                with open(fn) as f:
+                    d = f.read()
+    
+                d2 = tcache(cache_dir + 'cache_%s' % id,
+                            mc_ingest.shrink_and_encode_image,
+                            d,
+                            )
+                
+                hh['image_thumb'] = d2
+            
+            ## Number of instances of this semantic object:
+            
+            hh['num_instances_this_object'] = len(grp)
+            
+            nn += 1
+            
+            yield hh
 
 
 def download_ukbench(fn_out = 'datasets/ukbench/ukbench.zip'):
@@ -33,6 +199,8 @@ def download_ukbench(fn_out = 'datasets/ukbench/ukbench.zip'):
     Project URL: http://vis.uky.edu/~stewe/ukbench/
     Description: 4 photos of each object. More difficult semantic-similarity test.
     Stats:       6376 images, 4 images per positive set, 2GB zipped
+
+    Naming Format:  E.g. `ukbench00000.jpg`. Files with the same (number % 4) are in the same group.
     """
     
     dir_out = 'datasets/ukbench/'
@@ -60,7 +228,7 @@ def download_ukbench(fn_out = 'datasets/ukbench/ukbench.zip'):
     
 
 def iter_ukbench(max_num = 0,
-                 do_img_data = True,
+                 do_img_data = False,
                  ):
 
     fn_out = 'datasets/ukbench/ukbench.zip'
@@ -82,9 +250,6 @@ def iter_ukbench(max_num = 0,
             
             fn = 'datasets/ukbench/full/ukbench%05d.jpg' % nn
             #print ('fn',fn)
-
-            with open(fn) as f:
-                d = f.read()
             
             hh = {'_id': unicode(nn),
                   'group_num':group_num,
@@ -93,6 +258,9 @@ def iter_ukbench(max_num = 0,
             
             if do_img_data:
                 
+                with open(fn) as f:
+                    d = f.read()
+                    
                 d2 = tcache(cache_dir + 'cache_%05d' % nn,
                             mc_ingest.shrink_and_encode_image,
                             d,
@@ -100,26 +268,238 @@ def iter_ukbench(max_num = 0,
                 
                 hh['image_thumb'] = d2
 
-            #number of instances of this semantic object:
+            ## Number of instances of this semantic object:
+            
             hh['num_instances_this_object'] = 4 
             
             yield hh
 
 
-def eval(max_num = 500,
-         num_queries = 500,
-         the_gen = iter_ukbench,
-         rep_model_names = ['baseline_ng',
-                            'baseline',
-                            #'all_true',
-                            'random_guess',
-                            ],
-         ignore_self = False,
-         ):
+from hyperopt import hp, space_eval, fmin, tpe
+from time import time
+
+def hpo_vector_models(#the_gen = iter_ukbench,
+                      the_gen = iter_copydays,
+                      max_evals = 200,
+                      max_records = 150,
+                      max_queries = 150,
+                      use_simulator = False,
+                      optimize_for_recall_at = False,
+                      index_name = 'hpo_test',
+                      doc_type = 'hpo_test_doc',
+                      ):
     """
-    Main evaluation script.
+    Hyper-parameter optimization for the vector representation learning models.
+
+    Args:
+        the_gen:        Dataset iterator.
+        max_evals:      Important - Number of iterations to run the hyper-parameter optimizer.
+        num_records:    Number of images to load.
+        max_queries:    Number of test queries to do.
+        use_simulator:  Whether to use simulated ES. (Not yet tested.)
+                      
+    Example Run:
+        BEST ARGS:
+        {'patch_size': 2, 'use_hash': 'dhash', 'hash_size': 15.0, 'max_patches': 512, 'rep_model_name': 'baseline_ng'}
+
+        BEST SCORE:
+        0.032590051458
+
+    TODO:
+        Save winning hyper-parameters somehow, for later use.
     """
+    ###
     
+    t0 = time()
+
+    ## Run once for downloads:
+    #the_gen().next()
+
+    if use_simulator:
+        es = ElasticSearchEmulator()
+    else:
+        es = mc_ingest.es_connect()
+    
+    if es.indices.exists(index_name):
+        print ('DELETE_INDEX...', index_name)
+        es.indices.delete(index = index_name)
+        print ('DELETED')
+    
+    print 'INSERTING...',
+    
+    num_inserted = mc_ingest.ingest_bulk(the_gen(max_records, do_img_data = True),
+                                         index_name = index_name,
+                                         doc_type = doc_type,
+                                         redo_thumbs = False,
+                                         )
+    print 'INSERTED',num_inserted
+
+    print 'DEDUPE...'
+
+    for name in mc_dedupe.VECTORS_MODEL_NAMES:
+        num_updated = mc_dedupe.dedupe_reindex(index_name = index_name,
+                                               doc_type = doc_type,
+                                               vectors_model = name,
+                                               )
+    
+    print 'DEDUPE_UPDATED',num_updated
+
+    def objective(oargs):
+        """
+        Setup optimization objective to be minimizing return value of this function.
+
+        oargs format e.g.: {'type': 'baseline', 'use_hash': 'phash', 'hash_size': 11.0}
+        """
+        
+        oargs_orig = oargs.copy()
+        
+        rep_model_name = oargs['rep_model_name']
+        del oargs['rep_model_name']
+        
+        #print 'ARGS:'
+        #print oargs
+        #raw_input_enter()
+
+        ## Instantiate with passed `oargs`:
+        
+        rep_model = mc_dedupe.VECTORS_MODEL_NAMES[rep_model_name](**oargs)
+        
+        ## Evaluate recall @ N for on `max_queries` queries.
+
+        r_at_n = 0.0
+        num_found = 0
+        num_possible = 0
+
+        for c,hh in enumerate(the_gen(max_queries, do_img_data = False)):
+            
+            if optimize_for_recall_at:
+                do_optimize_for_recall_at = optimize_for_recall_at
+            else:
+                do_optimize_for_recall_at = hh['num_instances_this_object']
+            
+            assert do_optimize_for_recall_at > 1,do_optimize_for_recall_at
+            
+            if c % 100 == 0:
+                print 'objective',c
+            
+            group_num = hh['group_num']
+            
+            try:
+                query = rep_model.img_to_es_query(img_fn = hh['fn'])
+            except KeyboardInterrupt:
+                raise                         
+            except:
+                ## Some hyper-parameters combinations are not allowed, e.g.:
+                ## Error: 'Height of the patch should be less than the height of the image'
+                ## Instead of coding that all into the hyperopt search space,
+                ## just return large number here.
+                return 0.0
+
+            #print 'query',query
+            
+            rr = es.search(index = index_name,
+                           doc_type = doc_type,
+                           body = query,
+                           fields = ['_id', 'group_num', 'num_instances_this_object'],
+                           size = do_optimize_for_recall_at,
+                           timeout = '5s',
+                           )
+            
+            rr = rr['hits']['hits']
+
+            if rr:
+                print 'GOT',hh['_id'],rr
+                #raw_input_enter()
+
+            #GOT [{u'_score': 0.00038369675, u'_type': u'hpo_test_doc', u'_id': u'204403', u'fields': {u'group_num': [u'20440'], u'num_instances_this_object': [22]}, u'_index': u'hpo_test'}]
+
+                
+            ## Percent of true candidate docs found, ignoring query doc:
+
+            found = 0.0
+            for x in rr[:do_optimize_for_recall_at]:
+                if (x['fields']['group_num'][0] == hh['group_num']) and (x['_id'] != hh['_id']):
+                    found += 1.0
+            
+            r_at_n = found / (do_optimize_for_recall_at - 1.0)
+            
+            num_found += found
+            num_possible += (do_optimize_for_recall_at - 1.0)
+
+
+        rr = 0 - (num_found / num_possible)
+            
+        print 'returning:',rr,'found:',num_found,'of',num_possible
+        return rr
+
+
+    ## Define optimization search space:
+
+    # See: https://github.com/hyperopt/hyperopt/wiki/FMin
+    
+    space = hp.choice('rep_model',
+                      [{'rep_model_name':'baseline',
+                        'hash_size':hp.quniform('baseline_hash_size', 2, 64, 1),
+                        'use_hash':hp.choice('baseline_use_hash',['dhash','phash']),
+                      },
+                       {'rep_model_name':'baseline_ng',
+                        'hash_size':hp.quniform('baseline_ng_hash_size', 2, 64, 1),
+                        'use_hash':hp.choice('baseline_ng_use_hash',['dhash','phash']),
+                        'patch_size':hp.choice('baseline_ng_patch_size', [1,2,3,4,5,6,7,8,9,10,11,12,13]),
+                        'max_patches':hp.choice('baseline_ng_max_patches', [2,4,8,16,32,64,128,256,512,1024]),
+                       },
+                      ],
+                      )
+    
+    ## Run optimizer:
+    
+    print 'RUN OPTIMIZER...'
+    
+    best_args = fmin(objective,
+                     space,
+                     algo = tpe.suggest,
+                     max_evals = max_evals,
+                     )
+
+    print 'RE-RUN BEST PARAMS TO GET BEST SCORE...'
+    
+    best_score = objective(space_eval(space, best_args))
+
+    print
+    print 'BEST ARGS:'
+        
+    print space_eval(space, best_args)
+
+    print
+    print 'BEST SCORE:'
+
+    print 0 - best_score
+
+    print
+    print 'DONE',time() - t0
+
+
+def eval_demo(max_num = 500,
+              num_queries = 500,
+              the_gen = iter_ukbench,
+              rep_model_names = ['baseline_ng',
+                                 'baseline',
+                                 #'all_true',
+                                 'random_guess',
+                                 ],
+              ignore_self = False,
+              ):
+    """
+    Some exploratory visualizations of the representation-learning models.
+    
+    Consider this like an iPython notebook of quick experiments.
+    
+    For more practical needs, see `hpo_vector_models`.
+    """
+
+    ## Run once for downloads:
+    #the_gen().next()
+
     index_name = 'eval_index'
     doc_type = 'eval_doc'
 
@@ -137,26 +517,9 @@ def eval(max_num = 500,
         es.indices.delete(index = index_name)
         print ('DELETED')
     
-    def iter_wrap():
-        # Put in ingest_bulk() format:
-        
-        for hh in the_gen(max_num):
-            
-            xdoc = {'_op_type': 'index',
-                    '_index': index_name,
-                    '_type': doc_type,
-                    }
-            
-            xdoc.update(hh)
-            
-            for x in rr:
-                assert x['num_instances_this_object'] > 1.0,'Dataset needs to have multiple instances of each object.'
-            
-            yield xdoc
-
     print 'INSERTING...'
     
-    num_inserted = mc_ingest.ingest_bulk(the_gen(max_num),
+    num_inserted = mc_ingest.ingest_bulk(the_gen(max_num, do_img_data = True),
                                          index_name = index_name,
                                          doc_type = doc_type,
                                          redo_thumbs = False,
@@ -164,17 +527,19 @@ def eval(max_num = 500,
     print 'INSERTED',num_inserted
     
     print 'DEDUPE...'
-    
-    num_updated = mc_dedupe.dedupe_reindex(index_name = index_name,
-                                           doc_type = doc_type,
-                                           duplicate_modes = ['baseline', 'baseline_ng'],
-                                           )
+
+    for name in mc_dedupe.VECTORS_MODEL_NAMES:
+
+        num_updated = mc_dedupe.dedupe_reindex(index_name = index_name,
+                                               doc_type = doc_type,
+                                               vectors_model = name,
+                                               )
     
     print 'DEDUPE_UPDATED',num_updated
     
     # random set of queries
     
-    p_at_k = {}
+    r_at_k = {}
 
     dedupe_true = {}
     dedupe_prob = {}
@@ -187,7 +552,7 @@ def eval(max_num = 500,
 
         done[rep_model_name] = set()
         
-        p_at_k[rep_model_name] = {'at_04':0,
+        r_at_k[rep_model_name] = {'at_04':0,
                                   'at_10':0,
                                   'at_50':0,
                                   }
@@ -202,7 +567,7 @@ def eval(max_num = 500,
             dedupe_prob[rep_model_name] = [random() for x in xrange(1000)]
             continue
         
-        rep_model = mc_dedupe.REP_MODEL_NAMES[rep_model_name]()
+        rep_model = mc_dedupe.VECTORS_MODEL_NAMES[rep_model_name]()
         
         dedupe_true[rep_model_name] = []
         dedupe_prob[rep_model_name] = []
@@ -236,21 +601,21 @@ def eval(max_num = 500,
                         for x
                         in rr[:4]
                         if (x['fields']['group_num'][0] == hh['group_num']) and (x['_id'] != hh['_id'])
-                        ]) / (x['num_instances_this_object'] - 1.0)
+                        ]) / (hh['num_instances_this_object'] - 1.0)
             at_10 = len([1
                          for x
                          in rr[:10]
                          if (x['fields']['group_num'][0] == hh['group_num']) and (x['_id'] != hh['_id'])
-                         ]) / (x['num_instances_this_object'] - 1.0)
+                         ]) / (hh['num_instances_this_object'] - 1.0)
             at_50 = len([1
                          for x
                          in rr[:50]
                          if (x['fields']['group_num'][0] == hh['group_num']) and (x['_id'] != hh['_id'])
-                         ]) / (x['num_instances_this_object'] - 1.0)
+                         ]) / (hh['num_instances_this_object'] - 1.0)
 
-            p_at_k[rep_model_name]['at_04'] += at_4
-            p_at_k[rep_model_name]['at_10'] += at_10
-            p_at_k[rep_model_name]['at_50'] += at_50
+            r_at_k[rep_model_name]['at_04'] += at_4
+            r_at_k[rep_model_name]['at_10'] += at_10
+            r_at_k[rep_model_name]['at_50'] += at_50
             
             #print 'at_4',at_4,'at_10',at_10,'at_50',at_50
 
@@ -301,9 +666,9 @@ def eval(max_num = 500,
             
                 
                 
-            print c, rep_model_name, p_at_k[rep_model_name]
+            print c, rep_model_name, r_at_k[rep_model_name]
 
-        print 'PRECISION_@_K:',rep_model_name,[(x,100 * y / float(num_queries)) for x,y in p_at_k[rep_model_name].items()]
+        print 'RECALL_@_K:',rep_model_name,[(x,100 * y / float(num_queries)) for x,y in r_at_k[rep_model_name].items()]
 
     ### Plot Precision-Recall curves:
 
@@ -380,7 +745,7 @@ def eval(max_num = 500,
         es.indices.delete(index = index_name)
         print ('DELETED')
     
-    print 'PRECISION_@_K:',[(mm,[(x,100 * y / float(num_queries)) for x,y in zz.items()]) for mm,zz in p_at_k.items()]
+    print 'PRECISION_@_K:',[(mm,[(x,100 * y / float(num_queries)) for x,y in zz.items()]) for mm,zz in r_at_k.items()]
         
     print 'DONE'
 
@@ -675,15 +1040,31 @@ class ElasticSearchEmulator():
                *args,
                **kw):
         """
-        Accepts only queries of the form:
+        Accepts only queries of the forms:
         
             {'query': {'bool': {'should': [{'term':{'word1':1}}, {'term':{'word2':2}} ] } } } 
-        """
 
+        Or:
+
+            {'query': {'constant_score': {'filter': {'term': {'dedupe_hsh': 'a6935e549289a7a55ce45c98662db700'}}}}}
+
+        Or:
+            {'query':{'filtered': {'query': {'bool': {'should': [{'term': {x:y}} for x,y in terms.items()] } } } } }
+        """
+        
         ## Get query back into same format as docs:
         
+        if body.get('query',{}).get('filtered',{}).get('query',{}).get('bool'):
+            vv = body['query']['filtered']['query']['bool']['should']
+            
+        elif body.get('query',{}).get('bool'):
+            vv = body['query']['bool']['should']
+            
+        else:
+            vv = [body['query']['constant_score']['filter']]
+
         qterms = {}
-        for xx in [x['term'] for x in body['query']['bool']['should']]:
+        for xx in [x['term'] for x in vv]:
             qterms.update(xx)
         
         rh = {'hits':{'hits':[]}}
@@ -928,8 +1309,9 @@ def test_scoring_sim(docs = ['the brown fox is nice', 'the house is big', 'nice 
     print
     print 'ALL_PASSED'
 
-functions=['eval',
+functions=['eval_demo',
            'test_scoring_sim',
+           'hpo_vector_models',
            ]
 
 def main():

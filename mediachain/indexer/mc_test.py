@@ -53,10 +53,12 @@ def sanity_check(index_name = mc_config.MC_TEST_INDEX_NAME,
                                          )
     
     print ('INSERTED',num_inserted)
-    
-    mc_dedupe.dedupe_reindex(index_name = index_name,
-                             doc_type = doc_type,
-                             )
+
+    for name in mc_dedupe.VECTORS_MODEL_NAMES:
+        mc_dedupe.dedupe_reindex(index_name = index_name,
+                                 doc_type = doc_type,
+                                 vectors_model = name,
+                                 )
 
     print ('SEARCH_BY_TEXT...')
     
