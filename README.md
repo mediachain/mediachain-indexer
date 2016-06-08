@@ -15,12 +15,12 @@ mediachain-indexer-test     | Tests and sanity checks.
 
 #### Core Setup
 
-1) Install Elasticsearch. Version 2.3.2 or higher recommended.
+1) Install Elasticsearch. Version 2.3.2 or higher recommended:
   - [General Instructions](https://www.elastic.co/guide/en/elasticsearch/reference/current/_installation.html).
   - OSX: `brew install elasticsearch`
   - Linux: Check with your distribution.
 
-2) Launch Elasticsearch server.
+2) Launch Elasticsearch server:
 
 ```
 $ elasticsearch

@@ -54,7 +54,39 @@ import mc_config
 data_pat = 'data:image/jpeg;base64,'
 data_pat_2 = 'data:image/png;base64,'
 
-class model_reps_baseline(object):
+def simple_check_match(self,
+                       query,
+                       candidates,
+                       score_threshold = 0.5, ## Hyper-parameter optimize for this!
+                       ):
+    """
+    Dead-simple classifier based on score thresholds.
+
+    TODO: abstract some of the ES-centric stuff out.
+
+    Hit Format:
+        {u'_score': 0.87555695, u'_type': u'hpo_test_doc', u'_id': u'strong_attacked|204403', u'_source': {u'group_num': [u'20440'], u'num_instances_this_object': [22]}, u'_index': u'hpo_test'},
+    """
+    
+    query_id = query['_id']
+    
+    rr = {}
+    
+    for cand in candidates:
+
+        cand_id = cand['_id']
+
+        pair_id = tuple(sorted((query_id, cand_id)))
+
+        if cand['_score'] > score_threshold:
+            rr[pair_id] = 1
+        else:
+            rr[pair_id] = 0
+        
+    return rr    
+
+
+class VectorsBaseline(object):
     """
     Crudest image-matching model. Low-precision, low-recall.
     Does 1-to-1 matching of engineered feature hashes.
@@ -89,15 +121,16 @@ class model_reps_baseline(object):
         terms = self.img_to_terms(*args, **kw)
         query = {"query": {"constant_score":{"filter":{"term": terms}}}}
         return query
-    
-    
-            
-    
+
+    def check_match(self,
+                    *args,
+                    **kw):
+        return simple_check_match(*args, **kw)    
     
 from sklearn.feature_extraction.image import extract_patches_2d
 from math import sqrt
 
-class model_reps_baseline_ng(object):
+class VectorsBaselineNG(object):
     """
     Crude image-matching model. Slightly higher recall than `baseline` model.
     Does approximate matching of engineered feature hashes.
@@ -180,6 +213,10 @@ class model_reps_baseline_ng(object):
         query = {'query':{'filtered': {'query': {'bool': {'should': [{'term': {x:y}} for x,y in terms.items()] } } } } }
         return query
 
+    def check_match(self,
+                    *args,
+                    **kw):
+        return simple_check_match(*args, **kw)    
 
     
 @tornado.gen.coroutine
@@ -351,23 +388,97 @@ def dedupe_train():
     pass
 
 
-VECTORS_MODEL_NAMES = {'baseline':model_reps_baseline,
-                       'baseline_ng':model_reps_baseline_ng,
+
+class GreedyCluster():
+    """
+    Simple greedy clustering.
+
+    Input data format:
+        pair_clf       = {} # {(id_1,id_2):1} or {(id_1,id_2):0}
+        cluster_lookup = {} # {image_id:cluster_id}
+        clusters = {}       # {cluster_id:[image_id,...]}
+        cur_custer_id = [0] # [cluster_id]
+    """
+    
+    def __init__(self,):
+        pass
+    
+    def cluster(self,
+                pair_clf,
+                clusters,
+                cluster_lookup,
+                cur_cluster_id,
+                ):
+        
+        for (id_1, id_2), is_match in pair_clf.iteritems():
+            
+            cn_1 = cluster_lookup[id_1]
+            cn_2 = cluster_lookup[id_2]
+            
+            if is_match and (cn_1 != cn_2):
+                ## Merge:
+                
+                cur_cluster_id[0] += 1
+                cluster = tuple(set(clusters[cn_1] + clusters[cn_2]))
+                clusters[cur_cluster_id[0]] = cluster
+
+                ## TODO - there are more efficient ways of achieving this:
+                
+                for xid in cluster:
+                    cluster_lookup[xid] = cur_cluster_id[0]
+                
+            if (not is_match) and (cn_1 == cn_2):
+                ## Classifier says they these should be unmerged, but since we're merging greedily, do nothing:
+                
+                pass
+                
+
+VECTORS_MODEL_NAMES = {'baseline':VectorsBaseline,
+                       'baseline_ng':VectorsBaselineNG,
                        }
 
+CLUSTER_MODEL_NAMES = {'simple_greedy':GreedyCluster,
+                       }
 
-def dedupe_reindex(vectors_model = 'baseline',
-                   pairwise_model = None,
-                   cluster_model = None,
+PAIRWISE_MODEL_NAMES = {## For now, reusing the vector models, which have basic `check_match()` functions:
+                        'baseline':VectorsBaseline,
+                        'baseline_ng':VectorsBaselineNG,
+                        }
+
+def dedupe_reindex(use_lookup_name = False,
+                   vectors_model = 'baseline',
+                   pairwise_model = False,
+                   cluster_model = 'simple_greedy',
+                   greedy_updates = True,
                    incremental = False,
                    batch_size = 100,
                    index_name = mc_config.MC_INDEX_NAME,
                    doc_type = mc_config.MC_DOC_TYPE,
+                   v1_mode = True,
                    ):
     """
     Regenerate duplicate lookup tables. Currently implements v1 - a simple, greedy, in-memory baseline.
     
     TODO - Baseline implementation done, more advanced modes still WIP.
+    
+    Args:
+        use_lookup_name:    Name by which this particular model configuration can be looked up by, in later dedupe lookups.
+                            Defaults to just using the name of the passed `vectors_model`.
+        vectors_model:      Representation learning model to use. Can be either a string or dict with following forms:
+                            String:
+                                'baseline'
+                            Dictionary with model name as the key, and a sub-dictionary of hyper-parameters to pass
+                            to models:
+                              {'baseline_ng':{'use_hash':'dhash','patch_size':4}}
+        greedy_updates:    Whether clustering model should be applied greedily.
+        pairwise_model:    Pairwise classification model name. Or `False` to use the vectors model's `check_match()` function.
+        cluster_model:     Clustering model name.
+        incremental:       If True, only update clusters affected by newly ingested media. Otherwise, regenerate
+                           all dedupe clusters. Note: the more records that are deduped simultaneously, the greater
+                           the efficiency.
+    
+    Returns:
+        Check program exit status.
     
     General steps performed here, depending on chosen models:
     
@@ -376,34 +487,20 @@ def dedupe_reindex(vectors_model = 'baseline',
         3) Pairwise classify all pairs in each block.
         4) Clustering based on pair classifications.
         5) Output lookup tables for clustering info.
-    
-    Args:
-        vectors_model:    Representation learning model to use. Can be either a string or dict with following forms:
-                          String:
-                              'baseline'
-                          Dictionary with model name as the key, and a sub-dictionary of hyper-parameters to pass
-                          to models:
-                              {'baseline_ng':{'use_hash':'dhash','patch_size':4}}
-        pairwise_model:   null - Only mark exact matches as dupes.
-                          'threshold' - Simple baseline for pairwise dupe classification.
-        cluster_model:    null - no cluster agglomeration.
-                          'greedy' - Simple greedy clustering.
-        incremental:      If True, only update clusters affected by newly ingested media. Otherwise, regenerate
-                          all dedupe clusters. Note: the more records that are deduped simultaneously, the greater
-                          the efficiency.
-    
-    Returns:
-        Check program exit status.
     """
     
     assert vectors_model in VECTORS_MODEL_NAMES,('VECTORS_MODEL_NOT_IMPLEMENTED',vectors_model)
     
-    assert not pairwise_model,('PAIRWISE_MODEL_NOT_IMPLEMENTED',pairwise_model)
+    assert (not pairwise_model) or (pairwise_model in PAIRWISE_MODEL_NAMES),('PAIRWISE_MODEL_NOT_IMPLEMENTED',pairwise_model)
     
-    assert not cluster_model,('CLUSTER_MODEL_NOT_IMPLEMENTED',cluster_model)
+    assert (not cluster_model) or (cluster_model in CLUSTER_MODEL_NAMES),('CLUSTER_MODEL_NOT_IMPLEMENTED',cluster_model)
     
-    assert not incremental,'INCREMENTAL_NOT_IMPLEMENTED'
+    assert not incremental,'INCREMENTAL_NOT_IMPLEMENTED' ## And may never be implemented...
     
+    #
+    ## Step 1) Generate vector embeddings.
+    #
+
     def do_commit(rrr):
         print ('COMMITTING BATCH...',len(rrr))
         for is_success,res in parallel_bulk(es,
@@ -417,7 +514,7 @@ def dedupe_reindex(vectors_model = 'baseline',
         
         rrr[:] = []
         print ('COMMITTED')
-    
+
     es = es_connect()    
     
     res = scan(client = es,
@@ -439,7 +536,7 @@ def dedupe_reindex(vectors_model = 'baseline',
     
     nn = 0
     
-    ## Instantiate representation learning models:
+    ## Instantiate representation learning model:
     
     if type(vectors_model) in [str, unicode]:
         vectors_model_name = vectors_model
@@ -448,16 +545,48 @@ def dedupe_reindex(vectors_model = 'baseline',
     elif type(vectors_model) == dict:
         vectors_model_name = vectors_model.keys()[0]
 
+    if not use_lookup_name:
+        use_lookup_name = vectors_model_name
+        
     print repr(vectors_model)
         
     vmodel = VECTORS_MODEL_NAMES[vectors_model_name](**vectors_model[vectors_model_name])
     
     print ('MODEL',vmodel)
-        
+
+    ## Instantiate pairwise classification model:
+
+    if not pairwise_model:
+        # Assume that our vectors model also has a `check_match()` function:
+        pairwise_model_name = vectors_model_name
+    else:
+        pairwise_model_name = pairwise_model
+
+    pmodel = PAIRWISE_MODEL_NAMES[pairwise_model_name]
+
+    ## Instantiate clustering model:
+
+    cluster_model_name = cluster_model    
+    cmodel = CLUSTER_MODEL_NAMES[cluster_model]
+    
+    ## These will be needed later:
+    
+    cluster_lookup = {} # {image_id:cluster_id}
+    clusters = {}       # {cluster_id:[image_id,...]}
+    cur_cluster_id = [0]
+    
     ## Run first pass of dedupe:
     
     for c,hit in enumerate(res):
 
+        ## Pre-populate these, for later:
+        
+        cur_cluster_id[0] += 1
+        cluster_lookup[hit['_id']] = cur_cluster_id[0]
+        clusters[cur_cluster_id[0]] = [hit['_id']]
+
+        ## First pass of dedupe:
+        
         nn += 1
         
         hh = hit['_source']#['doc']
@@ -466,7 +595,7 @@ def dedupe_reindex(vectors_model = 'baseline',
         doc_update = {}
 
         doc_update.update(vmodel.img_to_terms(hh['image_thumb']))
-            
+        
         rr.append({'_op_type': 'update',
                    '_index': index_name,
                    '_type': doc_type,
@@ -488,38 +617,116 @@ def dedupe_reindex(vectors_model = 'baseline',
     es.indices.refresh(index = index_name)
     print ('REFRESHED')
     
+    ### Following code can be skipped for v1 baseline:
     
-    if False:
+    if v1_mode:
+        print ('DONE_DEDUPE')
+        return
+    
+    assert False,"WIP - didn't test yet."
+    
+    #
+    ## Step 2) Create overlapping candidate clusters based on embedding space distance:
+    #
+
+    all_clf_pairs = {} # {(id_1,id_2):1} or {(id_1,id_2):0}
+    
+    res = scan(client = es,
+               index = index_name,
+               doc_type = doc_type,
+               scroll = '5m', #TODO - hard coded.
+               query = {"query": {'match_all': {}
+                                 },
+                       #'from':0,
+                       #'size':1,                           
+                       },
+               )
+    
+    nn = 0
+    
+    for c,hit in enumerate(res):
         
-        assert False,'TODO: WIP'
+        nn += 1
         
-        ### Can skip these for the trivial baseline:
+        hh = hit['_source']
+        hh['_id'] = hit['_id']
+        
+        query = vmodel.img_to_es_query(img_data = hh['image_thumb'])
+        
+        rr = es.search(index = index_name,
+                       doc_type = doc_type,
+                       body = query,
+                       #fields = ['_id',
+                       #          ],
+                       size = do_optimize_for_recall_at,
+                       timeout = '5s',
+                       )
 
-        rr = []
+        rr = rr['hits']['hits']
+        
+        #
+        ## Step 3) Pairwise same / different classification:
+        #
+        
+        clf_pairs = pmodel.check_match(hit, rr)
 
-        for c_id, (hsh, cluster) in enumerate(hash_to_ids.iteritems()):
+        if greedy_updates:
+            #
+            ## Greedy Step 4) Create final non-overlapping clusters:
+            #
+            cmodel.cluster(clf_pairs,
+                           clusters,
+                           cluster_lookup,
+                           cur_cluster_id,
+                           )
+            
+        else:
+            
+            ## TODO:
+            # Uncertain if we should just overwrite previous classifications here.
+            # Depends on whether the model is only considering each individual pair in isolation,
+            # or if it is also considering outside information e.g. considering at all other pairs in
+            # the batch for each pair decision.
+            
+            all_clf_pairs.update(clf_pairs) 
 
-            #Media ID -> Cluster ID:
-            for mid in cluster:
-                rr.append({'_op_type': 'insert',
-                           '_index': mc_config.MC_INDEX_NAME_MID_TO_CID,
-                           '_type': mc_config.MC_DOC_TYPE_MID_TO_CID,
-                           '_id': mid,
-                           'doc': {'c_id': cn},
-                           })
-
-            #Cluster ID -> Cluster:
-            rr.append({'_op_type': 'insert',
-                       '_index': mc_config.MC_INDEX_NAME_CID_TO_CLUSTER,
-                       '_type': mc_config.MC_DOC_TYPE_CID_TO_CLUSTER,
-                       '_id': c_id,
-                       'doc': {'cluster': cluster},
+    
+    if not greedy_updates:
+        #
+        ## Non-Greedy Step 4) Create final non-overlapping clusters:
+        #
+        
+        cmodel.cluster(all_clf_pairs,
+                       clusters,
+                       cluster_lookup,
+                       cur_cluster_id,
+                       )
+    
+    #
+    ## Step 5) Update cluster lookup IDs: TODO - Atomic updates?...
+    #
+    
+    rr = []
+    nn = 0
+    
+    for c,(cluster_id,item_ids) in enumerate(clusters.iteritems()):
+        
+        for item_id in item_ids:
+            
+            nn += 1
+            
+            rr.append({'_op_type': 'update',
+                       '_index': index_name,
+                       '_type': doc_type,
+                       '_id': hit['_source']['_id'],
+                       'body': {'doc':{'lookup_' + use_lookup_name: unicode(cluster_id)}},
                        })
-
+            
             if len(rr) >= batch_size:
                 do_commit(rr)
-        if rr:
-            do_commit(rr)
+    
+    if rr:
+        do_commit(rr)
 
     
     print ('DONE_DEDUPE')
