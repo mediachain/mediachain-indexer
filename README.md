@@ -200,5 +200,21 @@ $ curl "http://127.0.0.1:23456/dupe_lookup" -d '{"q_media":"getty_531746790"}'
 }
 ```
 
+Pass `{"help":1}` to any endpoint, to get a plain-text help string:
 
+```
+$ curl "http://127.0.0.1:23456/dupe_lookup" -d '{"help":1}' | head
+
+Find all known duplicates of a media work.
+
+Args - passed as JSON-encoded body:
+    q_media:          Media to query for. See `Media Identifiers`.
+    lookup_name:      Name of lookup key for the model you want to use. See `lookup_name` of `dedupe_reindex()`.
+                      Note: must use 'dedupe_hsh' as lookup_name if v1_mode is True.
+    incremental:      If True, only update clusters affected by newly ingested media. Otherwise, regenerate
+                      all dedupe clusters. Note: the more records that are deduped simultaneously, the greater
+                      the efficiency.
+    include_self:     Include ID of query document in results.
+[...]
+```
 

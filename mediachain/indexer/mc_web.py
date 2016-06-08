@@ -199,7 +199,7 @@ class handle_ping(BaseHandler):
         
         self.write_json({'results':[rr]})
 
-        
+
 class handle_search(BaseHandler):
     
     #disable XSRF checking for this URL:
@@ -262,7 +262,7 @@ class handle_search(BaseHandler):
         
         d = self.request.body
 
-        print ('BODY',d)
+        #print ('BODY',d)
         
         try:
             data = json.loads(d)
@@ -273,6 +273,14 @@ class handle_search(BaseHandler):
                             })
             return
 
+        if 'help' in data:
+            ## Plain-text help:
+            from inspect import getdoc, getframeinfo, currentframe
+            self.set_header("Content-Type", "text/plain")
+            self.write(getdoc(getattr(self, getframeinfo(currentframe()).function)).replace('\n','\r\n') + '\r\n')
+            self.finish()
+            return
+        
         q_text = data.get('q','')
         q_id = data.get('q_id','')
         limit = intget(data.get('q'), 10)
@@ -437,6 +445,14 @@ class handle_dupe_lookup(BaseHandler):
                              'error_message':'Could not parse JSON request.',
                             })
             return
+
+        if 'help' in data:
+            ## Plain-text help:
+            from inspect import getdoc, getframeinfo, currentframe
+            self.set_header("Content-Type", "text/plain")
+            self.write(getdoc(getattr(self, getframeinfo(currentframe()).function)).replace('\n','\r\n') + '\r\n')
+            self.finish()
+            return
         
         if not data.get('q_media'):
             self.set_status(500)
@@ -473,6 +489,8 @@ class handle_score(BaseHandler):
     @tornado.gen.coroutine
     def post(self):
         """
+        NOTE: These functions are mostly contained in other API endpoints now. May remove this endpoint.
+        
         Admin tool for peering deeper into the similarity / relevance measurements that are the basis of
         dedupe / search calculations. Useful for e.g. getting a feel for why an image didn't show up in
         the top 100 results for a query, or why a pair of images weren't marked as duplicates.
@@ -514,6 +532,8 @@ class handle_score(BaseHandler):
             out:
                 {'results':[{'id':'ifps://123...', 'score':0.321}]}
         """
+
+        d = self.request.body
         
         try:
             data = json.loads(d)
@@ -522,6 +542,14 @@ class handle_score(BaseHandler):
             self.write_json({'error':'JSON_PARSE_ERROR',
                              'error_message':'Could not parse JSON request.',
                             })
+            return
+
+        if 'help' in data:
+            ## Plain-text help:
+            from inspect import getdoc, getframeinfo, currentframe
+            self.set_header("Content-Type", "text/plain")
+            self.write(getdoc(getattr(self, getframeinfo(currentframe()).function)).replace('\n','\r\n') + '\r\n')
+            self.finish()
             return
         
         q_text = data.get('q','')
