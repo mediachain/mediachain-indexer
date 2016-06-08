@@ -335,7 +335,8 @@ def ingest_bulk_blockchain(last_block_ref = None,
     
     def the_gen():
         
-        while True:
+        #while True:
+        if True:
             
             print 'STREAMING FROM TRANSACTORCLIENT...',(mc_config.MC_TRANSACTOR_HOST,mc_config.MC_TRANSACTOR_PORT)
             
@@ -390,7 +391,8 @@ def ingest_bulk_blockchain(last_block_ref = None,
             except ExpirationError as e:
                 print 'CAUGHT ExpirationError',e
                 sleep(1)
-                continue
+                #continue
+                return
             except:
                 #TODO... maybe not nice:
                 
@@ -404,13 +406,13 @@ def ingest_bulk_blockchain(last_block_ref = None,
                 os._exit(-1)
                 
             
-            print 'REPEATING...'
-            sleep(1)
+            #print 'REPEATING...'
+            #sleep(1)
             
     nn = ingest_bulk(iter_json = the_gen(),
-                     index_name = index_name,
-                     doc_type = doc_type,
-                     delete_current = delete_current,
+                     #index_name = index_name,
+                     #doc_type = doc_type,
+                     #delete_current = delete_current,
                      )
     
     print 'DONE_INGEST',nn
