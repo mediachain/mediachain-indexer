@@ -102,7 +102,7 @@ $ mediachain-indexer-dedupe dedupe_reindex
 $ mediachain-indexer-web web
 ```
 
-11) Query the REST API:
+11) Query the [REST API](https://github.com/mediachain/mediachain/blob/master/rfc/mediachain-rfc-3.md#rest-api-overview):
 
 Search by text:
 
