@@ -34,11 +34,12 @@ from time import time
 
 def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
                       #the_gen = mc_datasets.iter_ukbench,
-                      max_evals = 200,
-                      max_records = 150,
-                      max_queries = 150,
+                      max_evals = 10,
+                      max_records = 160,
+                      max_queries = 160,
+                      ignore_self = True,
+                      recall_at = False,
                       use_simulator = False,
-                      optimize_for_recall_at = False,
                       index_name = 'hpo_test',
                       doc_type = 'hpo_test_doc',
                       parallel_mode = False,
@@ -52,6 +53,9 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
         max_evals:      Important - Number of iterations to run the hyper-parameter optimizer.
         num_records:    Number of images to load.
         max_queries:    Number of test queries to do.
+        recall_at:      If False, will automatically optimize for recall @ `sample['num_instances_this_object']`.
+                        Set to integer to optimize for recall @ `recall_at`.
+        ignore_self:    Whether to ignore query image finding itself in the search results for scoring calculation.
         use_simulator:  Whether to use simulated ES. (TODO - Not yet tested.)
         parallel_mode:  Whether to run parallel across multiple machines. See hyperopt wiki link above.
         parallel_db:    Mongodb database URL needed for parallel mode.
@@ -66,7 +70,7 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
         {'patch_size': 2, 'use_hash': 'dhash', 'hash_size': 15.0, 'max_patches': 512, 'rep_model_name': 'baseline_ng'}
 
         BEST SCORE:
-        0.032590051458
+        3.25901%
 
     TODO:
         Save winning hyper-parameters, for later use.
@@ -74,6 +78,11 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
     
     assert not parallel_mode,'PARALLEL_MODE_NOT_TESTED_YET'
     assert not use_simulator,'SIMULATOR_NOT_TESTED_YET'
+
+    if ignore_self:
+        ignore_self_n = 1.0
+    else:
+        ignore_self_n = 0.0
     
     from hyperopt import Trials
     from hyperopt.mongoexp import MongoTrials
@@ -138,22 +147,24 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
         rep_model = mc_dedupe.VECTORS_MODEL_NAMES[rep_model_name](**oargs)
         
         ## Evaluate recall @ N for on `max_queries` queries.
-
+        
         r_at_n = 0.0
         num_found = 0
         num_possible = 0
-
+        
         for c,hh in enumerate(the_gen(max_queries, do_img_data = False)):
-            
-            if optimize_for_recall_at:
-                do_optimize_for_recall_at = optimize_for_recall_at
-            else:
-                do_optimize_for_recall_at = hh['num_instances_this_object']
-            
-            assert do_optimize_for_recall_at > 1,do_optimize_for_recall_at
             
             if c % 100 == 0:
                 print 'objective',c
+            
+            ## Either fixed number or dynamic for each sample:
+            
+            if recall_at:
+                do_optimize_for_recall_at = recall_at
+            else:
+                do_optimize_for_recall_at = hh['num_instances_this_object']
+            
+            assert do_optimize_for_recall_at > 1,('Dataset must have more than one sample per class.',do_optimize_for_recall_at)
             
             group_num = hh['group_num']
             
@@ -164,16 +175,19 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
             except:
                 ## Some hyper-parameters combinations are not allowed, e.g.:
                 ## Error: 'Height of the patch should be less than the height of the image'
-                ## Instead of coding that all into the hyperopt search space,
+                ## Instead of coding all of those validity constraints into the hyperopt search space,
                 ## just return large number here.
                 return 0.0
 
-            #print 'query',query
+            ## Search!:
             
             rr = es.search(index = index_name,
                            doc_type = doc_type,
                            body = query,
-                           fields = ['_id', 'group_num', 'num_instances_this_object'],
+                           fields = ['_id',
+                                     'group_num',
+                                     'num_instances_this_object',
+                                     ],
                            size = do_optimize_for_recall_at,
                            timeout = '5s',
                            )
@@ -183,21 +197,23 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
             if rr:
                 print 'GOT',hh['_id'],rr
                 #raw_input_enter()
-
-            #GOT [{u'_score': 0.00038369675, u'_type': u'hpo_test_doc', u'_id': u'204403', u'fields': {u'group_num': [u'20440'], u'num_instances_this_object': [22]}, u'_index': u'hpo_test'}]
-
-                
-            ## Percent of true candidate docs found, ignoring query doc:
+            
+            ## Record percent of true candidate docs found, ignoring query doc:
 
             found = 0.0
             for x in rr[:do_optimize_for_recall_at]:
-                if (x['fields']['group_num'][0] == hh['group_num']) and (x['_id'] != hh['_id']):
-                    found += 1.0
+                if ignore_self and (x['_id'] == hh['_id']):
+                    continue
+                if (x['fields']['group_num'][0] != hh['group_num']):
+                    continue
+                found += 1.0
             
-            r_at_n = found / (do_optimize_for_recall_at - 1.0)
+            r_at_n = found / (do_optimize_for_recall_at - ignore_self_n)
             
             num_found += found
-            num_possible += (do_optimize_for_recall_at - 1.0)
+            num_possible += min((do_optimize_for_recall_at - ignore_self_n),
+                                (hh['num_instances_this_object'] - ignore_self_n),
+                                )
 
 
         rr = 0 - (num_found / num_possible)
@@ -246,9 +262,9 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
 
     print
     print 'BEST SCORE:'
-
-    print 0 - best_score
-
+    
+    print '%.5f%%' % ((0 - best_score) * 100)
+    
     print
     print 'DONE',time() - t0
 
