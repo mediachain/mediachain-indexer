@@ -351,7 +351,7 @@ def ingest_bulk_blockchain(last_block_ref = None,
                     rh = {}
 
                     ## Copy these keys in from meta. Use tuples to rename keys. Keys can be repeated:
-
+                    
                     for kk in [u'caption', u'date_created', u'title', u'artist',
                                u'keywords', u'collection_name', u'editorial_source',
                                '_id',
@@ -362,17 +362,17 @@ def ingest_bulk_blockchain(last_block_ref = None,
                             rh[kk[1]] = meta[kk[0]]
                         else:
                             rh[kk] = meta[kk]
-
-                    print art.keys()
-                            
+                    
                     rh['latest_ref'] = base58.b58encode(art['meta']['rawRef'][u'@link'])
-
+                    
                     #TODO - different created date?:
                     rh['date_created'] = date_parser.parse(art['meta']['translatedAt']) 
-
+                    
                     #TODO: Using this placeholder until we get image data from canonical_stream:
                     rh['img_data'] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
-
+                    
+                    print 'INSERT',rh
+                    
                     yield rh
             
                 print 'END ITER'
