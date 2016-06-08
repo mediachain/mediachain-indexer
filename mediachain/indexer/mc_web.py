@@ -401,16 +401,8 @@ class handle_dupe_lookup(BaseHandler):
         
         Args - passed as JSON-encoded body:
             q_media:          Media to query for. See `Media Identifiers`.
-            vectors_model:    Representation learning model to use. Can be either a string or dict with following forms:
-                              String:
-                                  'baseline'
-                              Dictionary with model name as the key, and a sub-dictionary of hyper-parameters to pass
-                              to models:
-                                  {'baseline_ng':{'use_hash':'dhash','patch_size':4}}
-            pairwise_model:   'none' - Only mark exact matches as dupes.
-                              'threshold' - Simple baseline for pairwise dupe classification.
-            cluster_model:    'none' - no cluster agglomeration.
-                              'greedy' - Simple greedy clustering.
+            lookup_name:      Name of lookup key for the model you want to use. See `lookup_name` of `dedupe_reindex()`.
+                              Note: must use 'dedupe_hsh' as lookup_name if v1_mode is True.
             incremental:      If True, only update clusters affected by newly ingested media. Otherwise, regenerate
                               all dedupe clusters. Note: the more records that are deduped simultaneously, the greater
                               the efficiency.
@@ -454,9 +446,7 @@ class handle_dupe_lookup(BaseHandler):
             return
 
         rr = yield mc_dedupe.dedupe_lookup_async(media_id = data['q_media'],
-                                                 vectors_model = data.get('vectors_model', 'baseline'),
-                                                 pairwise_model = data.get('pairwise_model', None),
-                                                 cluster_model = data.get('cluster_model', None),
+                                                 lookup_name = data.get('lookup_name', 'dedupe_hsh'),
                                                  include_docs = data.get('include_docs'),
                                                  include_self = data.get('include_self'),
                                                  include_thumb = data.get('include_thumb'),

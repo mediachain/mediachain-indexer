@@ -221,16 +221,15 @@ class VectorsBaselineNG(object):
     
 @tornado.gen.coroutine
 def dedupe_lookup_async(media_id,
-                        vectors_model = 'baseline',
-                        pairwise_model = None,
-                        cluster_model = None,
+                        lookup_name = 'dedupe_hsh', # Identify model by this, instead of by `vectors_model` in v2.
                         incremental = False,
                         include_docs = False,
                         include_self = False,
                         include_thumb = False,
                         es = False,
                         index_name = mc_config.MC_INDEX_NAME,
-                        doc_type = mc_config.MC_DOC_TYPE,                
+                        doc_type = mc_config.MC_DOC_TYPE,
+                        v1_mode = True,
                         ):
     """
     Get list of all duplicates of a media work, from previously-generated duplicate lookup tables from `dedupe_reindex`.
@@ -241,35 +240,30 @@ def dedupe_lookup_async(media_id,
     
     Args:
         q_media:         Media to look up. See `Media Identifiers`.
-        vectors_model:    Representation learning model to use. Can be either a string or dict with following forms:
-                          String:
-                              'baseline'
-                          Dictionary with model name as the key, and a sub-dictionary of hyper-parameters to pass
-                          to models:
-                              {'baseline_ng':{'use_hash':'dhash','patch_size':4}}
-        pairwise_model:   null - Only mark exact matches as dupes.
-                          'threshold' - Simple baseline for pairwise dupe classification.
-        cluster_model:    null - no cluster agglomeration.
-                          'greedy' - Simple greedy clustering.
+        lookup_name:     Name of lookup key for the model you want to use. See `lookup_name` of `dedupe_reindex()`.
+                         Note: use 'dedupe_hsh' for v1 model.
+        include_self:    Include ID of query document in results.
+        include_docs:    Return entire indexed docs, instead of just IDs.
+        include_thumb:   Whether to include base64-encoded thumbnails in returned results.
         incremental:     Attempt to dedupe never-before-seen media file versus pre-ingested media files.
         es:              Database client handle. For `baseline`, it's an elasticsearch client handle.
-
+    
     Returns:
                          List of matching media IDs of form: [{'id':'ifps://123...'}, {'id':'ifps://456...'},...]
     """
     
-    assert vectors_model in VECTORS_MODEL_NAMES,('VECTORS_MODEL_NOT_IMPLEMENTED',vectors_model)
+    if v1_mode:
+        assert lookup_name == 'dedupe_hsh',("Since v1_mode is on must either use 'dedupe_hsh'. "\
+                                            "Otherwise, be sure to turn v1_mode off, both here and for dedupe_reindex()."
+                                            )
 
-    assert not pairwise_model,('PAIRWISE_MODEL_NOT_IMPLEMENTED',pairwise_model)
-        
-    assert not cluster_model,('CLUSTER_MODEL_NOT_IMPLEMENTED',cluster_model)
-
-    #raise tornado.gen.Return([])
+    else:
+        lookup_name = 'lookup_' + lookup_name
     
     content_based_search = False
     
     if media_id.startswith(data_pat) or media_id.startswith(data_pat_2):
-
+    
         #Search based on data URI:
         content_based_search = img_to_hsh(media_id)
     
@@ -285,102 +279,68 @@ def dedupe_lookup_async(media_id,
 
     print ('content_based_search',content_based_search,media_id[:40])
     
-    if True:
-        
-        ### Trivial baseline can take a shortcut that uses fewer indexes / fewer writes:
-        
-        if not content_based_search:
-        
-            rr = yield es.search(index = index_name,
-                                 type = doc_type,
-                                 source = {"query":{ "ids":{ "values": [ media_id ] } } }
-                                 )
+    ### Trivial baseline can take a shortcut that uses fewer indexes / fewer writes:
 
-            rr = json.loads(rr.body)
+    if not content_based_search:
 
-            if not rr['hits']['hits']:
-                raise tornado.gen.Return([])
-        
-            hit = rr['hits']['hits'][0]
-            hh = hit['_source']#['doc']
-            
-            content_based_search = hh['dedupe_hsh']
-            
-            print ('GOT_HASH',hh['dedupe_hsh'])
+        ## Query is a media ID. Get cluster ID for it:
         
         rr = yield es.search(index = index_name,
                              type = doc_type,
-                             source = {"query" : {"constant_score":{"filter":{"term":{ "dedupe_hsh" : content_based_search}}}}},
+                             source = {"query":{ "ids":{ "values": [ media_id ] } } }
                              )
-        
+
         rr = json.loads(rr.body)
-        
-        if not rr['hits']['hits']:            
+
+        if not rr['hits']['hits']:
             raise tornado.gen.Return([])
+
+        hit = rr['hits']['hits'][0]
+        hh = hit['_source']#['doc']
+
+        ## TODO - change following to .get(), to ignore records not yet dedupe-indexed for this lookup_name?:
         
-        rr = rr['hits']['hits']
+        content_based_search = hh[lookup_name]  
         
-        if not include_self:
-            
-            rr = [hit
-                  for hit
-                  in rr
-                  if hit['_id'] != media_id
-                  ]
-        
-        if not include_docs:
-            
-            rr = [{'_id':hit['_id']}
-                  for hit
-                  in rr
-                  ]
-            
-        else:
-            
-            if not include_thumb:
-                for x in rr:
-                    if 'image_thumb' in x:
-                        del x['image_thumb']
-        
-        raise tornado.gen.Return(rr)
+        print ('GOT_HASH',content_based_search)
     
+    rr = yield es.search(index = index_name,
+                         type = doc_type,
+                         source = {"query" : {"constant_score":{"filter":{"term":{ lookup_name : content_based_search}}}}},
+                         )
+    
+    rr = json.loads(rr.body)
+    
+    if not rr['hits']['hits']:            
+        raise tornado.gen.Return([])
+    
+    rr = rr['hits']['hits']
+    
+    if not include_self:
+        
+        rr = [hit
+              for hit
+              in rr
+              if hit['_id'] != media_id
+              ]
+
+    if not include_docs:
+
+        rr = [{'_id':hit['_id']}
+              for hit
+              in rr
+              ]
+
     else:
 
-        ### We'll use this method instead, once we move beyond the trivial baseline:
-        
-        #Lookup cluster ID for media ID:    
-        
-        rr = yield es.search(index = mc_config.MC_INDEX_NAME_MID_TO_CID,
-                             type = mc_config.MC_DOC_TYPE_MID_TO_CID,
-                             source = {"query" : {"constant_score":{"filter":{"term":{ "_id" : media_id}}}},
-                                       'size':1,
-                                       },
-                             )
-        
-        if not rr['hits']['hits']:
+        if not include_thumb:
+            for x in rr:
+                if 'image_thumb' in x:
+                    del x['image_thumb']
 
-            raise tornado.gen.Return([])
-        
-        else:
-            #Lookup all media IDs in that cluster:
-            
-            hit = rr['hits']['hits'][0]
-            hh = hit['_source']#['doc']
-            
-            rr = yield es.multi_search(index = mc_config.MC_INDEX_NAME_CID_TO_CLUSTER,
-                                       type = mc_config.MC_DOC_TYPE_CID_TO_CLUSTER,
-                                       source = {"query" : {"constant_score":{"filter":{"term":{ "_id" : hh['c_id']}}}}},
-                                       )
+    raise tornado.gen.Return(rr)
 
-            if not rr['hits']['hits']:
-                raise tornado.gen.Return([])
-
-            hit = rr['hits']['hits'][0]
-            hh = hit['_source']#['doc']
-
-            raise tornado.gen.Return(hh['cluster'])
-
-
+    
 def dedupe_train():
     """
     Train dedupe models. Not needed for unsupervised v1 baseline.
@@ -445,7 +405,7 @@ PAIRWISE_MODEL_NAMES = {## For now, reusing the vector models, which have basic 
                         'baseline_ng':VectorsBaselineNG,
                         }
 
-def dedupe_reindex(use_lookup_name = False,
+def dedupe_reindex(lookup_name = False,
                    vectors_model = 'baseline',
                    pairwise_model = False,
                    cluster_model = 'simple_greedy',
@@ -460,22 +420,22 @@ def dedupe_reindex(use_lookup_name = False,
     Regenerate duplicate lookup tables. Currently implements v1 - a simple, greedy, in-memory baseline.
     
     TODO - Baseline implementation done, more advanced modes still WIP.
-    
+
     Args:
-        use_lookup_name:    Name by which this particular model configuration can be looked up by, in later dedupe lookups.
-                            Defaults to just using the name of the passed `vectors_model`.
-        vectors_model:      Representation learning model to use. Can be either a string or dict with following forms:
-                            String:
-                                'baseline'
-                            Dictionary with model name as the key, and a sub-dictionary of hyper-parameters to pass
-                            to models:
-                              {'baseline_ng':{'use_hash':'dhash','patch_size':4}}
-        greedy_updates:    Whether clustering model should be applied greedily.
-        pairwise_model:    Pairwise classification model name. Or `False` to use the vectors model's `check_match()` function.
-        cluster_model:     Clustering model name.
-        incremental:       If True, only update clusters affected by newly ingested media. Otherwise, regenerate
-                           all dedupe clusters. Note: the more records that are deduped simultaneously, the greater
-                           the efficiency.
+        lookup_name:    Name by which this particular model configuration can be looked up, in later dedupe lookups.
+                        Defaults to just using the name of the passed `vectors_model`.
+        vectors_model:  Representation learning model to use. Can be either a string or dict with following forms:
+                        String:
+                            'baseline'
+                        Dictionary with model name as the key, and a sub-dictionary of hyper-parameters to pass
+                        to models:
+                            {'baseline_ng':{'use_hash':'dhash','patch_size':4}}
+        greedy_updates: Whether clustering model should be applied greedily.
+        pairwise_model: Pairwise classification model name. Or `False` to use the vectors model's `check_match()` function.
+        cluster_model:  Clustering model name.
+        incremental:    If True, only update clusters affected by newly ingested media. Otherwise, regenerate
+                        all dedupe clusters. Note: the more records that are deduped simultaneously, the greater
+                        the efficiency.
     
     Returns:
         Check program exit status.
@@ -545,8 +505,8 @@ def dedupe_reindex(use_lookup_name = False,
     elif type(vectors_model) == dict:
         vectors_model_name = vectors_model.keys()[0]
 
-    if not use_lookup_name:
-        use_lookup_name = vectors_model_name
+    if not lookup_name:
+        lookup_name = vectors_model_name
         
     print repr(vectors_model)
         
@@ -719,7 +679,7 @@ def dedupe_reindex(use_lookup_name = False,
                        '_index': index_name,
                        '_type': doc_type,
                        '_id': hit['_source']['_id'],
-                       'body': {'doc':{'lookup_' + use_lookup_name: unicode(cluster_id)}},
+                       'body': {'doc':{'lookup_' + lookup_name: unicode(cluster_id)}},
                        })
             
             if len(rr) >= batch_size:
