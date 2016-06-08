@@ -707,6 +707,7 @@ def dedupe_reindex(lookup_name = False,
     
 
 functions=['dedupe_train',
+           'dedupe_reindex',
            'dedupe_reindex_all',
            ]
 
