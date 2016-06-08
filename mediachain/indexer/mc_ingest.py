@@ -335,86 +335,81 @@ def ingest_bulk_blockchain(last_block_ref = None,
     
     def the_gen():
         
-        #while True:
-        if True:
-            
-            print 'STREAMING FROM TRANSACTORCLIENT...',(mc_config.MC_TRANSACTOR_HOST,mc_config.MC_TRANSACTOR_PORT)
-            
-            try:
-                
-                tc = mediachain.transactor.client.TransactorClient(mc_config.MC_TRANSACTOR_HOST,
-                                                                   mc_config.MC_TRANSACTOR_PORT,
-                                                                   )
-                
-                for art in tc.canonical_stream():
-                    
-                    print 'GOT',art.get('type')
-                    
-                    if art['type'] != u'artefact':
-                        continue
-                    
-                    meta = art['meta']['data']
+        print 'STREAMING FROM TRANSACTORCLIENT...',(mc_config.MC_TRANSACTOR_HOST,mc_config.MC_TRANSACTOR_PORT)
+        
+        tc = mediachain.transactor.client.TransactorClient(mc_config.MC_TRANSACTOR_HOST,
+                                                           mc_config.MC_TRANSACTOR_PORT,
+                                                           )
 
-                    rh = {}
+        for art in tc.canonical_stream():
 
-                    ## Copy these keys in from meta. Use tuples to rename keys. Keys can be repeated:
-                    
-                    for kk in [u'caption', u'date_created', u'title', u'artist',
-                               u'keywords', u'collection_name', u'editorial_source',
-                               '_id',
-                               ('_id','getty_id'),
-                               ]:
+            print 'GOT',art.get('type')
 
-                        if type(kk) == tuple:
-                            rh[kk[1]] = meta[kk[0]]
-                        elif kk == u'keywords':
-                            rh[kk] = ' '.join(meta[kk])
-                        else:
-                            rh[kk] = meta[kk]
-                    
-                    rh['latest_ref'] = base58.b58encode(art['meta']['rawRef'][u'@link'])
-                    
-                    ## TODO - different created date?:
-                    rh['date_created'] = date_parser.parse(art['meta']['translatedAt']) 
-                    
-                    ## TODO: Using this placeholder until we get image data from canonical_stream:
-                    rh['img_data'] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+            if art['type'] != u'artefact':
+                continue
 
-                    rhc = rh.copy()
-                    del rhc['img_data']
-                    print 'INSERT',rhc
-                    
-                    yield rh
-            
-                print 'END ITER'
-            
-            except ExpirationError as e:
-                print 'CAUGHT ExpirationError',e
-                sleep(1)
-                #continue
-                return
-            except:
-                #TODO... maybe not nice:
-                
-                print '!!!FORCE_EXIT'
-                
-                import traceback, sys, os
-                
-                for line in traceback.format_exception(*sys.exc_info()):
-                    print line,
-                
-                os._exit(-1)
-                
-            
-            #print 'REPEATING...'
-            #sleep(1)
-            
-    nn = ingest_bulk(iter_json = the_gen(),
-                     #index_name = index_name,
-                     #doc_type = doc_type,
-                     #delete_current = delete_current,
-                     )
-    
+            meta = art['meta']['data']
+
+            rh = {}
+
+            ## Copy these keys in from meta. Use tuples to rename keys. Keys can be repeated:
+
+            for kk in [u'caption', u'date_created', u'title', u'artist',
+                       u'keywords', u'collection_name', u'editorial_source',
+                       '_id',
+                       ('_id','getty_id'),
+                       ]:
+
+                if type(kk) == tuple:
+                    rh[kk[1]] = meta[kk[0]]
+                elif kk == u'keywords':
+                    rh[kk] = ' '.join(meta[kk])
+                else:
+                    rh[kk] = meta[kk]
+
+            rh['latest_ref'] = base58.b58encode(art['meta']['rawRef'][u'@link'])
+
+            ## TODO - different created date?:
+            rh['date_created'] = date_parser.parse(art['meta']['translatedAt']) 
+
+            ## TODO: Using this placeholder until we get image data from canonical_stream:
+            rh['img_data'] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+
+            rhc = rh.copy()
+            del rhc['img_data']
+            print 'INSERT',rhc
+
+            yield rh
+
+        print 'END ITER'
+
+
+    while True:
+        try:
+            nn = ingest_bulk(iter_json = the_gen(),
+                             #index_name = index_name,
+                             #doc_type = doc_type,
+                             #delete_current = delete_current,
+                             )
+            print 'REPEATING...'
+            sleep(1)
+        except ExpirationError as e:
+            print 'CAUGHT ExpirationError',e
+            sleep(1)
+            continue
+        except:
+            #TODO... maybe not nice:
+
+            print '!!!FORCE_EXIT'
+
+            import traceback, sys, os
+
+            for line in traceback.format_exception(*sys.exc_info()):
+                print line,
+
+            os._exit(-1)
+
+        
     print 'DONE_INGEST',nn
 
     
