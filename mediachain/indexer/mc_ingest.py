@@ -393,6 +393,16 @@ def ingest_bulk_blockchain(last_block_ref = None,
                              #doc_type = doc_type,
                              #delete_current = delete_current,
                              )
+
+            ## TODO: automatically do this for now, so we don't forget:
+            
+            import mc_models
+            for name in mc_models.VECTORS_MODEL_NAMES:
+                mc_models.dedupe_reindex(index_name = index_name,
+                                         doc_type = doc_type,
+                                         vectors_model = name,
+                                         )
+            
             print 'REPEATING...'
             sleep(1)
             

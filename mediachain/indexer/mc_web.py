@@ -309,7 +309,7 @@ class handle_search(BaseHandler):
                 
                 #Resolve ID(s) for query based on content.
                 #Note that this is similar to `/dupe_lookup` with `include_docs` = True:
-
+                
                 model = mc_models.VECTORS_MODEL_NAMES['baseline']()
                 
                 terms = model.img_to_terms(q_id)
