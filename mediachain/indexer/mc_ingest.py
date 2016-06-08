@@ -364,7 +364,7 @@ def ingest_bulk_blockchain(last_block_ref = None,
                         if type(kk) == tuple:
                             rh[kk[1]] = meta[kk[0]]
                         elif kk == u'keywords':
-                            rh[kk] = meta[' '.join(kk)]
+                            rh[kk] = ' '.join(meta[kk])
                         else:
                             rh[kk] = meta[kk]
                     
