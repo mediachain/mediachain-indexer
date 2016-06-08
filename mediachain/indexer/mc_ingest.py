@@ -367,25 +367,26 @@ def ingest_bulk_blockchain(last_block_ref = None,
                     rh[kk] = ' '.join(meta[kk])
                 else:
                     rh[kk] = meta[kk]
-
+            
             rh['latest_ref'] = base58.b58encode(art['meta']['rawRef'][u'@link'])
-
+            
             ## TODO - different created date?:
             rh['date_created'] = date_parser.parse(art['meta']['translatedAt']) 
-
+            
             ## TODO: Using this placeholder until we get image data from canonical_stream:
             #rh['img_data'] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
-
+            
             rhc = rh.copy()
             #del rhc['img_data']
             print 'INSERT',rhc
-
+            
             yield rh
-
+        
         print 'END ITER'
 
 
     while True:
+        
         try:
             nn = ingest_bulk(iter_json = the_gen(),
                              #index_name = index_name,
