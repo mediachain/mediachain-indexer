@@ -19,267 +19,21 @@ import matplotlib.pyplot as plt
 
 import mc_ingest
 import mc_dedupe
+import mc_datasets
+
 from mc_generic import group, setup_main, raw_input_enter, download_streamed, tcache, pretty_print
-from random import sample
 from os import mkdir, listdir, makedirs, walk
 from os.path import exists,join
-from random import random, shuffle
+from random import random, shuffle, sample
 import requests
 
-import zipfile
-import tarfile
-
 from collections import Counter, defaultdict
-
-
-def tarfile_extract_if_not_exists(fn_in,
-                                  directory,
-                                  ):
-    with tarfile.open(fn_in) as tar:
-        for name in tar.getnames():
-            if exists(join(directory, name)):
-                #print ('exists',name)
-                pass
-            else:
-                tar.extract(name, path=directory)
-
-
-copydays_links = {'original':'http://pascal.inrialpes.fr/data/holidays/copydays_original.tar.gz',
-                  'cropped':'http://pascal.inrialpes.fr/data/holidays/copydays_crop.tar.gz',
-                  'scale_attacked':'http://pascal.inrialpes.fr/data/holidays/copydays_jpeg.tar.gz',
-                  'strong_attacked':'http://pascal.inrialpes.fr/data/holidays/copydays_strong.tar.gz',
-                  }
-
-def download_copydays(check_extract = True):
-    """
-    Dataset:     Copydays
-    Credit:      Herve Jegou, Matthijs Douze and Cordelia Schmid. Hamming Embedding and Weak geometry consistency for large scale image search.
-    Project URL: http://lear.inrialpes.fr/~jegou/data.php#copydays
-    Description: Each image has suffered three kinds of artificial attacks: JPEG, cropping and "strong".
-    Stats:       Dataset size: 1491 images in total: 500 queries and 991 corresponding relevant images
-
-    Naming Format: E.g. `200001.jpg`. Files that share the same first 5 digits are in the same group.
-    """
-
-    try:
-        #TODO - better check.
-        if len(listdir('datasets/copydays/cropped/crops/80')) == 157:
-            check_extract = False
-    except KeyboardInterrupt:
-        raise                                 
-    except:
-        pass
-    
-    for name, url in copydays_links.items():
-        
-        fn_out = 'datasets/copydays/' + name + '.tar.gz'
-        
-        dir_out_full = 'datasets/copydays/' + name + '/'
-        
-        if not exists(dir_out_full):
-            makedirs(dir_out_full)
-        
-        download_streamed(url = url,
-                          fn = fn_out,
-                          use_temp = True,
-                          verbose = True,
-                          skip_existing = True,
-                          )
-
-        if check_extract:
-            print 'CHECK_EXTRACT...',fn_out
-
-            tarfile_extract_if_not_exists(fn_out,
-                                          dir_out_full,
-                                          )
-
-            print 'EXTRACTED'
-
-cache_groups_copydays = [False]
-            
-def iter_copydays(max_num = 0,
-                  do_img_data = False,
-                  check_extract = True,
-                  ):
-    print 'iter_copydays()'
-        
-    cache_dir = 'datasets/copydays/cache/'
-    
-    if not exists(cache_dir):
-        makedirs(cache_dir)
-
-    if cache_groups_copydays[0]:
-        groups = cache_groups_copydays[0]
-        
-    else:
-
-        download_copydays(check_extract = check_extract)
-
-        groups = {}
-        tot = 0
-
-        for name, url in copydays_links.items():
-
-            dir_out_full = 'datasets/copydays/' + name + '/'
-
-            for dir_name, subdir_list, file_list in walk(dir_out_full):
-
-                for fn in file_list:
-
-                    if not fn.endswith('.jpg'):
-                        continue
-
-                    num = fn[:fn.index('.jpg')]
-
-                    int(num)
-                    
-                    id = name + '|' + num
-                    
-                    grp = num[:-1]
-
-                    fn = join(dir_name,
-                              fn,
-                              )
-
-                    if grp not in groups:
-                        groups[grp] = []
-
-                    groups[grp].append((id, fn))
-
-                    tot += 1
-
-            #print 'LOADED',name,len(groups),tot
-
-        #print 'LOADED_ALL',len(groups),tot
-        
-        cache_groups_copydays[0] = groups
-        
-    nn = 0
-    for group_id, grp in groups.iteritems():
-
-        assert len(grp) == len(set(grp)),grp
-        
-        for id,fn in grp:
-            
-            if nn % 100 == 0:
-                print 'iter_copydays()',len(grp),id,fn
-            
-            if max_num and (nn == max_num):
-                return
-                        
-            hh = {'_id': unicode(id),
-                  'group_num':group_id,
-                  'fn':fn,
-                  }
-            
-            if do_img_data:
-                with open(fn) as f:
-                    d = f.read()
-    
-                d2 = tcache(cache_dir + 'cache_%s' % id,
-                            mc_ingest.shrink_and_encode_image,
-                            d,
-                            )
-                
-                hh['image_thumb'] = d2
-            
-            ## Number of instances of this semantic object:
-            
-            hh['num_instances_this_object'] = len(grp)
-            
-            nn += 1
-            
-            yield hh
-
-
-def download_ukbench(fn_out = 'datasets/ukbench/ukbench.zip'):
-    """
-    Dataset:     ukbench:
-    Credit:      D. Nistér and H. Stewénius. Scalable recognition with a vocabulary tree.
-    Project URL: http://vis.uky.edu/~stewe/ukbench/
-    Description: 4 photos of each object. More difficult semantic-similarity test.
-    Stats:       6376 images, 4 images per positive set, 2GB zipped
-
-    Naming Format:  E.g. `ukbench00000.jpg`. Files with the same (number % 4) are in the same group.
-    """
-    
-    dir_out = 'datasets/ukbench/'
-    dir_out_full = 'datasets/ukbench/full/'
-
-    if not exists(dir_out_full):
-        makedirs(dir_out_full)
-    
-    download_streamed(url = 'http://vis.uky.edu/~stewe/ukbench/ukbench.zip',
-                      fn = fn_out,
-                      use_temp = True,
-                      verbose = True,
-                      skip_existing = True,
-                      )
-    
-    if len(listdir(dir_out_full)) == 10200:
-        return
-    
-    print 'EXTRACTING...'
-    
-    with zipfile.ZipFile(fn_out, 'r') as zf:
-        zf.extractall(dir_out)
-            
-    print 'EXTRACTED',dir_out_full,len(listdir(dir_out_full))
-    
-
-def iter_ukbench(max_num = 0,
-                 do_img_data = False,
-                 ):
-
-    fn_out = 'datasets/ukbench/ukbench.zip'
-    download_ukbench(fn_out)
-
-    cache_dir = 'datasets/ukbench/cache/'
-
-    if not exists(cache_dir):
-        makedirs(cache_dir)
-    
-    for group_num,grp in enumerate(group(xrange(10199 + 1), 4)):
-        for nn in grp:
-            
-            if nn % 100 == 0:
-                print 'iter_ukbench()',nn
-            
-            if max_num and (nn == max_num):
-                return
-            
-            fn = 'datasets/ukbench/full/ukbench%05d.jpg' % nn
-            #print ('fn',fn)
-            
-            hh = {'_id': unicode(nn),
-                  'group_num':group_num,
-                  'fn':fn,
-                  }
-            
-            if do_img_data:
-                
-                with open(fn) as f:
-                    d = f.read()
-                    
-                d2 = tcache(cache_dir + 'cache_%05d' % nn,
-                            mc_ingest.shrink_and_encode_image,
-                            d,
-                            )
-                
-                hh['image_thumb'] = d2
-
-            ## Number of instances of this semantic object:
-            
-            hh['num_instances_this_object'] = 4 
-            
-            yield hh
-
 
 from hyperopt import hp, space_eval, fmin, tpe
 from time import time
 
-def hpo_vector_models(#the_gen = iter_ukbench,
-                      the_gen = iter_copydays,
+def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
+                      #the_gen = mc_datasets.iter_ukbench,
                       max_evals = 200,
                       max_records = 150,
                       max_queries = 150,
@@ -287,6 +41,8 @@ def hpo_vector_models(#the_gen = iter_ukbench,
                       optimize_for_recall_at = False,
                       index_name = 'hpo_test',
                       doc_type = 'hpo_test_doc',
+                      parallel_mode = False,
+                      parallel_db = 'mongo://localhost:12345/foo_db/jobs',
                       ):
     """
     Hyper-parameter optimization for the vector representation learning models.
@@ -296,9 +52,16 @@ def hpo_vector_models(#the_gen = iter_ukbench,
         max_evals:      Important - Number of iterations to run the hyper-parameter optimizer.
         num_records:    Number of images to load.
         max_queries:    Number of test queries to do.
-        use_simulator:  Whether to use simulated ES. (Not yet tested.)
-                      
-    Example Run:
+        use_simulator:  Whether to use simulated ES. (TODO - Not yet tested.)
+        parallel_mode:  Whether to run parallel across multiple machines. See hyperopt wiki link above.
+        parallel_db:    Mongodb database URL needed for parallel mode.
+                        NOTE: Use a new database name for each new run.
+    
+    For parallel mode, see these:
+         https://github.com/hyperopt/hyperopt/wiki/Parallelizing-Evaluations-During-Search-via-MongoDB
+         https://github.com/hyperopt/hyperopt/issues/248
+    
+    Example Output:
         BEST ARGS:
         {'patch_size': 2, 'use_hash': 'dhash', 'hash_size': 15.0, 'max_patches': 512, 'rep_model_name': 'baseline_ng'}
 
@@ -306,9 +69,19 @@ def hpo_vector_models(#the_gen = iter_ukbench,
         0.032590051458
 
     TODO:
-        Save winning hyper-parameters somehow, for later use.
+        Save winning hyper-parameters, for later use.
     """
-    ###
+    
+    assert not parallel_mode,'PARALLEL_MODE_NOT_TESTED_YET'
+    assert not use_simulator,'SIMULATOR_NOT_TESTED_YET'
+    
+    from hyperopt import Trials
+    from hyperopt.mongoexp import MongoTrials
+
+    if parallel_mode:
+        trials = MongoTrials(parallel_db, exp_key='exp1')
+    else:
+        trials = Trials()
     
     t0 = time()
 
@@ -459,6 +232,7 @@ def hpo_vector_models(#the_gen = iter_ukbench,
                      space,
                      algo = tpe.suggest,
                      max_evals = max_evals,
+                     trials = trials,
                      )
 
     print 'RE-RUN BEST PARAMS TO GET BEST SCORE...'
@@ -481,7 +255,7 @@ def hpo_vector_models(#the_gen = iter_ukbench,
 
 def eval_demo(max_num = 500,
               num_queries = 500,
-              the_gen = iter_ukbench,
+              the_gen = mc_datasets.iter_ukbench,
               rep_model_names = ['baseline_ng',
                                  'baseline',
                                  #'all_true',

@@ -107,6 +107,23 @@ def walk_files(dd, max_num = 0):
 
             yield fn
 
+            
+def tarfile_extract_if_not_exists(fn_in,
+                                  directory,
+                                  ):
+    """
+    Extract files from tarfile, but skip files that already exist.
+    """
+    import tarfile
+    
+    with tarfile.open(fn_in) as tar:
+        for name in tar.getnames():
+            if exists(join(directory, name)):
+                #print ('exists',name)
+                pass
+            else:
+                tar.extract(name, path=directory)
+
 def group(seq, size):
     """
     Group sequence `seq` into chunks of size `size`.

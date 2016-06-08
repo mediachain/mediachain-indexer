@@ -61,8 +61,8 @@ class model_reps_baseline(object):
     """
     
     def __init__(self,
-                 hash_size = 16,
                  use_hash = 'dhash',
+                 hash_size = 16,
                  ):
         
         self.hash_size = int(hash_size)
@@ -116,10 +116,10 @@ class model_reps_baseline_ng(object):
     """
 
     def __init__(self,
-                 hash_size = 16,
                  use_hash = 'dhash',
-                 patch_size = 4,
-                 max_patches = 64,
+                 hash_size = 15,
+                 patch_size = 2,
+                 max_patches = 512,
                  ):
         if use_hash == 'dhash':
             self.hash_func = imagehash.dhash

@@ -1,13 +1,14 @@
 
 ## Search and Dedupe for Mediachain
 
-Entry Point               |  Info
---------------------------|---------------------
-mediachain-indexer-dedupe | (Re-)Generate deduplication lookup indexes.
-mediachain-indexer-ingest | Ingest media from local sources or Mediachain API, for search & dedupe.
-mediachain-indexer-web    | Search & dedupe REST API.
-mediachain-indexer-eval   | Evaluate and score models against benchmarks.
-mediachain-indexer-test   | Demos and tests.
+Entry Point                 |  Info
+----------------------------|---------------------
+mediachain-indexer-dedupe   | (Re-)Generate deduplication lookup indexes. Train models.
+mediachain-indexer-datasets | Download training and ingestion datasets.
+mediachain-indexer-ingest   | Ingest media from local sources or Mediachain API, for search & dedupe.
+mediachain-indexer-web      | Search & dedupe REST API.
+mediachain-indexer-eval     | Evaluate and score models against benchmarks.
+mediachain-indexer-test     | Demos and tests.
 
 
 ## Getting Started
@@ -19,7 +20,7 @@ mediachain-indexer-test   | Demos and tests.
   - OSX: `brew install elasticsearch`
   - Linux: Check with your distribution.
 
-2) Launch elasticsearch server.
+2) Launch Elasticsearch server.
 
 ```
 $ elasticsearch
@@ -39,7 +40,6 @@ $ mediachain-indexer-ingest
 USAGE: mediachain-indexer-ingest <function_name>
 
 Available Functions:
-getty_create_dumps...................... Quick and dirty Getty API downloader.
 ingest_bulk_blockchain.................. Ingest media from Mediachain blockchain.
 ingest_bulk_gettydump................... Ingest media from Getty data dumps into Indexer.
 config.................................. Print current environment variables.
@@ -74,7 +74,7 @@ $ mediachain-indexer-test sanity_check
 7) Alternatively, grab small Getty testing dataset:
 
 ```
-$ GETTY_KEY="<your_getty_key>" mediachain-indexer-ingest getty_create_dumps
+$ MC_GETTY_KEY="<your_getty_key>" mediachain-indexer-datasets getty_create_dumps
 ```
 
 8) Ingest Getty dataset:
