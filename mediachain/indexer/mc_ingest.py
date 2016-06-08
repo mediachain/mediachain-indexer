@@ -198,10 +198,13 @@ def ingest_bulk(iter_json = False,
 
                 if 'img_data' in hh:
                     del hh['img_data']
-
-                print 'INSERTING',hh
-                
-                yield hh
+            
+            chh = hh.copy()
+            if 'image_thumb' in chh:
+                del chh['image_thumb']
+            print 'INSERTING',index_name,doc_type,chh
+            
+            yield hh
     
     gen = iter_wrap()
 
