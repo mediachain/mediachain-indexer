@@ -272,6 +272,7 @@ def ingest_bulk(iter_json = False,
 
 """
 EXPECTED ARTEFACT FORMAT:
+----
 
 { 'entity': { u'meta': { u'data': { u'name': u'Randy Brooke'},
                          u'rawRef': { u'@link': '\x12 u\xbb\xdaP\xf6\x1d\x1d\xf4\xff\xcbFD\xac\xe9\x92\xb3,\xf1\x9a;\x08J\r\xd2L\x97\xd0\x8cKY\xd5\x1a'},
@@ -317,6 +318,15 @@ def ingest_bulk_blockchain(last_block_ref = None,
     
     import mediachain.transactor.client
     from grpc.framework.interfaces.face.face import ExpirationError
+
+    from mediachain.datastore.dynamo import set_aws_config
+    
+    set_aws_config({'endpoint_url': 'http://localhost:8000',
+                    'mediachain_table_name': 'Mediachain',
+                    'aws_access_key_id': '',
+                    'aws_secret_access_key': '',
+                    'region_name':'',
+                    })
     
     def the_gen():
         
@@ -328,14 +338,14 @@ def ingest_bulk_blockchain(last_block_ref = None,
                 tc = mediachain.transactor.client.TransactorClient(mc_config.MC_TRANSACTOR_HOST,
                                                                    mc_config.MC_TRANSACTOR_PORT,
                                                                    )
-
+                
                 for art in tc.canonical_stream():
-
+                    
                     print 'GOT',art.get('type')
-
+                    
                     if art['type'] != u'artefact':
                         continue
-
+                    
                     meta = art['meta']['data']
 
                     rh = {}
@@ -371,6 +381,18 @@ def ingest_bulk_blockchain(last_block_ref = None,
                 print 'CAUGHT ExpirationError',e
                 sleep(1)
                 continue
+            except:
+                #TODO... maybe not nice:
+                
+                print '!!!FORCE_EXIT'
+                
+                import traceback, sys, os
+                
+                for line in traceback.format_exception(*sys.exc_info()):
+                    print line,
+                
+                os._exit(-1)
+                
             
             print 'REPEATING...'
             sleep(1)
