@@ -299,7 +299,7 @@ def getty_create_dumps(INC_SIZE = 100,
     
     if len(sys.argv) < 3:
         print ('NOTE: set MC_GETTY_KEY to Getty API key.')
-        print ('Usage: python mediachain-indexer-ingest getty_create_dumps [archiv | entertainment | rf | small]')
+        print ('Usage: python mediachain-indexer-ingest getty_create_dumps [archiv | entertainment | rf | small | custom]')
         exit(-1)
     
     typ = sys.argv[2]
@@ -323,6 +323,11 @@ def getty_create_dumps(INC_SIZE = 100,
     elif typ == 'small':
         #small 100-sample portion of `entertainment` dataset.
         set_entertainment = [x.strip() for x in open('Entertainment IDs.txt').read().split(',')[:100]]
+        ids.update(set_entertainment)
+
+    elif typ == 'custom':
+        #small 100-sample portion of `entertainment` dataset.
+        set_entertainment = [x.strip() for x in open('custom.txt').read().split(',')[:100]]
         ids.update(set_entertainment)
         
     else:

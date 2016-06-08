@@ -46,6 +46,7 @@ from cStringIO import StringIO
 
 import binascii
 import base64
+import base58
 
 import numpy as np
 
@@ -100,6 +101,7 @@ def ingest_bulk(iter_json = False,
                 search_after = False,
                 redo_thumbs = True,
                 ignore_thumbs = False,
+                delete_current = True,
                 ):
     """
     Ingest Getty dumps from JSON files.
@@ -107,13 +109,14 @@ def ingest_bulk(iter_json = False,
     Currently does not attempt to import media to the Mediachain chain.
     
     Args:
-        iter_json:     Iterable of media objects, with `img_data` containing the raw-bytes image data.
-        thread_count:  Number of parallel threads to use for ES insertion.
-        index_name:    ES index name to use.
-        doc_type:      ES document type to use.
-        search_after:  Manually inspect ingested records after. Probably not needed anymore.
-        redo_thumbs:   Whether to recalcuate 'image_thumb' from 'img_data'.
-        ignore_thumbs: Whether to ignore thumbnail generation entirely.
+        iter_json:      Iterable of media objects, with `img_data` containing the raw-bytes image data.
+        thread_count:   Number of parallel threads to use for ES insertion.
+        index_name:     ES index name to use.
+        doc_type:       ES document type to use.
+        search_after:   Manually inspect ingested records after. Probably not needed anymore.
+        redo_thumbs:    Whether to recalcuate 'image_thumb' from 'img_data'.
+        ignore_thumbs:  Whether to ignore thumbnail generation entirely.
+        delete_current: Whether to delete current index, if it exists.
 
     Returns:
         Number of inserted records.
@@ -129,7 +132,7 @@ def ingest_bulk(iter_json = False,
     
     es = es_connect()
     
-    if es.indices.exists(index_name):
+    if delete_current and es.indices.exists(index_name):
         print ('DELETE_INDEX...', index_name)
         es.indices.delete(index = index_name)
         print ('DELETED')
@@ -267,57 +270,118 @@ def ingest_bulk(iter_json = False,
     return es.count(index_name)['count']
 
 
+"""
+EXPECTED ARTEFACT FORMAT:
 
-def ingest_bulk_blockchain(host,
-                           port,
-                           object_id,
+{ 'entity': { u'meta': { u'data': { u'name': u'Randy Brooke'},
+                         u'rawRef': { u'@link': '\x12 u\xbb\xdaP\xf6\x1d\x1d\xf4\xff\xcbFD\xac\xe9\x92\xb3,\xf1\x9a;\x08J\r\xd2L\x97\xd0\x8cKY\xd5\x1a'},
+                         u'translatedAt': u'2016-06-08T15:25:50.254139',
+                         u'translator': u'GettyTranslator/0.1'},
+              u'type': u'entity'},
+  u'meta': { u'data': { u'_id': u'getty_521396048',
+                        u'artist': u'Randy Brooke',
+                        u'caption': u'NEW YORK, NY - APRIL 15:  A model walks the runway wearing the Ines Di Santo Bridal Collection Spring 2017 on April 15, 2016 in New York City.  (Photo by Randy Brooke/Getty Images for Ines Di Santo)',
+                        u'collection_name': u'Getty Images Entertainment',
+                        u'date_created': u'2016-04-15T00:00:00-07:00',
+                        u'editorial_source': u'Getty Images North America',
+                        u'keywords': [ u'Vertical',
+                                       u'Walking',
+                                       u'USA',
+                                       u'New York City',
+                                       u'Catwalk - Stage',
+                                       u'Fashion Model',
+                                       u'Photography',
+                                       u'Arts Culture and Entertainment',
+                                       u'Bridal Show'],
+                        u'title': u'Ines Di Santo Bridal Collection Spring 2017 - Runway'},
+             u'rawRef': { u'@link': "\x12 r\x1a\xed'#\xc8\xbe\xb1'Qu\xadePG\x01@\x19\x88N\x17\xa9\x01a\x1e\xa9v\xc9L\x00\xe6c"},
+             u'translatedAt': u'2016-06-08T15:26:12.622240',
+             u'translator': u'GettyTranslator/0.1'},
+  u'type': u'artefact'}
+"""
+
+def ingest_bulk_blockchain(last_block_ref = None,
+                           delete_current = True,
+                           index_name = mc_config.MC_INDEX_NAME,
+                           doc_type = mc_config.MC_DOC_TYPE,
                            ):
     """
     Ingest media from Mediachain blockchain.
+    
     Args:
-        host:       Host.
-        port:       Port.
-        object_id:  ID of the artefact/entity to fetch.
-        index_name: Name of Indexer index to populate.
-        doc_type:   Name of Indexer doc type.
-    Looking at `mediachain-client/mediachain.reader.api.get_object_chain` as the main API call? 
+        last_block_ref:  (Optional) Last block ref to start from.
+        index_name:      Name of Indexer index to populate.
+        doc_type:        Name of Indexer doc type.
+    
     """
-
-    assert False,'TODO - WIP stub, not ready yet. '
     
-    from mediachain.reader import api
-    
-    aws = {'aws_access_key_id':mc_config.MC_AWS_ACCESS_KEY_ID,
-           'aws_secret_access_key':mc_config.MC_AWS_SECRET_ACCESS_KEY,
-           'endpoint_url':mc_config.MC_ENDPOINT_URL,
-           'region_name':mc_config.MC_REGION_NAME,
-           }
+    import mediachain.transactor.client
+    from grpc.framework.interfaces.face.face import ExpirationError
     
     def the_gen():
-        for object_id in []:
+        
+        while True:
+            print 'STREAMING FROM TRANSACTORCLIENT...',(mc_config.MC_TRANSACTOR_HOST,mc_config.MC_TRANSACTOR_PORT)
+            
+            try:
+                
+                tc = mediachain.transactor.client.TransactorClient(mc_config.MC_TRANSACTOR_HOST,
+                                                                   mc_config.MC_TRANSACTOR_PORT,
+                                                                   )
 
-            h = {#'_id': img_id,
-                 'title':'Crowd of People Walking',
-                 'artist':'test artist',
-                 'collection_name':'test collection name',
-                 'caption':'test caption',
-                 'editorial_source':'test editorial source',
-                 'keywords':'test keywords',
-                 #'date_created':datetime.datetime.now(),
-                 #'img_data':img_uri,
-                 }
+                for art in tc.canonical_stream():
+
+                    print 'GOT',art.get('type')
+
+                    if art['type'] != u'artefact':
+                        continue
+
+                    meta = art['meta']['data']
+
+                    rh = {}
+
+                    ## Copy these keys in from meta. Use tuples to rename keys. Keys can be repeated:
+
+                    for kk in [u'caption', u'date_created', u'title', u'artist',
+                               u'keywords', u'collection_name', u'editorial_source',
+                               '_id',
+                               ('_id','getty_id'),
+                               ]:
+
+                        if type(kk) == tuple:
+                            rh[kk[1]] = meta[kk[0]]
+                        else:
+                            rh[kk] = meta[kk]
+
+                    print art.keys()
+                            
+                    rh['latest_ref'] = base58.b58encode(art['meta']['rawRef'][u'@link'])
+
+                    #TODO - different created date?:
+                    rh['date_created'] = date_parser.parse(art['meta']['translatedAt']) 
+
+                    #TODO: Using this placeholder until we get image data from canonical_stream:
+                    rh['img_data'] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+
+                    yield rh
             
-            obj = api.get_object(host, port, object_id, aws)
+                print 'END ITER'
             
-            print 'obj',obj
+            except ExpirationError as e:
+                print 'CAUGHT ExpirationError',e
+                sleep(1)
+                continue
             
-            assert False,'TODO'
+            print 'REPEATING...'
+            sleep(1)
             
-            h['title'] = obj['title']
-            
-            yield h
+    nn = ingest_bulk(iter_json = the_gen(),
+                     index_name = index_name,
+                     doc_type = doc_type,
+                     delete_current = delete_current,
+                     )
     
-    ingest_bulk(iter_json = gen)
+    print 'DONE_INGEST',nn
 
     
 def ingest_bulk_gettydump(getty_path = 'getty_small/json/images/',
@@ -343,7 +407,8 @@ def ingest_bulk_gettydump(getty_path = 'getty_small/json/images/',
     ingest_bulk(iter_json = iter_json)
     
 
-
+    
+    
 def config():
     """
     Print current environment variables.

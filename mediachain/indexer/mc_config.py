@@ -41,3 +41,9 @@ MC_TEST_WEB_HOST = 'http://127.0.0.1:23456'
 MC_TEST_INDEX_NAME = 'mc_test'
 MC_TEST_DOC_TYPE = 'mc_test_image'
 
+
+## Transactor settings:
+
+MC_TRANSACTOR_HOST = os.environ.get('MC_TRANSACTOR_HOST','127.0.0.1')
+MC_TRANSACTOR_PORT = int(os.environ.get('MC_TRANSACTOR_PORT', '10001'))
+
