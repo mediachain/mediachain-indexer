@@ -138,29 +138,30 @@ def ingest_bulk(iter_json = False,
         print ('DELETE_INDEX...', index_name)
         es.indices.delete(index = index_name)
         print ('DELETED')
-            
-    print ('CREATE_INDEX...',index_name)
-    es.indices.create(index = index_name,
-                      body = {'settings': {'number_of_shards': mc_config.MC_NUMBER_OF_SHARDS,
-                                           'number_of_replicas': mc_config.MC_NUMBER_OF_REPLICAS,                             
-                                           },
-                              'mappings': {doc_type: {'properties': {'title':{'type':'string'},
-                                                                     'artist':{'type':'string'},
-                                                                     'collection_name':{'type':'string'},
-                                                                     'caption':{'type':'string'},
-                                                                     'editorial_source':{'type':'string'},
-                                                                     'keywords':{'type':'string', 'index':'not_analyzed'},
-                                                                     'created_date':{'type':'date'},
-                                                                     'image_thumb':{'type':'string', 'index':'no'},
-                                                                     'dedupe_hsh':{'type':'string', 'index':'not_analyzed'},
-                                                                     },
-                                                      },
-                                           },
-                              },
-                      #ignore = 400, # ignore already existing index
-                      )
-    
-    print('CREATED',index_name)
+
+    if not es.indices.exists(index_name):
+        print ('CREATE_INDEX...',index_name)
+        es.indices.create(index = index_name,
+                          body = {'settings': {'number_of_shards': mc_config.MC_NUMBER_OF_SHARDS,
+                                               'number_of_replicas': mc_config.MC_NUMBER_OF_REPLICAS,                             
+                                               },
+                                  'mappings': {doc_type: {'properties': {'title':{'type':'string'},
+                                                                         'artist':{'type':'string'},
+                                                                         'collection_name':{'type':'string'},
+                                                                         'caption':{'type':'string'},
+                                                                         'editorial_source':{'type':'string'},
+                                                                         'keywords':{'type':'string', 'index':'not_analyzed'},
+                                                                         'created_date':{'type':'date'},
+                                                                         'image_thumb':{'type':'string', 'index':'no'},
+                                                                         'dedupe_hsh':{'type':'string', 'index':'not_analyzed'},
+                                                                         },
+                                                          },
+                                               },
+                                  },
+                          #ignore = 400, # ignore already existing index
+                          )
+
+        print('CREATED',index_name)
     
     print('INSERTING...')
 
