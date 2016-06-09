@@ -288,8 +288,6 @@ class handle_search(BaseHandler):
         doc_type = data.get('doc_type', mc_config.MC_DOC_TYPE)
         include_docs = data.get('include_docs', True)
         include_thumb = data.get('include_thumb', True)
-
-        
         
         if not (q_text or q_id):
             #self.set_status(500)
@@ -309,9 +307,9 @@ class handle_search(BaseHandler):
                   'next_page':None,
                   'prev_page':None,
                   }
-            self.write_json(rr, pretty = True)
+            self.write_json(rr)
             return
-
+        
         if (q_text and q_id):
             self.set_status(500)
             self.write_json({'error':'BAD_QUERY',
@@ -406,7 +404,7 @@ class handle_search(BaseHandler):
                     del x['_source']['image_thumb']
                 
         self.write_json(rr,
-                        pretty = data.get('pretty', False),
+                        pretty = data.get('pretty', True),
                         max_indent_depth = data.get('max_indent_depth', False),
                         )
 

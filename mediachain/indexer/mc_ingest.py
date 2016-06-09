@@ -451,7 +451,7 @@ def ingest_bulk_blockchain(last_block_ref = None,
             nn = ingest_bulk(iter_json = the_gen(),
                              #index_name = index_name,
                              #doc_type = doc_type,
-                             #delete_current = delete_current,
+                             delete_current = False,
                              )
 
             ## TODO: automatically do this for now, so we don't forget:
