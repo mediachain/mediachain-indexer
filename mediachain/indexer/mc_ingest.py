@@ -15,7 +15,7 @@ Scraping / downloading functions also contained here.
 Later may be extended to insert media that comes from off-chain into the chain.
 """
 
-from mc_generic import setup_main, group, raw_input_enter, pretty_print
+from mc_generic import setup_main, group, raw_input_enter, pretty_print, intget
 
 import mc_config
 
@@ -501,7 +501,8 @@ def ingest_bulk_gettydump(getty_path = 'getty_small/json/images/',
 
 
 
-def search_by_image(index_name = mc_config.MC_INDEX_NAME,
+def search_by_image(limit = 5,
+                    index_name = mc_config.MC_INDEX_NAME,
                     doc_type = mc_config.MC_DOC_TYPE,
                     ):
     """
@@ -511,17 +512,21 @@ def search_by_image(index_name = mc_config.MC_INDEX_NAME,
     $ mediachain-indexer-ingest ingest_bulk_gettydump
     $ mediachain-indexer-ingest search_by_image getty_small/downloads/thumb/5/3/1/7/531746924.jpg
     """
+
     if len(sys.argv) < 3:
-        print 'Usage: mediachain-indexer-ingest search_by_image <image_file_name> [index_name] [doc_type]'
+        print 'Usage: mediachain-indexer-ingest search_by_image <image_file_name> [limit_num] [index_name] [doc_type]'
         exit(-1)
 
     fn = sys.argv[2]
     
     if len(sys.argv) >= 4:
-        index_name = sys.argv[3]
-        
+        limit = intget(sys.argv[3], 5)
+    
     if len(sys.argv) >= 5:
-        doc_type = sys.argv[4]
+        index_name = sys.argv[4]
+        
+    if len(sys.argv) >= 6:
+        doc_type = sys.argv[5]
     
     if not exists(fn):
         print ('File Not Found:',fn)
@@ -533,10 +538,10 @@ def search_by_image(index_name = mc_config.MC_INDEX_NAME,
     img_uri = shrink_and_encode_image(d)
     
     hh = requests.post(mc_config.MC_TEST_WEB_HOST + '/search',
-                       headers = {'User-Agent':'MC_TEST 1.0'},
+                       headers = {'User-Agent':'MC_CLI 1.0'},
                        verify = False,
                        json = {"q_id":img_uri,
-                               "limit":5,
+                               "limit":limit,
                                "include_self": True,
                                "index_name":index_name,
                                "doc_type":doc_type,
