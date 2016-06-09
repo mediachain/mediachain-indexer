@@ -220,9 +220,10 @@ def ingest_bulk(iter_json = False,
             xindex = hh['_index']
             xtype = hh['_type']
             xid = hh['_id']
-            del hh['_index']
-            del hh['_type']
-            del hh['_op_type']
+
+            for k,v in hh.items():
+                if k.startswith('_'):
+                    del hh[k]
             
             assert xaction == 'index',(xaction,)
             
