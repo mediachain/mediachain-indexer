@@ -469,6 +469,11 @@ def ingest_bulk_blockchain(last_block_ref = None,
             
         except grpc_errors as e:
             print '!!!CAUGHT gRPC ERROR',e
+            
+            import traceback, sys, os
+            for line in traceback.format_exception(*sys.exc_info()):
+                print line,
+            
             sleep(1)
             continue
         
@@ -478,7 +483,6 @@ def ingest_bulk_blockchain(last_block_ref = None,
             print '!!!FORCE_EXIT_START'
 
             import traceback, sys, os
-
             for line in traceback.format_exception(*sys.exc_info()):
                 print line,
 

@@ -272,10 +272,17 @@ def usage(functions,
     sys.exit(1)
 
 def set_console_title(title):
-    title = title.replace("'",' ').replace('"',' ').replace('\\',' ')
-    cmd = r"echo -ne '\ek%s\e\\'" % title
-    print 'COMMAND',cmd
-    system(cmd)
+    """
+    Helpers for auto-setting console titles.
+    """
+    try:
+        title = title.replace("'",' ').replace('"',' ').replace('\\',' ')
+        cmd = r"echo -ne '\ek%s\e\\' > /dev/null" % title
+        system(cmd)
+        cmd = 'screen -X title "%s" 2> /dev/null' % title
+        system(cmd)
+    except:
+        pass
 
 def get_version(check = ['mediachain-indexer',
                          'mediachain-cli',
