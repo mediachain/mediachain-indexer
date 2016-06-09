@@ -231,7 +231,7 @@ def ingest_bulk(iter_json = False,
             
             res = es.index(index = xindex, doc_type = xtype, id = xid, body = hh)
             
-            print 'DONE-NON_PARALLEL_BULK',xaction,hh
+            print 'DONE-NON_PARALLEL_BULK',xaction,xid
             
             yield True,res
         
@@ -489,12 +489,61 @@ def ingest_bulk_gettydump(getty_path = 'getty_small/json/images/',
 
     ingest_bulk(iter_json = iter_json)
 
+    ## TODO: automatically do this for now, so we don't forget:
+    
+    import mc_models
+    for name in mc_models.VECTORS_MODEL_NAMES:
+        mc_models.dedupe_reindex(index_name = index_name,
+                                 doc_type = doc_type,
+                                 vectors_model = name,
+                                 )
+            
 
-def image_search():
+
+
+def search_by_image(index_name = mc_config.MC_INDEX_NAME,
+                    doc_type = mc_config.MC_DOC_TYPE,
+                    ):
     """
-    TODO: Content-based image search.
+    Usage: mediachain-indexer-ingest search_by_image <image_file_name> [index_name] [doc_type]
+
+    Command-line content-based image search.
     """
-    pass
+    if len(sys.argv) < 3:
+        print 'Usage: mediachain-indexer-ingest search_by_image <image_file_name> [index_name] [doc_type]'
+        exit(-1)
+
+    fn = sys.argv[2]
+    
+    if len(sys.argv) >= 4:
+        index_name = sys.argv[3]
+        
+    if len(sys.argv) >= 5:
+        doc_type = sys.argv[4]
+    
+    if not exists(fn):
+        print ('File Not Found:',fn)
+        exit(-1)
+
+    with open(fn) as f:
+        d = f.read()
+        
+    img_uri = shrink_and_encode_image(d)
+    
+    hh = requests.post(mc_config.MC_TEST_WEB_HOST + '/search',
+                       headers = {'User-Agent':'MC_TEST 1.0'},
+                       verify = False,
+                       json = {"q_id":img_uri,
+                               "limit":5,
+                               "include_self": True,
+                               "index_name":index_name,
+                               "doc_type":doc_type,
+                               },
+                       ).json()
+    
+    print pretty_print(hh)
+    
+    
     
     
 def config():
@@ -509,7 +558,7 @@ def config():
 functions=['ingest_bulk_blockchain',
            'ingest_bulk_gettydump',
            'config',
-           'image_search',
+           'search_by_image',
            ]
 
 def main():
