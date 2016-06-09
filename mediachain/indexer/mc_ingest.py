@@ -491,7 +491,8 @@ def ingest_bulk_blockchain(last_block_ref = None,
     print 'DONE_INGEST',nn
 
     
-def ingest_bulk_gettydump(getty_path = 'getty_small/json/images/',
+def ingest_bulk_gettydump(getty_path = 'getty_custom/json/images/',
+                          #getty_path = 'getty_small/json/images/',
                           index_name = mc_config.MC_INDEX_NAME,
                           doc_type = mc_config.MC_DOC_TYPE,
                           *args,
