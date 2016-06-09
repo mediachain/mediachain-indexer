@@ -226,7 +226,9 @@ def ingest_bulk(iter_json = False,
             
             assert xaction == 'index',(xaction,)
             
-            res = es.index(index = xindex, doc_type = xtype, id = xid, body = hh)
+            print 'BODY',hh
+            
+            res = es.index(index = xindex, doc_type = xtype, id = xid, body = {'doc':hh})
             
             print 'DONE-NON_PARALLEL_BULK',xaction,hh
             
