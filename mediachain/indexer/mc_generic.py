@@ -107,7 +107,7 @@ def walk_files(dd, max_num = 0):
 
             yield fn
 
-            
+
 def tarfile_extract_if_not_exists(fn_in,
                                   directory,
                                   ):

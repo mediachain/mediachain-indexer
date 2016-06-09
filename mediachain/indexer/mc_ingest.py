@@ -211,6 +211,9 @@ def ingest_bulk(iter_json = False,
     def non_parallel_bulk(es,
                           the_iter,
                           *args, **kw):
+        """
+        Aggressive inserter that inserts & refreshes after every item.
+        """
 
         for hh in the_iter:
 
@@ -234,6 +237,13 @@ def ingest_bulk(iter_json = False,
             print 'DONE-NON_PARALLEL_BULK',xaction,xid
             
             yield True,res
+
+            try:
+                es.indices.refresh(index = xindex)
+            except:
+                print 'REFRESH_ERROR'
+            
+            print 'REFRESHED'
         
         print 'EXIT-LOOP_NON_PARALLEL_BULK'
 
