@@ -30,10 +30,11 @@ MC_DOC_TYPE_CID_TO_CLUSTER = os.environ.get('MC_DOC_TYPE_CID_TO_CLUSTER', '') or
 
 MC_GETTY_KEY = os.environ.get('MC_GETTY_KEY', '') # Getty key, for creating local dump of getty images.
 
-MC_AWS_ACCESS_KEY_ID = os.environ.get('MC_AWS_ACCESS_KEY_ID', '') or ''
-MC_AWS_SECRET_ACCESS_KEY = os.environ.get('MC_AWS_SECRET_ACCESS_KEY', '') or ''
-MC_REGION_NAME = os.environ.get('MC_REGION_NAME', '') or ''   #AWS region of DynamoDB instance.  
-MC_ENDPOINT_URL = os.environ.get('MC_ENDPOINT_URL', '') or '' #AWS endpoint of DynamoDB instance.
+MC_AWS_ACCESS_KEY_ID = os.environ.get('MC_AWS_ACCESS_KEY_ID')
+MC_AWS_SECRET_ACCESS_KEY = os.environ.get('MC_AWS_SECRET_ACCESS_KEY')
+MC_DYNAMO_TABLE_NAME = os.environ.get('MC_DYNAMO_TABLE_NAME', 'Mediachain')
+MC_REGION_NAME = os.environ.get('MC_REGION_NAME')  #AWS region of DynamoDB instance.
+MC_ENDPOINT_URL = os.environ.get('MC_ENDPOINT_URL')  #AWS endpoint of DynamoDB instance.
 
 ## Testing settings:
 
