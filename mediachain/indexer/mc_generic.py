@@ -278,9 +278,12 @@ def set_console_title(title):
     system(cmd)
 
 def get_version():
+    """
+    Output most important version info.
+    """
     try:
         import pip
-        return [x for x in list(pip.operations.freeze.freeze()) if 'mediachain-indexer' in x]
+        return [x for x in list(pip.operations.freeze.freeze()) if ('mediachain' in x) or ('ipfs-api' in x)]
     except:
         return 'unknown'
 
@@ -292,7 +295,7 @@ def setup_main(functions,
     Helper for invoking functions from command-line.
     """
     
-    print 'MEDIACHAIN-INDEXER-VERSION:',get_version()
+    print 'VERSION_INFO:',get_version()
     
     if len(sys.argv) < 2:
         usage(functions,
