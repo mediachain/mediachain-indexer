@@ -102,6 +102,7 @@ def ingest_bulk(iter_json = False,
                 redo_thumbs = True,
                 ignore_thumbs = False,
                 delete_current = True,
+                use_aggressive = True
                 ):
     """
     Ingest Getty dumps from JSON files.
@@ -117,6 +118,7 @@ def ingest_bulk(iter_json = False,
         redo_thumbs:    Whether to recalcuate 'image_thumb' from 'img_data'.
         ignore_thumbs:  Whether to ignore thumbnail generation entirely.
         delete_current: Whether to delete current index, if it exists.
+        use_aggressive: Use slow inserter that immediately indexes & refreshes after each item.
 
     Returns:
         Number of inserted records.
@@ -247,8 +249,10 @@ def ingest_bulk(iter_json = False,
         
         print 'EXIT-LOOP_NON_PARALLEL_BULK'
 
-    #use_inserter = parallel_bulk
-    use_inserter = non_parallel_bulk
+    if use_aggressive:
+        use_inserter = non_parallel_bulk
+    else:
+        use_inserter = parallel_bulk
     
     first = gen.next() ## TODO: parallel_bulk silently eats exceptions. Here's a quick hack to watch for errors.
     
