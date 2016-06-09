@@ -299,12 +299,14 @@ def getty_create_dumps(INC_SIZE = 100,
     
     if len(sys.argv) < 3:
         print ('NOTE: set MC_GETTY_KEY to Getty API key.')
-        print ('Usage: python mediachain-indexer-ingest getty_create_dumps [archiv | entertainment | rf | small | custom]')
+        print ('Usage: mediachain-indexer-datastes getty_create_dumps [archiv | entertainment | rf | small | custom] [custom-id] [custom-id] ...')
+        print ('Example: mediachain-indexer-datasets getty_create_dumps arciv')
+        print ('Example: mediachain-indexer-datasets getty_create_dumps custom JD6484-001 JD6484-002 JD6484-003')
         exit(-1)
     
     typ = sys.argv[2]
 
-    assert typ in ['archiv', 'entertainment', 'rf', 'small']
+    assert typ in ['archiv', 'entertainment', 'rf', 'small', 'custom']
     
     ids = set()
     
@@ -321,13 +323,14 @@ def getty_create_dumps(INC_SIZE = 100,
         ids.update(set_rf)
         
     elif typ == 'small':
-        #small 100-sample portion of `entertainment` dataset.
+        ## small 100-sample portion of `entertainment` dataset.
         set_entertainment = [x.strip() for x in open('Entertainment IDs.txt').read().split(',')[:100]]
         ids.update(set_entertainment)
 
     elif typ == 'custom':
-        #small 100-sample portion of `entertainment` dataset.
-        set_entertainment = [x.strip() for x in open('custom.txt').read().split(',')[:100]]
+        ## Specify IDs on command line:
+        set_entertainment = sys.argv[3:]
+        print 'DOING_CUSTOM',set_entertainment
         ids.update(set_entertainment)
         
     else:
@@ -526,7 +529,9 @@ def getty_create_dumps(INC_SIZE = 100,
     for t in tt:
         t.join()
         print ('JOINED')
-        
+
+    if typ == 'custom':
+        print 'DONE_CUSTOM',set_entertainment,'->',dd4
     print ('DONE ALL')
 
 
