@@ -322,8 +322,12 @@ def ingest_bulk_blockchain(last_block_ref = None,
     """
     
     import mediachain.transactor.client
-    from grpc.framework.interfaces.face.face import ExpirationError
+    from grpc.framework.interfaces.face.face import ExpirationError, AbortionError, CancellationError, ExpirationError, \
+        LocalShutdownError, NetworkError, RemoteShutdownError, RemoteError
 
+    grpc_errors = (AbortionError, CancellationError, ExpirationError, LocalShutdownError, \
+                   NetworkError, RemoteShutdownError, RemoteError)
+    
     from mediachain.datastore.dynamo import set_aws_config
     aws_cfg = {'endpoint_url': mc_config.MC_ENDPOINT_URL,
                'mediachain_table_name': mc_config.MC_DYNAMO_TABLE_NAME,
@@ -408,21 +412,25 @@ def ingest_bulk_blockchain(last_block_ref = None,
             print 'REPEATING...'
             sleep(1)
             
-        except ExpirationError as e:
-            print 'CAUGHT ExpirationError',e
+        except grpc_errors as e:
+            print '!!!CAUGHT gRPC ERROR',e
             sleep(1)
             continue
         
         except:
-            #TODO... maybe not nice:
+            ## TODO... maybe not nice:
 
-            print '!!!FORCE_EXIT'
+            print '!!!FORCE_EXIT_START'
 
             import traceback, sys, os
 
             for line in traceback.format_exception(*sys.exc_info()):
                 print line,
 
+            sleep(1) ## Last hope for the any background threads to do some cleanup
+            
+            print '!!!FORCE_EXIT_END'
+            
             os._exit(-1)
 
         
