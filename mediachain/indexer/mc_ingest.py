@@ -237,8 +237,8 @@ def ingest_bulk(iter_json = False,
         
         print 'EXIT-LOOP_NON_PARALLEL_BULK'
 
-    use_inserter = parallel_bulk 
-    #use_inserter = non_parallel_bulk
+    #use_inserter = parallel_bulk 
+    use_inserter = non_parallel_bulk
     
     first = gen.next() ## TODO: parallel_bulk silently eats exceptions. Here's a quick hack to watch for errors.
     
