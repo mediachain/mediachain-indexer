@@ -229,7 +229,7 @@ def ingest_bulk(iter_json = False,
             
             print 'BODY',hh
             
-            res = es.index(index = xindex, doc_type = xtype, id = xid, body = {'body':hh})
+            res = es.index(index = xindex, doc_type = xtype, id = xid, body = hh)
             
             print 'DONE-NON_PARALLEL_BULK',xaction,hh
             
@@ -237,7 +237,7 @@ def ingest_bulk(iter_json = False,
         
         print 'EXIT-LOOP_NON_PARALLEL_BULK'
 
-    #use_inserter = parallel_bulk 
+    #use_inserter = parallel_bulk
     use_inserter = non_parallel_bulk
     
     first = gen.next() ## TODO: parallel_bulk silently eats exceptions. Here's a quick hack to watch for errors.
