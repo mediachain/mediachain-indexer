@@ -210,7 +210,7 @@ def ingest_bulk(iter_json = False,
 
     def non_parallel_bulk(es,
                           the_iter,
-                          *args, *kw):
+                          *args, **kw):
 
         for hh in the_iter:
 
@@ -236,7 +236,7 @@ def ingest_bulk(iter_json = False,
 
     #use_inserter = parallel_bulk 
     use_inserter = non_parallel_bulk
-        
+    
     first = gen.next() ## TODO: parallel_bulk silently eats exceptions. Here's a quick hack to watch for errors.
     
     for is_success,res in use_inserter(es,
