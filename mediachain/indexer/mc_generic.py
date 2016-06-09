@@ -277,15 +277,28 @@ def set_console_title(title):
     print 'COMMAND',cmd
     system(cmd)
 
-def get_version():
+def get_version(check = ['mediachain-indexer',
+                         'mediachain-cli',
+                         'ipfs-api',
+                         ],
+                ):
     """
-    Output most important version info.
+    Output most important version info. Only works for installed packages.
     """
+    rr = []
+    
     try:
-        import pip
-        return [x for x in list(pip.operations.freeze.freeze()) if ('mediachain' in x) or ('ipfs-api' in x)]
+        import pkg_resources
+        
+        for xx in check:
+            try:
+                rr.append(xx + '=' + pkg_resources.get_distribution(xx).version)
+            except:
+                pass
     except:
-        return 'unknown'
+        pass
+    
+    return rr
 
 def setup_main(functions,
                glb,
