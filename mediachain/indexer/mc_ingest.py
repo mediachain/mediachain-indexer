@@ -212,7 +212,7 @@ def ingest_bulk(iter_json = False,
                           the_iter,
                           *args, *kw):
 
-        for hh in the_iter.iteritems():
+        for hh in the_iter:
 
             print 'NON_PARALLEL_BULK',hh
             
