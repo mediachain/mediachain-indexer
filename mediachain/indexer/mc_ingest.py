@@ -208,16 +208,43 @@ def ingest_bulk(iter_json = False,
     
     gen = iter_wrap()
 
-    # TODO: parallel_bulk silently eats exceptions. Here's a quick hack to watch for errors:
+    def non_parallel_bulk(es,
+                          the_iter,
+                          *args, *kw):
+
+        for hh in the_iter.iteritems():
+
+            print 'NON_PARALLEL_BULK',hh
+            
+            xaction = hh['_op_type']
+            xindex = hh['_index']
+            xtype = hh['_type']
+            xid = hh['_id']
+            del hh['_index']
+            del hh['_type']
+            del hh['_op_type']
+            
+            assert xaction == 'index',(xaction,)
+            
+            res = es.index(index = xindex, doc_type = xtype, id = xid, body = hh)
+            
+            print 'DONE-NON_PARALLEL_BULK',xaction,hh
+            
+            yield True,res
         
-    first = gen.next()
+        print 'EXIT-LOOP_NON_PARALLEL_BULK'
+
+    #use_inserter = parallel_bulk 
+    use_inserter = non_parallel_bulk
+        
+    first = gen.next() ## TODO: parallel_bulk silently eats exceptions. Here's a quick hack to watch for errors.
     
-    for is_success,res in parallel_bulk(es,
-                                        itertools.chain([first], gen),
-                                        thread_count = thread_count,
-                                        chunk_size = 1,
-                                        max_chunk_bytes = 100 * 1024 * 1024, #100MB
-                                        ):
+    for is_success,res in use_inserter(es,
+                                       itertools.chain([first], gen),
+                                       thread_count = thread_count,
+                                       chunk_size = 1,
+                                       max_chunk_bytes = 100 * 1024 * 1024, #100MB
+                                       ):
         """
         #FORMAT:
         (True,
