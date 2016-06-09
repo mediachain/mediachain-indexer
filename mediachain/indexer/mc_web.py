@@ -144,13 +144,14 @@ class BaseHandler(tornado.web.RequestHandler):
     def write_json(self,
                    hh,
                    sort_keys = True,
-                   indent = 0, #Set to None to do without newlines.
+                   indent = 4, #Set to None to do without newlines.
                    pretty = False,
                    max_indent_depth = False,
                    ):
         """
         Central point where we can customize the JSON output.
         """
+        print 'PRETTY',pretty
         self.set_header("Content-Type", "application/json")
         
         if pretty:
@@ -162,7 +163,6 @@ class BaseHandler(tornado.web.RequestHandler):
         else:
             self.write(json.dumps(hh,
                                   sort_keys = sort_keys,
-                                  indent = indent,
                                   ) + '\n')
         self.finish()
         

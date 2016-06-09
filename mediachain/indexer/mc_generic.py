@@ -277,6 +277,12 @@ def set_console_title(title):
     print 'COMMAND',cmd
     system(cmd)
 
+def get_version():
+    try:
+        import pip
+        return [x for x in list(pip.operations.freeze.freeze()) if 'mediachain-indexer' in x]
+    except:
+        return 'unknown'
 
 def setup_main(functions,
                glb,
@@ -285,6 +291,8 @@ def setup_main(functions,
     """
     Helper for invoking functions from command-line.
     """
+    
+    print 'MEDIACHAIN-INDEXER-VERSION:',get_version()
     
     if len(sys.argv) < 2:
         usage(functions,
