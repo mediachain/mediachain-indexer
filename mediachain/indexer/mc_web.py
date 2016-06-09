@@ -288,12 +288,28 @@ class handle_search(BaseHandler):
         doc_type = data.get('doc_type', mc_config.MC_DOC_TYPE)
         include_docs = data.get('include_docs', True)
         include_thumb = data.get('include_thumb', True)
+
+        
         
         if not (q_text or q_id):
-            self.set_status(500)
-            self.write_json({'error':'BAD_QUERY',
-                             'error_message':'Either `q` or `q_id` is required.',
-                             })
+            #self.set_status(500)
+            #self.write_json({'error':'BAD_QUERY',
+            #                 'error_message':'Either `q` or `q_id` is required.',
+            #                 })
+            
+            ## Return all:
+            
+            rr = yield self.es.search(index = index_name,
+                                          type = doc_type,
+                                          source = {"query": {"match_all": {}}}
+                                          )
+            rr = json.loads(rr.body)
+            rr = rr['hits']['hits']
+            rr = {'results':rr,
+                  'next_page':None,
+                  'prev_page':None,
+                  }
+            self.write_json(rr, pretty = True)
             return
 
         if (q_text and q_id):
