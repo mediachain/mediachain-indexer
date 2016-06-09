@@ -215,7 +215,7 @@ def ingest_bulk(iter_json = False,
     for is_success,res in parallel_bulk(es,
                                         itertools.chain([first], gen),
                                         thread_count = thread_count,
-                                        chunk_size = 500,
+                                        chunk_size = 1,
                                         max_chunk_bytes = 100 * 1024 * 1024, #100MB
                                         ):
         """
@@ -458,8 +458,13 @@ def ingest_bulk_gettydump(getty_path = 'getty_small/json/images/',
                                             **kw)
 
     ingest_bulk(iter_json = iter_json)
-    
 
+
+def image_search():
+    """
+    TODO: Content-based image search.
+    """
+    pass
     
     
 def config():
@@ -474,6 +479,7 @@ def config():
 functions=['ingest_bulk_blockchain',
            'ingest_bulk_gettydump',
            'config',
+           'image_search',
            ]
 
 def main():
