@@ -325,13 +325,15 @@ def ingest_bulk_blockchain(last_block_ref = None,
     from grpc.framework.interfaces.face.face import ExpirationError
 
     from mediachain.datastore.dynamo import set_aws_config
-    
-    set_aws_config({'endpoint_url': 'http://localhost:8000',
-                    'mediachain_table_name': 'Mediachain',
-                    'aws_access_key_id': '',
-                    'aws_secret_access_key': '',
-                    'region_name':'',
-                    })
+    aws_cfg = {'endpoint_url': mc_config.MC_ENDPOINT_URL,
+               'mediachain_table_name': mc_config.MC_DYNAMO_TABLE_NAME,
+               'aws_access_key_id': mc_config.MC_AWS_ACCESS_KEY_ID,
+               'aws_secret_access_key': mc_config.MC_AWS_SECRET_ACCESS_KEY,
+               'region_name': mc_config.MC_REGION_NAME,
+               }
+
+    aws_cfg = dict((k, v) for k, v in aws_cfg.iteritems() if v is not None)
+    set_aws_config(aws_cfg)
     
     def the_gen():
         
