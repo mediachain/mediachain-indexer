@@ -245,6 +245,16 @@ def ingest_bulk(iter_json = False,
             except:
                 print 'REFRESH_ERROR'
             
+            try:
+                import mc_models
+                for name in mc_models.VECTORS_MODEL_NAMES:
+                    mc_models.dedupe_reindex(index_name = xindex,
+                                             doc_type = xtype,
+                                             vectors_model = name,
+                                             )
+            except:
+                print 'REINDEX_ERROR'
+            
             print 'REFRESHED'
         
         print 'EXIT-LOOP_NON_PARALLEL_BULK'
