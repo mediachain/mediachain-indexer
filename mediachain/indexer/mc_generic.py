@@ -273,14 +273,16 @@ def usage(functions,
 
 def set_console_title(title):
     """
-    Helpers for auto-setting console titles.
+    Helpers for auto-setting console titles. Uses a few different methods to be sure.
     """
     try:
         title = title.replace("'",' ').replace('"',' ').replace('\\',' ')
         cmd = r"echo -ne '\ek%s\e\\' > /dev/null" % title
         system(cmd)
-        cmd = 'screen -X title "%s" 2> /dev/null' % title
+        cmd = "printf '\033k%s\033\\'" % title
         system(cmd)
+        #cmd = 'screen -X title "%s" 2> /dev/null' % title
+        #system(cmd)
     except:
         pass
 
@@ -305,7 +307,7 @@ def get_version(check = ['mediachain-indexer',
     except:
         pass
     
-    return rr
+    return ' '.join(rr)
 
 def setup_main(functions,
                glb,
@@ -334,7 +336,7 @@ def setup_main(functions,
               )
         return
 
-    title = (entry_point_name or sys.argv[0]) + ' '+f
+    title = (entry_point_name or sys.argv[0]) + ' '+f + ' #' + get_version(['mediachain-indexer'])
     
     set_console_title(title)
     
