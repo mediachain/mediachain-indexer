@@ -505,9 +505,11 @@ def search_by_image(index_name = mc_config.MC_INDEX_NAME,
                     doc_type = mc_config.MC_DOC_TYPE,
                     ):
     """
-    Usage: mediachain-indexer-ingest search_by_image <image_file_name> [index_name] [doc_type]
-
     Command-line content-based image search.
+    
+    Example:
+    $ mediachain-indexer-ingest ingest_bulk_gettydump
+    $ mediachain-indexer-ingest search_by_image getty_small/downloads/thumb/5/3/1/7/531746924.jpg
     """
     if len(sys.argv) < 3:
         print 'Usage: mediachain-indexer-ingest search_by_image <image_file_name> [index_name] [doc_type]'
@@ -524,7 +526,7 @@ def search_by_image(index_name = mc_config.MC_INDEX_NAME,
     if not exists(fn):
         print ('File Not Found:',fn)
         exit(-1)
-
+    
     with open(fn) as f:
         d = f.read()
         
