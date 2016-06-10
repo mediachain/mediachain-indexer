@@ -1,8 +1,17 @@
 #!/usr/bin/env python
 
-from mc_generic import config_env, print_config
+"""
+Config of format:
 
-## Format: {'section_title':{var_name:(var_value,'var_description')}}
+   {'section_title':{var_name:(var_value,'var_description')}}
+
+NOTE: Use the following suffixes on variable names for typing. See mc_generic.config_env for more details:
+
+   '_INT'     = integer
+   '_FLOAT'   = float
+      *       = string
+"""
+
 
 cfg = {'1. Elasticsearch Settings':
        {'MC_ES_URLS':('', 'One or more comma-separated RFC-1738 formatted URLs.'\
@@ -30,5 +39,6 @@ cfg = {'1. Elasticsearch Settings':
         'MC_TRANSACTOR_PORT_INT':('10001', ''),
        },
        }
-         
-config_env(cfg, globals())
+
+import mc_generic
+mc_generic.config_env(cfg, globals())
