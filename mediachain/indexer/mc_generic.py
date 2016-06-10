@@ -8,6 +8,7 @@ import json
 import fcntl, termios, struct
 import sys
 from time import time
+import os
 from os import system, walk, rename
 from os.path import join, exists
 import requests
@@ -236,7 +237,95 @@ def space_pad(s,
     #assert len(s) <= n,(n,s)
     return s + (ch * max(0,n-len(s)))
 
+
+def load_config(cfg,
+                fn = False,
+                hh = False,
+                clear = False,
+                ):
+    """
+    Load config from file_name or dict.
+    """
+    if fn:
+        with open(fn) as f:
+            hh = json.loads(f.read())
+    if clear:
+        cfg.clear()
+    cfg.update(hh)
+
+    
+def config_env(cfg, glb):
+    """
+    Update config from environment variables. Convert types according suffixes:    
+    
+       '_INT'   = integer
+       '_FLOAT' = float
+
+    Also updates the passed globals(). Don't pass locals().
+    """
+    rh = {}
+    for kg,vg in cfg.items():
+        for k,(v,d) in vg.items():
+            xx = os.environ.get(k,v)
+            if k.endswith('_INT'):
+                xx = intget(xx, v)
+            elif k.endswith('_FLOAT'):
+                xx = floatget(xx, v)
+            cfg[kg][k] = (xx,d)
+            rh[k] = xx
+    glb.update(rh)
+
+    
+def print_config(cfg):
+    """
+    Pretty-print config of format {'section_title':{var_name:(var_value,'var_description')}}.
+    """
+    
+    import numbers
+
+    try:
+        tw,th = terminal_size()
+    except:
+        tw,th = 80,40
+    
+    print
+    print '### CONFIG:'
+
+    max_name = min(50, max([len(y) for x in cfg.values() for y,z in x.items()]))
+    max_val = min(50, max([len(repr(y)) for x in cfg.values() for y,z in x.items()]))
+    
+    for kg,vg in sorted(cfg.items()):
+        
+        print
+        print '##',kg + ':'
+        print
+        
+        for cc,(k,(v,d)) in enumerate(vg.items()):
+            
+            if d:
+                if cc:
+                    print
+                d += ':'
+                for z in d.split('\n'):
+                    print '  # ' + ('...\n  # '.join([''.join(x) for x in group(z, tw - 3)]))
+                    
+            
+            print '  ' + space_pad(k, n=max_name, ch=' ') + '=',
+            print space_pad(repr(v), n=max_val, ch=' '),
+            if isinstance(v, numbers.Integral):
+                print '<INT>  ',
+            elif isinstance(v, float):
+                print '<FLOAT>',
+            elif True: #isinstance(v, basestring):
+                print '<STR>  ',
+            print
+    print
+
+
 def terminal_size():
+    """
+    Get terminal size.
+    """
     h, w, hp, wp = struct.unpack('HHHH',
         fcntl.ioctl(0, termios.TIOCGWINSZ,
         struct.pack('HHHH', 0, 0, 0, 0)))
@@ -246,6 +335,9 @@ def usage(functions,
           glb,
           entry_point_name = False,
           ):
+    """
+    Print usage of all passed functions.
+    """
     try:
         tw,th = terminal_size()
     except:

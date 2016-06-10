@@ -15,7 +15,7 @@ Scraping / downloading functions also contained here.
 Later may be extended to insert media that comes from off-chain into the chain.
 """
 
-from mc_generic import setup_main, group, raw_input_enter, pretty_print, intget
+from mc_generic import setup_main, group, raw_input_enter, pretty_print, intget, print_config
 
 import mc_config
 
@@ -142,8 +142,8 @@ def ingest_bulk(iter_json = False,
     if not es.indices.exists(index_name):
         print ('CREATE_INDEX...',index_name)
         es.indices.create(index = index_name,
-                          body = {'settings': {'number_of_shards': mc_config.MC_NUMBER_OF_SHARDS,
-                                               'number_of_replicas': mc_config.MC_NUMBER_OF_REPLICAS,                             
+                          body = {'settings': {'number_of_shards': mc_config.MC_NUMBER_OF_SHARDS_INT,
+                                               'number_of_replicas': mc_config.MC_NUMBER_OF_REPLICAS_INT,                             
                                                },
                                   'mappings': {doc_type: {'properties': {'title':{'type':'string'},
                                                                          'artist':{'type':'string'},
@@ -396,10 +396,10 @@ def ingest_bulk_blockchain(last_block_ref = None,
     
     def the_gen():
         
-        print 'STREAMING FROM TRANSACTORCLIENT...',(mc_config.MC_TRANSACTOR_HOST,mc_config.MC_TRANSACTOR_PORT)
+        print 'STREAMING FROM TRANSACTORCLIENT...',(mc_config.MC_TRANSACTOR_HOST, mc_config.MC_TRANSACTOR_PORT_INT)
         
         tc = mediachain.transactor.client.TransactorClient(mc_config.MC_TRANSACTOR_HOST,
-                                                           mc_config.MC_TRANSACTOR_PORT,
+                                                           mc_config.MC_TRANSACTOR_PORT_INT,
                                                            )
 
         for art in tc.canonical_stream():
@@ -584,18 +584,12 @@ def search_by_image(limit = 5,
     
     
 def config():
-    """
-    Print current environment variables.
-    """    
-    for x in dir(mc_config):
-        if x.startswith('MC_'):
-            print x + '="%s"' % str(getattr(mc_config, x))
-
+    print_config(mc_config.cfg)
 
 functions=['ingest_bulk_blockchain',
            'ingest_bulk_gettydump',
-           'config',
            'search_by_image',
+           'config',
            ]
 
 def main():
