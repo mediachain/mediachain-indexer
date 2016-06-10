@@ -49,15 +49,44 @@ config.................................. Print current environment variables.
 
 ```
 $ mediachain-indexer-ingest config
-MC_DOC_TYPE="image"
-MC_DOC_TYPE_CID_TO_CLUSTER="clusters"
-MC_DOC_TYPE_MID_TO_CID="cluster_nums"
-MC_GETTY_KEY=""
-MC_INDEX_NAME="getty_test"
-MC_INDEX_NAME_CID_TO_CLUSTER="clustering_baseline_cid_to_cluster"
-MC_INDEX_NAME_MID_TO_CID="clustering_baseline_mid_to_cid"
-MC_NUMBER_OF_REPLICAS="0"
-MC_NUMBER_OF_SHARDS="1"
+
+### CONFIG:
+
+## 1. Elasticsearch Settings:
+
+  MC_NUMBER_OF_SHARDS_INT  = 1                           <INT>  
+  MC_NUMBER_OF_REPLICAS_INT= 0                           <INT>  
+  MC_INDEX_NAME            = 'getty_test'                <STR>  
+  MC_DOC_TYPE              = 'image'                     <STR>  
+
+  # One or more comma-separated RFC-1738 formatted URLs. 
+  # e.g. "http://user:secret@localhost:9200/,https://user:secret@other_host:443/production":
+  MC_ES_URLS               = ''                          <STR>  
+
+## 2. Ingestion Settings:
+
+  # AWS region of DynamoDB instance:
+  MC_REGION_NAME           = None                        <STR>  
+  MC_AWS_SECRET_ACCESS_KEY = None                        <STR>  
+  MC_AWS_ACCESS_KEY_ID     = None                        <STR>  
+  MC_DYNAMO_TABLE_NAME     = 'Mediachain'                <STR>  
+
+  # Getty key, for creating local dump of getty images:
+  MC_GETTY_KEY             = ''                          <STR>  
+
+  # AWS endpoint of DynamoDB instance:
+  MC_ENDPOINT_URL          = None                        <STR>  
+
+## 3. Settings for Automated Tests:
+
+  MC_TEST_WEB_HOST         = 'http://127.0.0.1:23456'    <STR>  
+  MC_TEST_INDEX_NAME       = 'mc_test'                   <STR>  
+  MC_TEST_DOC_TYPE         = 'mc_test_image'             <STR>  
+
+## 4. Transactor settings:
+
+  MC_TRANSACTOR_HOST       = '127.0.0.1'                 <STR>  
+  MC_TRANSACTOR_PORT_INT   = 10001                       <INT>  
 ```
 
 
