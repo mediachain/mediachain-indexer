@@ -5,6 +5,10 @@ Config of format:
 
    {'section_title':{var_name:(var_value,'var_description')}}
 
+   or
+
+   {'section_title':{var_name:(var_value,['var_description', 'more_description'])}}
+
 NOTE: Use the following suffixes on variable names for typing. See mc_generic.config_env for more details:
 
    '_INT'     = integer
@@ -14,8 +18,10 @@ NOTE: Use the following suffixes on variable names for typing. See mc_generic.co
 
 
 cfg = {'1. Elasticsearch Settings':
-       {'MC_ES_URLS':('', 'One or more comma-separated RFC-1738 formatted URLs.'\
-                      '\ne.g. "http://user:secret@localhost:9200/,https://user:secret@other_host:443/production"'),
+       {'MC_ES_URLS':('',
+                      ['One or more comma-separated RFC-1738 formatted URLs.',
+                       '\ne.g. "http://user:secret@localhost:9200/,https://user:secret@other_host:443/production"']
+                      ),
         'MC_INDEX_NAME':('getty_test', ''),
         'MC_DOC_TYPE':('image', ''),
         'MC_NUMBER_OF_SHARDS_INT':('1', ''),

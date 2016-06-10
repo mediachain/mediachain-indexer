@@ -303,6 +303,8 @@ def print_config(cfg):
         for cc,(k,(v,d)) in enumerate(vg.items()):
             
             if d:
+                if isinstance(d, (tuple, list)):
+                    d = ' '.join(d)
                 if cc:
                     print
                 d += ':'
