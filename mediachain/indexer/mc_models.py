@@ -2,36 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Run dedupe on all ingested media, to generate two lookup tables:
-
-   {global_image_id:cluster_id}
-   {cluster_id:global_image_id}
-
-
-## Process
-
-Baseline approach uses manual engineered features having minimal flexibility and minimal training supervision used only
-for e.g. adjusting the similarity threshold hyperparameter.
-
-Advanced approach relies on more flexible models, trained via supervised training data, and with less reliance on
-manual feature engineering or hyper-parameter tuning.
-
-1) [Baseline & Advanced]: For all ingested media, lookup ~100 candidate duplicates. This can be done by:
-   - Exact matching on feature-engineered blocking predicates
-     (e.g. exact match on stemmed and normalized text strings.)
-   - Approximate kNN on unsupervised, feature-engineered hashing descriptors or vector embeddings
-     (e.g. pHash, dHash, tf-IDF).
-   - Approximate kNN lookup, on vectors created from a model learned via training supervision
-     (e.g. Representation learning model trained on a margin ranking triplet-loss.)
-2) [Baseline]: It decides there's a match if a pair of media exceeds a similarity threashold.
-3) [Advanced]: applies a second layer of dedupe classification on all pairs in each candidate block.
-4) [Baseline & Advanced]: Pairwise decisions are fed into an agglomerative clustering, producing a flat clustering.
-
-
-TODO:
-   - Migrate from simple baselines to sophisticated models.
-   - Store dedupe lookup tables on something other than ES?
-
+Models for search and dedupe.
 """
 
 import tornado
@@ -39,8 +10,10 @@ import tornado.gen
 import json
 
 from mc_generic import setup_main, pretty_print
-from mc_ingest import es_connect, decode_image
+from mc_ingest import decode_image
 from elasticsearch.helpers import parallel_bulk, scan
+
+from mc_neighbors import storage_connect
 
 from PIL import Image
 from cStringIO import StringIO
@@ -57,7 +30,7 @@ data_pat_2 = 'data:image/png;base64,'
 def simple_check_match(self,
                        query,
                        candidates,
-                       score_threshold = 0.5, ## Hyper-parameter optimize for this!
+                       score_threshold = 0.5, ## Hyperparameter optimize for this!
                        ):
     """
     Dead-simple classifier based on score thresholds.
@@ -487,7 +460,7 @@ def dedupe_reindex(lookup_name = False,
         rrr[:] = []
         print ('COMMITTED')
 
-    es = es_connect()    
+    es = storage_connect()    
     
     res = scan(client = es,
                index = index_name,

@@ -37,8 +37,6 @@ from sys import exit
 
 from datetime import datetime
 from dateutil import parser as date_parser
-from elasticsearch import Elasticsearch
-from elasticsearch.helpers import parallel_bulk
 from hashlib import md5
 
 from PIL import Image
@@ -87,12 +85,7 @@ def decode_image(s):
     return base64.urlsafe_b64decode(ss)
 
 
-def es_connect():
-    print ('CONNECTING...')
-    es = Elasticsearch()
-    print ('CONNECTED')
-    return es
-
+from mc_neighbors import storage_connect
         
 def ingest_bulk(iter_json = False,
                 thread_count = 1,
@@ -132,7 +125,7 @@ def ingest_bulk(iter_json = False,
                                                 doc_type = doc_type,
                                                 )
     
-    es = es_connect()
+    es = storage_connect()
     
     if delete_current and es.indices.exists(index_name):
         print ('DELETE_INDEX...', index_name)

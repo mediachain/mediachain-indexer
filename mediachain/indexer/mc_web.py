@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-__doc__ = \
 """
 Prototype REST Indexer interface for search / dedupe.
 

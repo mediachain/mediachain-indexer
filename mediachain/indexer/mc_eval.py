@@ -32,6 +32,8 @@ from collections import Counter, defaultdict
 from hyperopt import hp, space_eval, fmin, tpe
 from time import time
 
+from mc_neighbors import ElasticSearchEmulator, LuceneScoringClassic, storage_connect
+
 def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
                       #the_gen = mc_datasets.iter_ukbench,
                       max_evals = 10,
@@ -100,7 +102,7 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
     if use_simulator:
         es = ElasticSearchEmulator()
     else:
-        es = mc_ingest.es_connect()
+        es = storage_connect()
     
     if es.indices.exists(index_name):
         print ('DELETE_INDEX...', index_name)
@@ -300,7 +302,7 @@ def eval_demo(max_num = 500,
     num_true = 0
     num_false = 0
     
-    es = mc_ingest.es_connect()
+    es = storage_connect()
     
     if es.indices.exists(index_name):
         print ('DELETE_INDEX...', index_name)
@@ -540,360 +542,6 @@ def eval_demo(max_num = 500,
     print 'DONE'
 
 
-from collections import Counter
-from math import sqrt, log, floor, ceil
-
-import struct
-
-
-class LuceneSmallFloat():
-    """
-    Emulate Lucene's `SmallFloat`.
-    
-    See: https://lucene.apache.org/core/4_3_0/core/org/apache/lucene/util/SmallFloat.html
-    """
-    
-    @classmethod
-    def floatToRawIntBits(cls, b):
-        'Simulate Java library function - convert ieee 754 floating point number to integer:'
-        return struct.unpack('>l', struct.pack('>f', b))[0]
-
-    @classmethod
-    def intBitsToFloat(cls, b):
-        'Simulate Java library function - convert integer to ieee 754 floating point'
-        if (b < 2147483647) or (b > -2147483648):
-            return struct.unpack('>f', struct.pack('>l', b))[0]
-        else:
-            assert False,'todo?'
-            #return struct.unpack('d', struct.pack('Q', int(bin(b), 0)))[0]
-
-    @classmethod
-    def byteToFloat(cls, b, numMantissaBits, zeroExp):
-        'Converts an 8 bit float to a 32 bit float.'
-        if (b == 0):
-            return 0.0
-        bits = (b & 0xff) << (24 - numMantissaBits)
-        bits += (63 - zeroExp) << 24
-        return cls.intBitsToFloat(bits)
-
-    @classmethod
-    def floatToByte(cls, f, numMantissaBits, zeroExp):
-        'Converts an 8 bit float to a 32 bit float.'
-        
-        bits = cls.floatToRawIntBits(f)
-        smallfloat = bits >> (24 - numMantissaBits)
-
-        if (smallfloat <= ((63 - zeroExp) << numMantissaBits)):
-            return (bits <= 0) and 0 or 1
-
-        if (smallfloat >= ((63 - zeroExp) << numMantissaBits) + 0x100):
-            return -1
-
-        return smallfloat - ((63 - zeroExp) << numMantissaBits)
-    
-    @classmethod
-    def floatToByte315(cls, f):
-        'Simulate Lucene function.'
-        
-        return cls.floatToByte(f, numMantissaBits=3, zeroExp=15)
-        
-        bits = cls.floatToRawIntBits(f)
-        smallfloat = bits >> (24 - 3)
-
-        if (smallfloat <= ((63 - 15) << 3)):
-            return (bits <= 0) and 0 or 1
-
-        if (smallfloat >= ((63 - 15) << 3) + 0x100):
-            return -1
-
-        return smallfloat - ((63 - 15) << 3)
-
-    @classmethod
-    def byte315ToFloat(cls, b):
-        'Simulate Lucene function.'
-
-        return cls.byteToFloat(b, numMantissaBits=3, zeroExp=15)
-        
-        if (b == 0):
-            return 0.0
-        bits = (b & 0xff) << (24 - 3)
-        bits += (63 - 15) << 24
-        return cls.intBitsToFloat(bits)
-
-    @classmethod
-    def byte52ToFloat(cls, b):
-        return cls.byteToFloat(b, numMantissaBits=5, zeroExp=2)
-
-    @classmethod
-    def floatToByte52(cls, f):
-        return cls.floatToByte(f, numMantissaBits=5, zeroExp=2) 
-    
-    @classmethod
-    def float_round_trip_315(cls, x):
-        return cls.byte315ToFloat(cls.floatToByte315(x))
-
-    @classmethod
-    def float_round_trip_52(cls, x):
-        return cls.byte52ToFloat(cls.floatToByte52(x))
-
-    @classmethod
-    def test(cls):
-        ' Test from: http://www.openjems.com/tag/querynorm/'
-        from math import sqrt
-        assert LuceneSmallFloat.float_round_trip_315(1 / sqrt(13)) == 0.25
-        print 'PASSED'
-
-class LuceneScoringClassic():
-    """
-    Emulate Lucene's classic tf-IDF-based relevance scoring formula.
-    """
-    
-    def __init__(self):
-        self.df = Counter()
-        self.num_docs = 0
-        self.docs = {}
-        
-    def add_doc(self,
-                doc,
-                id = False,
-                ):
-        """
-        Args:
-            doc: Dict of form {term: count}
-        """
-        self.df.update({x:1 for x in doc})
-        self.num_docs += 1
-        
-        if id is not False:
-            self.docs[id] = doc
-        
-    def score(self,
-              query,
-              doc,
-              query_boost = 1.0,
-              verbose = False,
-              ):
-        """
-        Attempt to exactly replicate Lucene's classic relevance scoring formula:
-        
-        score(q,d)  =  
-                queryNorm(q)  
-              · coord(q,d)    
-              · ∑ (           
-                    tf(t in d)   
-                  · idf(t)²      
-                  · t.getBoost() 
-                  · norm(t,d)    
-                ) (t in q)    
-    
-        Args:
-            query:  Dict of form {term: count, ...}
-            doc:    Dict of form {term: count, ...}
-
-        See Also:
-            No one quite gets the formula right, but have a look at these:
-            https://www.elastic.co/guide/en/elasticsearch/guide/master/practical-scoring-function.html
-            http://www.openjems.com/tag/querynorm/
-        """
-        
-        assert self.num_docs,'First `add_doc()`.'
-
-        is_hit = len(set(query).intersection(doc)) and True
-
-        if not is_hit:
-            return 0.0
-        
-        ## Computes a score factor based on a term or phrase's frequency in a document:
-        query_norm = 1.0 / sqrt(sum([(1.0 + log(self.num_docs / (self.df.get(term, 0.0) + 1.0))) ** 2
-                                     for term
-                                     in query
-                                     ]))
-
-        if verbose:
-            print 'query_norm',query_norm,'self.num_docs',self.num_docs
-        
-        # Rewards documents that contain a higher percentage of the query terms:
-        coord = len(set(query).intersection(doc)) / float(len(query))
-        
-        xx = 0.0
-        
-        for term in query:
-            ## Term frequency of this term in this document:
-            tf = sqrt(doc.get(term, 0.0))
-            
-            ## Inverse of frequency of this term in all documents:
-            idf  = (1.0 + log(self.num_docs / (self.df.get(term, 0.0) + 1.0))) ** 2
-            
-            ## Query-level boost:
-            boost = query_boost
-            
-            ## Field-length norm (number of terms in field), combined with the field-level boost, if any:
-            
-            if True:
-                ## !!! For our needs, we can just assume field_norm is 1.0:
-                
-                field_norm = 1.0
-                
-            else:
-                ## Full field_norm calculation. Everything here is tricky. Luckily we can ignore it for our needs:
-                
-                field_length = 1 ## See docs / source for details on this. For our query forms, assume 1.
-                
-                field_norm = LuceneSmallFloat.float_round_trip_315(boost / sqrt(field_length))
-            
-            xx += tf * idf * field_norm # * boost + (idf * query_norm)
-            
-            if verbose:
-                print '->tf',tf,'idf(%d,%d)' % (self.num_docs, self.df.get(term,0)),'idf',idf,
-                print 'boost',boost,
-                print 'field_length',field_length,'field_norm',field_norm,'=xx',tf * idf * boost * field_norm
-            
-        rr = xx * query_norm * coord
-
-        #rr = floor(rr * 1e8) / 1e8
-        
-        if verbose:
-            print 'xx',xx,'query_norm',query_norm,'coord',coord,'=',rr
-        #raw_input_enter()
-        
-        return rr
-
-
-class ElasticSearchEmulator():
-    """
-    Attempts to exactly reproduce the particular subset of ES functionality we use.
-    
-    Useful for indexer system design without having to make assuptions about Lucene / ES black-box scoring formulas,
-    for testing, model evaluation, and hyper-parameter optimization.
-    """
-    
-    def __init__(self,
-                 scoring = LuceneScoringClassic(),
-                 *args,
-                 **kw):
-
-        class indices():
-            def exists(self,
-                       *args,
-                        **kw):
-                return False
-            
-            def delete(self,
-                       *args,
-                        **kw):
-                pass
-            
-            def create(self,
-                       index,
-                       body,
-                       *args,
-                        **kw):
-                pass
-            
-            def refresh(self,
-                        index,
-                        *args,
-                        **kw):
-                pass
-        
-        
-        self.indices = indices()
-
-        self.scoring = scoring
-        
-    def index(self,
-              index,
-              doc_type,
-              id,
-              body,
-              *args,
-              **kw):
-        """
-        Accept documents of the form:
-        
-            {'word1':1, 'word2':2, 'word3':3}
-        """
-        assert id
-        assert body
-        
-        terms = {x:y for x,y in body.items() if not x.startswith('_')}
-        
-        self.scoring.add_doc(terms,
-                             id = id,
-                             )
-    
-    def search(self,
-               index,
-               doc_type,
-               body,
-               explain = False,
-               *args,
-               **kw):
-        """
-        Accepts only queries of the forms:
-        
-            {'query': {'bool': {'should': [{'term':{'word1':1}}, {'term':{'word2':2}} ] } } } 
-
-        Or:
-
-            {'query': {'constant_score': {'filter': {'term': {'dedupe_hsh': 'a6935e549289a7a55ce45c98662db700'}}}}}
-
-        Or:
-            {'query':{'filtered': {'query': {'bool': {'should': [{'term': {x:y}} for x,y in terms.items()] } } } } }
-        """
-        
-        ## Get query back into same format as docs:
-        
-        if body.get('query',{}).get('filtered',{}).get('query',{}).get('bool'):
-            vv = body['query']['filtered']['query']['bool']['should']
-            
-        elif body.get('query',{}).get('bool'):
-            vv = body['query']['bool']['should']
-            
-        else:
-            vv = [body['query']['constant_score']['filter']]
-
-        qterms = {}
-        for xx in [x['term'] for x in vv]:
-            qterms.update(xx)
-        
-        rh = {'hits':{'hits':[]}}
-        
-        ## Score and sort docs:
-        
-        xx = []
-        for doc_id,doc in self.scoring.docs.iteritems():
-
-            xdoc = doc.copy()
-            xdoc['_id'] = doc_id
-            
-            xx.append((self.scoring.score(qterms,
-                                          doc,
-                                          ),
-                       xdoc
-                       ),
-                      )
-        
-        ## Apparently ES moves stuff around like this:
-        
-        for sc,doc in sorted(xx, reverse = True):
-            
-            h = {'_id':unicode(doc['_id']),
-                 '_type':unicode(doc_type),
-                 '_index':unicode(index),
-                 '_source':doc,
-                 '_score':sc,
-                 }
-            
-            del doc['_id']
-            
-            if explain:
-                h['_explanation'] = {'details':[], 'description':'EMULATOR_NOT_IMPLEMENTED', 'value':sc}
-            
-            rh['hits']['hits'].append(h)
-        
-        return rh
-
 
 def short_ex(rr):
     """
@@ -1022,7 +670,7 @@ def test_scoring_sim(docs = ['the brown fox is nice', 'the house is big', 'nice 
     results = []
     
     for es in [ElasticSearchEmulator(),
-               mc_ingest.es_connect(),
+               storage_connect(),
                ]:
 
         print
