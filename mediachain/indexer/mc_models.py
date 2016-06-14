@@ -13,7 +13,7 @@ from mc_generic import setup_main, pretty_print
 from mc_ingest import decode_image
 from elasticsearch.helpers import parallel_bulk, scan
 
-from mc_neighbors import storage_connect
+from mc_neighbors import low_level_es_connect
 
 from PIL import Image
 from cStringIO import StringIO
@@ -460,7 +460,7 @@ def dedupe_reindex(lookup_name = False,
         rrr[:] = []
         print ('COMMITTED')
 
-    es = storage_connect()    
+    es = low_level_es_connect()    
     
     res = scan(client = es,
                index = index_name,

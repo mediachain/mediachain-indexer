@@ -32,7 +32,8 @@ from collections import Counter, defaultdict
 from hyperopt import hp, space_eval, fmin, tpe
 from time import time
 
-from mc_neighbors import ElasticSearchEmulator, LuceneScoringClassic, storage_connect
+import mc_neighbors
+
 
 def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
                       #the_gen = mc_datasets.iter_ukbench,
@@ -46,6 +47,7 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
                       doc_type = 'hpo_test_doc',
                       parallel_mode = False,
                       parallel_db = 'mongo://localhost:12345/foo_db/jobs',
+                      USE_NN = True,
                       ):
     """
     Hyper-parameter optimization for the vector representation learning models.
@@ -100,9 +102,9 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
     #the_gen().next()
 
     if use_simulator:
-        es = ElasticSearchEmulator()
+        es = mc_neighbors.ElasticSearchEmulator()
     else:
-        es = storage_connect()
+        es = mc_neighbors.low_level_es_connect()
     
     if es.indices.exists(index_name):
         print ('DELETE_INDEX...', index_name)
@@ -302,7 +304,7 @@ def eval_demo(max_num = 500,
     num_true = 0
     num_false = 0
     
-    es = storage_connect()
+    es = mc_neighbors.low_level_es_connect()
     
     if es.indices.exists(index_name):
         print ('DELETE_INDEX...', index_name)
@@ -651,7 +653,7 @@ def test_scoring_sim(docs = ['the brown fox is nice', 'the house is big', 'nice 
     ## If you want to test the scoring without the full ES emulator:
 
     if False:    
-        xx = LuceneScoringClassic()
+        xx = mc_neighbors.LuceneScoringClassic()
         
         for x in docs:
             #xx.add_doc(Counter(x.split()))
@@ -669,8 +671,8 @@ def test_scoring_sim(docs = ['the brown fox is nice', 'the house is big', 'nice 
     
     results = []
     
-    for es in [ElasticSearchEmulator(),
-               storage_connect(),
+    for es in [mc_neighbors.ElasticSearchEmulator(),
+               mc_neighbors.low_level_es_connect(),
                ]:
 
         print

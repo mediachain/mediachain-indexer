@@ -17,7 +17,7 @@ import struct
 import mc_config
 
 from elasticsearch import Elasticsearch
-from elasticsearch.helpers import parallel_bulk as es_parallel_bulk
+from elasticsearch.helpers import parallel_bulk as es_parallel_bulk, scan as es_scan
 
 
 class LuceneSmallFloat():
@@ -443,8 +443,7 @@ class NearestNeighborsES(NearestNeighborsBase):
             es.indices.delete(index = index_name)
             print ('DELETED')
 
-    def _non_parallel_bulk(es,
-                           the_iter,
+    def _non_parallel_bulk(the_iter,
                            *args,
                            **kw):
         """
@@ -507,10 +506,27 @@ class NearestNeighborsES(NearestNeighborsBase):
                                            **kw)
         
         else:
-            return es_parallel_bulk(the_iter,
+            return es_parallel_bulk(self.es,
+                                    the_iter,
                                     *args,
                                     **kw)
-    
+
+
+    def scan_all(self,
+                 scroll = '5m', #TODO - hard coded timeout.
+                 ):
+        """
+        Most efficient way to scan all documents.
+        """
+
+        es_scan(client = self.es,
+                index = self.index_name,
+                doc_type = self.doc_type,
+                scroll = scroll,
+                query = {"query": {'match_all': {}}},
+               )
+
+        
     def search_full_text(self,
                          q_text,
                          ):
@@ -576,9 +592,11 @@ class NearestNeighborsES(NearestNeighborsBase):
         return rr
 
 
-def storage_connect():
+def low_level_es_connect():
     """
-    TODO - This is the old approach. Switch to new abstracted interface.
+    TODO - 
+    Only hyper-parameter optimization should use this low-level interface now.
+    Switch everything else to new abstracted interface.
     """
     print ('CONNECTING...')
     es = Elasticsearch()

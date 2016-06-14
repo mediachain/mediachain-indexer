@@ -85,7 +85,7 @@ def decode_image(s):
     return base64.urlsafe_b64decode(ss)
 
 
-from mc_neighbors import storage_connect
+from mc_neighbors import low_level_es_connect
         
 def ingest_bulk(iter_json = False,
                 thread_count = 1,
@@ -125,7 +125,7 @@ def ingest_bulk(iter_json = False,
                                                 doc_type = doc_type,
                                                 )
     
-    es = storage_connect()
+    es = low_level_es_connect()
     
     if delete_current and es.indices.exists(index_name):
         print ('DELETE_INDEX...', index_name)
