@@ -407,7 +407,7 @@ class handle_search(BaseHandler):
                         max_indent_depth = data.get('max_indent_depth', False),
                         )
 
-        
+
 
 class handle_dupe_lookup(BaseHandler):
     

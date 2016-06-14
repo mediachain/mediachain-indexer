@@ -48,3 +48,6 @@ cfg = {'1. Elasticsearch Settings':
 
 import mc_generic
 mc_generic.config_env(cfg, globals())
+
+
+LOW_LEVEL = True ## Temporary - For transitioning from old approach to new.

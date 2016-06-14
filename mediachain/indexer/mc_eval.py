@@ -33,6 +33,7 @@ from hyperopt import hp, space_eval, fmin, tpe
 from time import time
 
 import mc_neighbors
+import mc_config
 
 
 def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
@@ -117,6 +118,7 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
                                          index_name = index_name,
                                          doc_type = doc_type,
                                          redo_thumbs = False,
+                                         use_aggressive = False,
                                          )
     print 'INSERTED',num_inserted
 
@@ -272,7 +274,7 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
     print
     print 'DONE',time() - t0
 
-
+    
 def eval_demo(max_num = 500,
               num_queries = 500,
               the_gen = mc_datasets.iter_ukbench,
@@ -282,6 +284,8 @@ def eval_demo(max_num = 500,
                                  'random_guess',
                                  ],
               ignore_self = False,
+              index_name = 'eval_index',
+              doc_type = 'eval_doc',
               ):
     """
     Some exploratory visualizations of the representation-learning models.
@@ -294,22 +298,26 @@ def eval_demo(max_num = 500,
     ## Run once for downloads:
     #the_gen().next()
 
-    index_name = 'eval_index'
-    doc_type = 'eval_doc'
-
     precision = {}
     recall = {}
     average_precision = {}
 
     num_true = 0
     num_false = 0
-    
-    es = mc_neighbors.low_level_es_connect()
-    
-    if es.indices.exists(index_name):
-        print ('DELETE_INDEX...', index_name)
-        es.indices.delete(index = index_name)
-        print ('DELETED')
+
+    if mc_config.LOW_LEVEL:
+        es = mc_neighbors.low_level_es_connect()
+
+        if es.indices.exists(index_name):
+            print ('DELETE_INDEX...', index_name)
+            es.indices.delete(index = index_name)
+            print ('DELETED')
+
+    else:
+        nes = mc_neighbors.high_level_connect(index_name = index_name,
+                                              doc_type = doc_type,
+                                              )
+        nes.delete_index()
     
     print 'INSERTING...'
     
@@ -317,6 +325,7 @@ def eval_demo(max_num = 500,
                                          index_name = index_name,
                                          doc_type = doc_type,
                                          redo_thumbs = False,
+                                         use_aggressive = False,
                                          )
     print 'INSERTED',num_inserted
     
@@ -378,14 +387,21 @@ def eval_demo(max_num = 500,
             group_num = hh['group_num']
             
             query = rep_model.img_to_es_query(img_fn = hh['fn'])
-            
-            rr = es.search(index = index_name,
-                           doc_type = doc_type,
-                           body = query,
-                           fields = ['_id', 'group_num'],
-                           size = 100,#max_num, #50,
-                           timeout = '5s',
-                           )
+
+            if mc_config.LOW_LEVEL:
+                rr = es.search(index = index_name,
+                               doc_type = doc_type,
+                               body = query,
+                               fields = ['_id', 'group_num'],
+                               size = 100,#max_num, #50,
+                               timeout = '5s',
+                               )
+            else:
+                rr = nes.search_terms(body = query,
+                                      fields = ['_id', 'group_num'],
+                                      size = 100,#max_num, #50,
+                                      timeout = '5s',
+                                      )
             
             rr = rr['hits']['hits']
 
@@ -533,12 +549,15 @@ def eval_demo(max_num = 500,
     system('open ' + fn_out)
     
     print 'CLEAN_UP...'
-    
-    if es.indices.exists(index_name):
-        print ('DELETE_INDEX...', index_name)
-        es.indices.delete(index = index_name)
-        print ('DELETED')
-    
+
+    if mc_config.LOW_LEVEL:
+        if es.indices.exists(index_name):
+            print ('DELETE_INDEX...', index_name)
+            es.indices.delete(index = index_name)
+            print ('DELETED')
+    else:
+        nes.delete_index()
+            
     print 'PRECISION_@_K:',[(mm,[(x,100 * y / float(num_queries)) for x,y in zz.items()]) for mm,zz in r_at_k.items()]
         
     print 'DONE'

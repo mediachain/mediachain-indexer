@@ -372,11 +372,6 @@ class ElasticSearchEmulator():
 class NearestNeighborsBase(object):
     """
     Base class for nearest neighbor index implementations.
-
-    At a minimum, subclasses should implement:
-      - `parallel_bulk` for inserting / updating / deleting objects.
-      - One or more of `search_full_text`, `search_ids`, or `search_terms`, depending on how the index will be used.
-     
     """
     def create_index(self, *args, **kw):
         pass
@@ -384,6 +379,12 @@ class NearestNeighborsBase(object):
     def delete_index(self, *args, **kw):
         pass
 
+    def refresh_index(self, *args, **kw):
+        raise NotImplementedError
+    
+    def scan_all(self, *args, **kw):
+        raise NotImplementedError
+    
     def parallel_bulk(self, *args, **kw):
         raise NotImplementedError
             
@@ -396,6 +397,9 @@ class NearestNeighborsBase(object):
     def search_ids(self, *args, **kw):
         raise NotImplementedError
 
+    def count(self, *args, **kw):
+        raise NotImplementedError
+
 
 
 class NearestNeighborsES(NearestNeighborsBase):
@@ -404,9 +408,10 @@ class NearestNeighborsES(NearestNeighborsBase):
     """
     def __init__(self,
                  use_simulator = False,
-                 use_custom_parallel_bulk = True,
+                 use_custom_parallel_bulk = False,
                  index_name = mc_config.MC_TEST_INDEX_NAME,
                  doc_type = mc_config.MC_TEST_DOC_TYPE,
+                 index_settings = {}
                  ):
         """
         Args:
@@ -426,24 +431,31 @@ class NearestNeighborsES(NearestNeighborsBase):
 
         self.use_custom_parallel_bulk = use_custom_parallel_bulk
     
-    def create_index(self,
-                     index_name,
-                     ):
+    def _create_index(self,
+                      ):
         """
         Create and / or setup new index. For ES, this involves schema mapping setup.
         """
-        pass
+        self.es.indices.create(index = self.index_name,
+                               body = self.index_settings,
+                               #ignore = 400, # ignore already existing index
+                               )
+
     
     def delete_index(self,):
         """
         Delete index if exists.
         """
-        if self.es.indices.exists(index_name):
-            print ('DELETE_INDEX...', index_name)
-            es.indices.delete(index = index_name)
+        if self.es.indices.exists(self.index_name):
+            print ('DELETE_INDEX...', self.index_name)
+            self.es.indices.delete(index = self.index_name)
             print ('DELETED')
 
-    def _non_parallel_bulk(the_iter,
+    def refresh_index(self,):
+        self.es.indices.refresh(index = self.index_name)
+
+    def _non_parallel_bulk(self,
+                           the_iter,
                            *args,
                            **kw):
         """
@@ -465,12 +477,15 @@ class NearestNeighborsES(NearestNeighborsBase):
             for k,v in hh.items():
                 if k.startswith('_'):
                     del hh[k]
-            
-            assert xaction == 'index',(xaction,)
-            
+                        
             print 'BODY',hh
-            
-            res = self.es.index(index = xindex, doc_type = xtype, id = xid, body = hh)
+
+            if xaction == 'index':
+                res = self.es.index(index = xindex, doc_type = xtype, id = xid, body = hh)
+            elif xaction == 'update':
+                res = self.es.update(index = xindex, doc_type = xtype, id = xid, body = hh)
+            else:
+                assert False,repr(xaction)
             
             print 'DONE-NON_PARALLEL_BULK',xaction,xid
             
@@ -519,12 +534,14 @@ class NearestNeighborsES(NearestNeighborsBase):
         Most efficient way to scan all documents.
         """
 
-        es_scan(client = self.es,
-                index = self.index_name,
-                doc_type = self.doc_type,
-                scroll = scroll,
-                query = {"query": {'match_all': {}}},
-               )
+        rr = es_scan(client = self.es,
+                     index = self.index_name,
+                     doc_type = self.doc_type,
+                     scroll = scroll,
+                     query = {"query": {'match_all': {}}},
+                     )
+
+        return rr
 
         
     def search_full_text(self,
@@ -552,8 +569,8 @@ class NearestNeighborsES(NearestNeighborsBase):
         return rr
         
     def search_terms(self,
-                        terms,
-                        ):
+                     terms,
+                     **kw):
         """
         Search based on terms, without applying the full text search analyzers.
         Does use tf-IDF for ranking.
@@ -567,7 +584,7 @@ class NearestNeighborsES(NearestNeighborsBase):
         rr = self.es.search(index = self.index_name,
                             type = self.doc_type,
                             source = {"query": query},
-                            )
+                            **kw)
         
         return rr
 
@@ -590,15 +607,63 @@ class NearestNeighborsES(NearestNeighborsBase):
                             )
         
         return rr
+    
+    def count(self):
+        return self.es.count(self.index_name)['count']
+
+
+def fake_async_decorator(ocls):
+    """
+    Wrap all non-private methods of a class with the tornado Task decorator.
+    
+    Used to simulate the interface of async methods, but with methods that actually block.
+    
+    TODO: Test.
+    """
+    import tornado
+    import tornado.gen
+    
+    cls = type(ocls.__name__ + 'Async', ocls.__bases__, dict(ocls.__dict__))
+    
+    for attr in cls.__dict__:
+        if callable(getattr(cls, attr)) and (not attr.startswith('_')):
+            
+            def fake(*args, **kw):
+                yield tornado.gen.Task(getattr(cls, attr)(*args, **kw))
+            
+            setattr(cls, attr, fake)
+    
+    return cls    
+
+NearestNeighborsBaseAsync = fake_async_decorator(NearestNeighborsBase)
 
 
 def low_level_es_connect():
     """
-    TODO - 
-    Only hyper-parameter optimization should use this low-level interface now.
-    Switch everything else to new abstracted interface.
+    Central point for creating new index-backend connections.
+    
+    Note: Only hyper-parameter optimization should use this low-level interface now.
+          Everything else should use `high_level_connect`.
     """
-    print ('CONNECTING...')
+    
+    print ('LOW_LEVEL_CONNECTING...')
     es = Elasticsearch()
-    print ('CONNECTED')
+    print ('LOW_LEVEL_CONNECTED')
     return es
+
+
+def high_level_connect(**kw):
+    """
+    Central point for creating new index-backend connections.
+    """
+    
+    print ('HIGH_LEVEL_CONNECTING...')
+    
+    if ('async' in kw) and (kw['async']):
+        nes = NearestNeighborsESAsync(**kw)
+    else:
+        nes = NearestNeighborsES(**kw)
+        
+    print ('HIGH_LEVEL_CONNECTED')
+    
+    return nes

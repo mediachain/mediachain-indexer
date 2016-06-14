@@ -18,8 +18,8 @@ Later may be extended to insert media that comes from off-chain into the chain.
 from mc_generic import setup_main, group, raw_input_enter, pretty_print, intget, print_config
 
 import mc_config
-
 import mc_datasets
+import mc_neighbors
 
 from time import sleep
 import json
@@ -51,7 +51,10 @@ import numpy as np
 import imagehash
 import itertools
 
-    
+
+from elasticsearch import Elasticsearch
+from elasticsearch.helpers import parallel_bulk, scan
+
 data_pat = 'data:image/jpeg;base64,'
 data_pat_2 = 'data:image/png;base64,'
     
@@ -85,8 +88,6 @@ def decode_image(s):
     return base64.urlsafe_b64decode(ss)
 
 
-from mc_neighbors import low_level_es_connect
-        
 def ingest_bulk(iter_json = False,
                 thread_count = 1,
                 index_name = mc_config.MC_INDEX_NAME,
@@ -95,7 +96,7 @@ def ingest_bulk(iter_json = False,
                 redo_thumbs = True,
                 ignore_thumbs = False,
                 delete_current = True,
-                use_aggressive = True
+                use_aggressive = True,
                 ):
     """
     Ingest Getty dumps from JSON files.
@@ -119,43 +120,58 @@ def ingest_bulk(iter_json = False,
     Examples:
         See `mc_test.py`
     """
+        
+    index_settings = {'settings': {'number_of_shards': mc_config.MC_NUMBER_OF_SHARDS_INT,
+                                   'number_of_replicas': mc_config.MC_NUMBER_OF_REPLICAS_INT,                             
+                                   },
+                      'mappings': {doc_type: {'properties': {'title':{'type':'string'},
+                                                             'artist':{'type':'string'},
+                                                             'collection_name':{'type':'string'},
+                                                             'caption':{'type':'string'},
+                                                             'editorial_source':{'type':'string'},
+                                                             'keywords':{'type':'string', 'index':'not_analyzed'},
+                                                             'created_date':{'type':'date'},
+                                                             'image_thumb':{'type':'string', 'index':'no'},
+                                                             'dedupe_hsh':{'type':'string', 'index':'not_analyzed'},
+                                                             },
+                                              },
+                                   },
+                      }
 
     if not iter_json:
         iter_json = mc_datasets.iter_json_getty(index_name = index_name,
                                                 doc_type = doc_type,
                                                 )
-    
-    es = low_level_es_connect()
-    
-    if delete_current and es.indices.exists(index_name):
-        print ('DELETE_INDEX...', index_name)
-        es.indices.delete(index = index_name)
-        print ('DELETED')
 
-    if not es.indices.exists(index_name):
-        print ('CREATE_INDEX...',index_name)
-        es.indices.create(index = index_name,
-                          body = {'settings': {'number_of_shards': mc_config.MC_NUMBER_OF_SHARDS_INT,
-                                               'number_of_replicas': mc_config.MC_NUMBER_OF_REPLICAS_INT,                             
-                                               },
-                                  'mappings': {doc_type: {'properties': {'title':{'type':'string'},
-                                                                         'artist':{'type':'string'},
-                                                                         'collection_name':{'type':'string'},
-                                                                         'caption':{'type':'string'},
-                                                                         'editorial_source':{'type':'string'},
-                                                                         'keywords':{'type':'string', 'index':'not_analyzed'},
-                                                                         'created_date':{'type':'date'},
-                                                                         'image_thumb':{'type':'string', 'index':'no'},
-                                                                         'dedupe_hsh':{'type':'string', 'index':'not_analyzed'},
-                                                                         },
-                                                          },
-                                               },
-                                  },
-                          #ignore = 400, # ignore already existing index
-                          )
-
-        print('CREATED',index_name)
+    if mc_config.LOW_LEVEL:
+        es = mc_neighbors.low_level_es_connect()
     
+        if delete_current and es.indices.exists(index_name):
+            print ('DELETE_INDEX...', index_name)
+            es.indices.delete(index = index_name)
+            print ('DELETED')
+
+        if not es.indices.exists(index_name):
+            print ('CREATE_INDEX...',index_name)
+            es.indices.create(index = index_name,
+                              body = index_settings,
+                              #ignore = 400, # ignore already existing index
+                              )
+
+            print('CREATED',index_name)
+    else:
+        #NOT LOW_LEVEL:
+        nes = mc_neighbors.high_level_connect(index_name = index_name,
+                                              doc_type = doc_type,
+                                              index_settings = index_settings,
+                                              use_custom_parallel_bulk = use_aggressive,
+                                              )
+        
+        if delete_current:
+            nes.delete_index()
+        
+        nes.create_index()
+            
     print('INSERTING...')
 
     def iter_wrap():
@@ -259,13 +275,18 @@ def ingest_bulk(iter_json = False,
         use_inserter = parallel_bulk
     
     first = gen.next() ## TODO: parallel_bulk silently eats exceptions. Here's a quick hack to watch for errors.
-    
-    for is_success,res in use_inserter(es,
-                                       itertools.chain([first], gen),
-                                       thread_count = thread_count,
-                                       chunk_size = 1,
-                                       max_chunk_bytes = 100 * 1024 * 1024, #100MB
-                                       ):
+
+    if mc_config.LOW_LEVEL:
+        ii = use_inserter(es,
+                          itertools.chain([first], gen),
+                          thread_count = thread_count,
+                          chunk_size = 1,
+                          max_chunk_bytes = 100 * 1024 * 1024, #100MB
+                          )
+    else:
+        ii = nes.parallel_bulk(itertools.chain([first], gen))
+                              
+    for is_success,res in ii:
         """
         #FORMAT:
         (True,
@@ -277,50 +298,17 @@ def ingest_bulk(iter_json = False,
                         u'status': 201}})
         """
         pass
+
+    if mc_config.LOW_LEVEL:
+        print ('REFRESHING', index_name)
+        es.indices.refresh(index = index_name)
+        print ('REFRESHED')
+        rr = es.count(index_name)['count']
+    else:
+        nes.refresh_index()
+        rr = nes.count()
         
-    print ('REFRESHING', index_name)
-    es.indices.refresh(index = index_name)
-    print ('REFRESHED')
-    
-    if search_after:
-        
-        print ('SEARCH...')
-        
-        q_body = {"query": {'match_all': {}}}
-        
-        #q_body = {"query" : {"constant_score":{"filter":{"term":
-        #                        { "dedupe_hsh" : '87abc00064dc7e780e0683110488a620e9503ceb9bfccd8632d39823fffcffff'}}}}}
-
-        q_body['from'] = 0
-        q_body['size'] = 1
-
-        print ('CLUSTER_STATE:')
-        print pretty_print(es.cluster.state())
-
-        print ('QUERY:',repr(q_body))
-
-        res = es.search(index = index_name,
-                        body = q_body,
-                        )
-
-        print ('RESULTS:', res['hits']['total'])
-
-        #print (res['hits']['hits'])
-
-        for hit in res['hits']['hits']:
-
-            doc = hit['_source']#['doc']
-
-            if 'image_thumb' in doc:
-                doc['image_thumb'] = '<removed>'
-
-            print 'HIT:'
-            print pretty_print(doc)
-
-            raw_input_enter()
-
-
-    return es.count(index_name)['count']
+    return rr
 
 
 """

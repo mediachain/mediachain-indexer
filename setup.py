@@ -8,7 +8,7 @@ reqs_file = join(dirname(realpath(__file__)), 'requirements.txt')
 with open(reqs_file) as f:
     reqs = f.readlines()
     
-setup(version = '0.0.4',
+setup(version = '0.0.5',
       name = 'mediachain-indexer',
       description = 'Mediachain Indexer - Search, Dedupe, Ingestion.',
       author = 'Mediachain Labs',

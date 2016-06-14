@@ -5,6 +5,8 @@
 Models for search and dedupe.
 """
 
+
+
 import tornado
 import tornado.gen
 import json
@@ -13,7 +15,7 @@ from mc_generic import setup_main, pretty_print
 from mc_ingest import decode_image
 from elasticsearch.helpers import parallel_bulk, scan
 
-from mc_neighbors import low_level_es_connect
+import mc_neighbors
 
 from PIL import Image
 from cStringIO import StringIO
@@ -446,33 +448,47 @@ def dedupe_reindex(lookup_name = False,
     ## Step 1) Generate vector embeddings.
     #
 
+    if mc_config.LOW_LEVEL:
+        es = mc_neighbors.low_level_es_connect()    
+
+        res = scan(client = es,
+                   index = index_name,
+                   doc_type = doc_type,
+                   scroll = '5m', #TODO - hard coded.
+                   query = {"query": {'match_all': {}
+                                     },
+                           #'from':0,
+                           #'size':1,                           
+                           },
+                   )
+    else:
+        nes = mc_neighbors.high_level_connect(index_name = index_name,
+                                              doc_type = doc_type,
+                                              )
+        
+        res = nes.scan_all()
+        
+        
     def do_commit(rrr):
         print ('COMMITTING BATCH...',len(rrr))
-        for is_success,res in parallel_bulk(es,
-                                            rrr,
-                                            thread_count = 1,
-                                            chunk_size = 500,
-                                            max_chunk_bytes = 100 * 1024 * 1024, #100MB
-                                            ):
+        
+        if mc_config.LOW_LEVEL:
+            ii = parallel_bulk(es,
+                               rrr,
+                               thread_count = 1,
+                               chunk_size = 500,
+                               max_chunk_bytes = 100 * 1024 * 1024, #100MB
+                               )
+        else:
+            ii = nes.parallel_bulk(rrr)
+        
+        for is_success,res in ii:
             #print is_success,res
             pass
         
         rrr[:] = []
         print ('COMMITTED')
 
-    es = low_level_es_connect()    
-    
-    res = scan(client = es,
-               index = index_name,
-               doc_type = doc_type,
-               scroll = '5m', #TODO - hard coded.
-               query = {"query": {'match_all': {}
-                                 },
-                       #'from':0,
-                       #'size':1,                           
-                       },
-               )
-    
     print ('(1) Generate baseline image descriptors...')
     
     hash_to_ids = {}
@@ -557,10 +573,13 @@ def dedupe_reindex(lookup_name = False,
         do_commit(rr)
     
     print ('UPDATED',nn)
-    
-    print ('REFRESHING', index_name)
-    es.indices.refresh(index = index_name)
-    print ('REFRESHED')
+
+    if mc_config.LOW_LEVEL:
+        print ('REFRESHING', index_name)
+        es.indices.refresh(index = index_name)
+        print ('REFRESHED')
+    else:
+        nes.refresh_index()
     
     ### Following code can be skipped for v1 baseline:
     
@@ -575,17 +594,20 @@ def dedupe_reindex(lookup_name = False,
     #
 
     all_clf_pairs = {} # {(id_1,id_2):1} or {(id_1,id_2):0}
-    
-    res = scan(client = es,
-               index = index_name,
-               doc_type = doc_type,
-               scroll = '5m', #TODO - hard coded.
-               query = {"query": {'match_all': {}
-                                 },
-                       #'from':0,
-                       #'size':1,                           
-                       },
-               )
+
+    if mc_config.LOW_LEVEL:
+        res = scan(client = es,
+                   index = index_name,
+                   doc_type = doc_type,
+                   scroll = '5m', #TODO - hard coded.
+                   query = {"query": {'match_all': {}
+                                     },
+                           #'from':0,
+                           #'size':1,                           
+                           },
+                   )
+    else:
+        res = nes.scan_all()
     
     nn = 0
     
@@ -598,14 +620,20 @@ def dedupe_reindex(lookup_name = False,
         
         query = vmodel.img_to_es_query(img_data = hh['image_thumb'])
         
-        rr = es.search(index = index_name,
-                       doc_type = doc_type,
-                       body = query,
-                       #fields = ['_id',
-                       #          ],
-                       size = do_optimize_for_recall_at,
-                       timeout = '5s',
-                       )
+        if mc_config.LOW_LEVEL:
+            rr = es.search(index = index_name,
+                           doc_type = doc_type,
+                           body = query,
+                           #fields = ['_id',
+                           #          ],
+                           size = do_optimize_for_recall_at,
+                           timeout = '5s',
+                           )
+        else:
+            rr = nes.search_terms(terms = query,
+                                  size = do_optimize_for_recall_at,
+                                  timeout = '5s',
+                                  )
 
         rr = rr['hits']['hits']
         
