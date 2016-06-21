@@ -604,6 +604,145 @@ def iter_json_getty(max_num = 0,
 
     print ('DONE_YIELD',nn)
 
+    
+def transforms_1():
+    """
+    WIP image transforms collection.
+    """
+
+    from PIL import Image, ImageEnhance
+    image = Image.open('downloads/jcfeb2011.jpg')
+
+    ## Sharpness - 0.0 gives a blurred image, a factor of 1.0 gives the original image, and a factor of 2.0 gives a sharpened image:
+    i2 = ImageEnhance.Sharpness(image).enhance(factor)
+    
+    ## An enhancement factor of 0.0 gives a black image. A factor of 1.0 gives the original image.
+    i2 = ImageEnhance.Brightness(image).enhance(factor)
+    
+    ## An enhancement factor of 0.0 gives a solid grey image. A factor of 1.0 gives the original image.
+    i2 = ImageEnhance.Contrast(image).enhance(factor)
+
+    ## An enhancement factor of 0.0 gives a black and white image. A factor of 1.0 gives the original image.
+    i2 = ImageEnhance.Color(image).enhance(factor)
+
+    ## Rotate, -180 to 180, resample=Image.NEAREST, resample=Image.BILINEAR, resample=Image.BICUBIC:
+    i2 = i1.rotate(45)
+
+    ## Rotate without cropping:
+    i2 = i2.rotate(45, expand=True)
+
+    ## Specify transparent color:
+    transparency = im.info['transparency'] 
+    im.save('icon.gif', transparency=transparency)
+
+    ## Crop off max 10% from each side:
+
+    width, height = i1.size
+    left = width / randint(10, 100)
+    top = height / randint(10, 100)
+    right = width - (width / randint(10, 100))
+    bottom = height - (height / randint(10, 100))
+    i2 = i1.crop((left, top, right, bottom))
+
+    ### http://pillow.readthedocs.io/en/3.1.x/reference/ImageOps.html
+
+    ## cutoff – How many percent to cut off from the histogram. ignore – The background pixel value (use None for no background).
+    PIL.ImageOps.autocontrast(image, cutoff=0, ignore=None)
+
+    ## The black and white arguments should be RGB tuples;
+    PIL.ImageOps.colorize(image, black, white)
+
+    ## Remove border from image. The same amount of pixels are removed from all four sides. 
+    PIL.ImageOps.crop(image, border=0)
+
+    ## Applies a non-linear mapping to the input image, in order to create a uniform distribution of grayscale values in the output image.
+    PIL.ImageOps.equalize(image, mask=None)
+
+    ## Add border to the image
+    PIL.ImageOps.expand(image, border=0, fill=0)
+
+    ## Returns a sized and cropped version of the image, cropped to the requested aspect ratio and size.
+    PIL.ImageOps.fit(image, size, method=0, bleed=0.0, centering=(0.5, 0.5))
+
+    ## Convert the image to grayscale.
+    PIL.ImageOps.grayscale(image)
+
+    ## Reduce the number of bits for each color channel.
+    PIL.ImageOps.posterize(image, bits)
+    
+    #### Perspective transformation: http://stackoverflow.com/questions/14177744/how-does-perspective-transformation-work-in-pil
+
+    #######
+    ## http://cbio.ensmp.fr/~nvaroquaux/formations/scipy-lecture-notes/advanced/image_processing/index.html
+    ## http://www.scipy-lectures.org/advanced/image_processing/
+
+    from scipy import ndimage
+    from scipy import misc
+    lena = misc.imread('lena.png')
+    
+    ###
+
+    ## Cropping
+    lena = misc.lena()
+    lx, ly = lena.shape
+    crop_lena = lena[lx / 4: - lx / 4, ly / 4: - ly / 4]
+    
+    ## up <-> down flip
+    flip_ud_lena = np.flipud(lena)
+    
+    ## rotation
+    rotate_lena = ndimage.rotate(lena, 45)
+    rotate_lena_noreshape = ndimage.rotate(lena, 45, reshape=False)
+
+    
+    ## Add noise to image:
+    noisy = l + 0.4 * l.std() * np.random.random(l.shape)
+    
+    ## A Gaussian filter smoothes the noise out... and the edges as well:
+    blurred_lena = ndimage.gaussian_filter(lena, sigma=3)
+    very_blurred = ndimage.gaussian_filter(lena, sigma=5)
+
+    ##A median filter preserves better the edges:
+    med_denoised = ndimage.median_filter(noisy, 3)
+
+    ##Total-variation (TV) denoising. Find a new image so that the total-variation of the image (integral of the norm L1 of the gradient) is minimized, while being close to the measured image:
+    from skimage.filter import tv_denoise
+    tv_denoised = tv_denoise(noisy, weight=50)
+
+    
+    ## Increase the weight of edges by adding an approximation of the Laplacian:
+    filter_blurred_l = ndimage.gaussian_filter(blurred_l, 1)
+    alpha = 30
+    sharpened = blurred_l + alpha * (blurred_l - filter_blurred_l)
+
+
+def iter_perturb_images(iter_in,
+                        num_perturb_per_image = 5,
+                        input_chunk_size = 1000,
+                        use_uuid_group_nums = False,
+                        thumbs_only = True,
+                        funcs = [],
+                        ):
+    """
+    Wraps the other dataset iterators and adds noise to the image. Replaces the `image_thumb` values of the input iterator.
+    
+    Each of the `funcs` should accept 2 arguments: an input file object and output file object.
+
+    If the wrapped iterator has a `group_num` key, then that value is copied to the new perturbed images. Otherwise,
+    new group_num values are created for each group.
+    
+    Reads in `input_chunk_size` images at a time, adds in perturbed versions, then the chunk is shuffled and output.
+    
+    Example: `input_chunk_size = 1000` and `num_perturb_per_image = 5` => 6000 images which are then shuffled and output.
+    
+    """
+    assert False,'TODO'
+    
+    cur_group_num = 0
+    
+    for c,grp in enumerate(grp(iter_in)):
+        pass
+    
 
 functions=['getty_create_dumps',
            ]

@@ -34,6 +34,7 @@ cfg = {'1. Elasticsearch Settings':
         'MC_DYNAMO_TABLE_NAME':('Mediachain', ''),
         'MC_REGION_NAME':(None, 'AWS region of DynamoDB instance'),
         'MC_ENDPOINT_URL':(None, 'AWS endpoint of DynamoDB instance'),
+        'MC_USE_IPFS':(True, 'Use IPFS for image ingestion.'),
        },
        '3. Settings for Automated Tests':
        {'MC_TEST_WEB_HOST':('http://127.0.0.1:23456', ''),
