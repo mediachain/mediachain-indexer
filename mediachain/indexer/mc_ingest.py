@@ -495,7 +495,7 @@ def ingest_bulk_gettydump(#getty_path = 'getty_custom/json/images/',
         doc_type:   Name of Indexer doc type.
     """
     
-    if mc_config.MC_USE_IPFS:
+    if mc_config.MC_USE_IPFS_INT:
         from mediachain.datastore import set_use_ipfs_for_raw_data
         set_use_ipfs_for_raw_data(True)
     
