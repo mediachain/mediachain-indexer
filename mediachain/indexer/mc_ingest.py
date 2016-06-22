@@ -232,7 +232,7 @@ def ingest_bulk(iter_json = False,
 
         for hh in the_iter:
 
-            print 'NON_PARALLEL_BULK',hh
+            print 'NON_PARALLEL_BULK',repr(hh)[:100],'...'
             
             xaction = hh['_op_type']
             xindex = hh['_index']
@@ -349,6 +349,8 @@ def ingest_bulk_blockchain(last_block_ref = None,
                            delete_current = True,
                            index_name = mc_config.MC_INDEX_NAME,
                            doc_type = mc_config.MC_DOC_TYPE,
+                           auto_reindex = True,
+                           force_exit = True,
                            ):
     """
     Ingest media from Mediachain blockchain.
@@ -357,7 +359,8 @@ def ingest_bulk_blockchain(last_block_ref = None,
         last_block_ref:  (Optional) Last block ref to start from.
         index_name:      Name of Indexer index to populate.
         doc_type:        Name of Indexer doc type.
-    
+        auto_reindex:    Automatically reindex upon completion. TODO: Reindex periodically instead of waiting for iterator exit?
+        force_exit:      Force exit interpreter upon completion. Workaround for gPRC bug that prevents the process from exiting.
     """
     
     import mediachain.transactor.client
@@ -415,68 +418,60 @@ def ingest_bulk_blockchain(last_block_ref = None,
             
             rh['latest_ref'] = base58.b58encode(art['meta']['rawRef'][u'@link'])
             
-            ## TODO - different created date?:
+            ## TODO - use different created date?:
             rh['date_created'] = date_parser.parse(art['meta']['translatedAt']) 
             
-            ## TODO: Using this placeholder until we get image data from canonical_stream:
-            #rh['img_data'] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
-            
             rhc = rh.copy()
-            #del rhc['img_data']
+            if 'img_data' in rhc:
+                del rhc['img_data']
             print 'INSERT',rhc
             
             yield rh
         
         print 'END ITER'
-
-
-    while True:
+    
+    try:
+        nn = ingest_bulk(iter_json = the_gen(),
+                         #index_name = index_name,
+                         #doc_type = doc_type,
+                         delete_current = False,
+                         )
         
-        try:
-            nn = ingest_bulk(iter_json = the_gen(),
-                             #index_name = index_name,
-                             #doc_type = doc_type,
-                             delete_current = False,
-                             )
+        print 'GRPC EXITED SUCCESSFULLY...'
 
-            ## TODO: automatically do this for now, so we don't forget:
+        if auto_reindex:
+
+            print 'AUTO_REINDEX...'
             
             import mc_models
             for name in mc_models.VECTORS_MODEL_NAMES:
                 mc_models.dedupe_reindex(index_name = index_name,
                                          doc_type = doc_type,
                                          vectors_model = name,
-                                         )
-            
-            print 'REPEATING...'
-            sleep(1)
-            
-        except grpc_errors as e:
-            print '!!!CAUGHT gRPC ERROR',e
-            
-            import traceback, sys, os
-            for line in traceback.format_exception(*sys.exc_info()):
-                print line,
-            
-            sleep(1)
-            continue
+                                         )    
+    except grpc_errors as e:
+        print '!!!CAUGHT gRPC ERROR',e
+
+        import traceback, sys, os
+        for line in traceback.format_exception(*sys.exc_info()):
+            print line,
+
+    except e:
+        print '!!!CAUGHT OTHER ERROR',e
         
-        except:
-            ## TODO... maybe not nice:
+        import traceback, sys, os
+        for line in traceback.format_exception(*sys.exc_info()):
+            print line,
 
-            print '!!!FORCE_EXIT_START'
+    if force_exit:
+        ## Force exit due to grpc bug:
 
-            import traceback, sys, os
-            for line in traceback.format_exception(*sys.exc_info()):
-                print line,
-
-            sleep(1) ## Last hope for the any background threads to do some cleanup
-            
-            print '!!!FORCE_EXIT_END'
-            
-            os._exit(-1)
-
+        print 'FORCE_EXIT'
         
+        sleep(1)
+
+        os._exit(-1)
+
     print 'DONE_INGEST',nn
 
     
