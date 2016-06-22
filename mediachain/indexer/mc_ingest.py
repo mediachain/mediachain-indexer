@@ -57,7 +57,7 @@ from elasticsearch.helpers import parallel_bulk, scan
 data_pat = 'data:image/jpeg;base64,'
 data_pat_2 = 'data:image/png;base64,'
 
-def shrink_and_encode_image(s, size = (150, 150)):
+def shrink_and_encode_image(s, size = (255, 255)):
     """
     Resize image to small size & base64 encode it.
     """
@@ -84,7 +84,7 @@ def decode_image(s):
     else:
         assert False,('BAD_DATA_URL',s[:15])
         
-    return base64.urlsafe_b64decode(ss)
+    return base64.b64decode(ss)
 
 
 def ingest_bulk(iter_json = False,
@@ -217,7 +217,7 @@ def ingest_bulk(iter_json = False,
             chh = hh.copy()
             if 'image_thumb' in chh:
                 del chh['image_thumb']
-            print 'INSERTING',index_name,doc_type,chh
+            print 'INSERTING',index_name,doc_type#,chh
             
             yield hh
     
@@ -232,7 +232,7 @@ def ingest_bulk(iter_json = False,
 
         for hh in the_iter:
 
-            print 'NON_PARALLEL_BULK',repr(hh)[:100],'...'
+            #print 'NON_PARALLEL_BULK',repr(hh)[:100],'...'
             
             xaction = hh['_op_type']
             xindex = hh['_index']
@@ -245,7 +245,7 @@ def ingest_bulk(iter_json = False,
             
             assert xaction == 'index',(xaction,)
             
-            print 'BODY',hh
+            #print 'BODY',hh
             
             res = es.index(index = xindex, doc_type = xtype, id = xid, body = hh)
             
