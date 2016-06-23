@@ -245,7 +245,7 @@ def ingest_bulk(iter_json = False,
             
             assert xaction == 'index',(xaction,)
             
-            #print 'BODY',hh
+            print 'BODY',hh
             
             res = es.index(index = xindex, doc_type = xtype, id = xid, body = hh)
             

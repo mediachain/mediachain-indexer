@@ -15,16 +15,24 @@ mediachain-indexer-test     | Tests and sanity checks.
 
 #### Core Setup
 
-1) Install Elasticsearch. Version 2.3.2 or higher recommended:
+1) Install Elasticsearch. Version `2.3.2` required:
+
   - [General Instructions](https://www.elastic.co/guide/en/elasticsearch/reference/current/_installation.html).
   - OSX: `brew install elasticsearch`
-  - Linux: Check with your distribution.
+  - Ubuntu:
+
+```
+        $ sudo add-apt-repository -y ppa:webupd8team/java
+        $ sudo apt-get update
+        $ sudo apt-get -y install oracle-java8-installer
+        $ wget "https://download.elastic.co/elasticsearch/release/org/elasticsearch/distribution/deb/elasticsearch/2.3.3/elasticsearch-2.3.3.deb"
+        $ sudo dpkg -i  elasticsearch-2.3.3.deb
+        $ sudo update-rc.d elasticsearch defaults
+```
 
 2) Launch Elasticsearch server:
 
-```
-$ elasticsearch
-```
+`$ elasticsearch` or `$ sudo /etc/init.d/elasticsearch start`
 
 3) Install Indexer:
 
@@ -98,38 +106,55 @@ $ mediachain-indexer-ingest config
 $ mediachain-indexer-test sanity_check
 ```
 
-#### Full Setup
+#### Create Dataset to be Ingested
 
-7) Alternatively, grab small Getty testing dataset:
+7) Collect small Getty testing dataset:
 
 ```
 $ MC_GETTY_KEY="<your_getty_key>" mediachain-indexer-datasets getty_create_dumps
 ```
 
-8) Ingest Getty dataset:
+#### Ingest Directly, Bypassing Blockchain
+
+
+8a) Ingest Getty dataset:
 
 ```
 $ mediachain-indexer-ingest ingest_bulk_gettydump
 ```
 
-Or, ingest from Mediachain blockchain:
+#### Ingest via Blockchain
+
+Alternatively:
+
+8b) Prepare Indexer to accept blocks from the blockchain:
 
 ```
 $ mediachain-indexer-ingest ingest_bulk_blockchain
 ```
 
+9b) Initiate import to blockchain from media in directory `getty_small` using
+[mediachain-client](https://github.com/mediachain/mediachain-client):
 
-9) Deduplicate ingested media:
+  python -m mediachain.cli.main -s localhost -p 10001 -e http://localhost:8000 ingest getty_small
+
+
+#### Deduplicate & Prepare to Serve Queries
+
+10) Deduplicate ingested media:
 
 ```
 $ mediachain-indexer-models dedupe_reindex
 ```
 
-10) Start REST API server:
+11) Start REST API server:
 
 ```
 $ mediachain-indexer-web web
 ```
+
+
+#### Query Server
 
 11) Query the [REST API](https://github.com/mediachain/mediachain/blob/master/rfc/mediachain-rfc-3.md#rest-api-overview):
 
@@ -250,39 +275,53 @@ Args - passed as JSON-encoded body:
 
 ## Code Organization
 
+Top: The 3 modes of operation - ingestion, search, and dedupe.
+
+Side: Components and connections involved in each mode of operation, including the external
+[core](https://github.com/mediachain/mediachain), frontend, and [client](https://github.com/mediachain/mediachain-client)
+components.
+
 
 ```
                       INGESTION:               SEARCH:                       DEDUPE:
 
-                   +--------------+   +-------------------------+    +----------------------------+
-                   |  Transactors |   |   End-User Web Browser  |    |     Transactors            |
-                   +------+-------+   +---+-------------^-------+    +----------^-----------------+
-                          |               |             |                       |                 
-                          v               v             ^                       ^                 
-                     (copycat/gRPC)  (JSON/REST)   (JSON/REST)            (copycat/gRPC)          
-                          |               |             |                       |                 
-                          |        +------+-------------+--------------+        |                 
-             /            |        |      |             | --frontend-- |        |                 
-            |             |        |  +---v-------------+-------+      |        |                 
-mediachain <              |        |  | Javascript/HTML Web App |      |        |                 
- -frontend  |             |        |  +---+-------------^-------+      |        |                 
-             \            |        |      |             |              |        |                 
-                          |        +------+-------------+--------------+        |                 
-                          |               |             |                       |                 
-                          v               v             ^                       ^                 
-                     (copycat/gRPC)  (JSON/REST)   (JSON/REST)            (copycat/gRPC)          
-                          |               |             |                       |                 
-                +---------+------------+  |             |            +----------+-----------------+
-mediachain   /  |         | --reader-- |  |             |            |          |      --writer-- |
+                                      +-------------------------+
+                                      |   End-User Web Browser  |
+                                      +---+-------------^-------+
+       	       	       	       	       	  |    	       	|
+             /  +----------------------+  |             |      	      +---------------------------+
+            |  	|             --core-- |  |	       	|	      |                	 --core-- |
+            |   |  +---------------+   |  |	        |             |  +--------------------+   |
+mediachain <    |  | Transactors   |   |  |	        |             |  |    Transactors     |   |
+ -core      |  	|  +------+--------+   |  |    	        |      	      |  +------^-------------+   |
+            |  	|         |            |  |	        | 	      |         |                 |
+             \ 	+---------+------------+  |             |             +---------+-----------------+
+                          |               |             |                       |
+                          v               v             ^                       ^
+                     (copycat/gRPC)  (JSON/REST)   (JSON/REST)            (copycat/gRPC)
+                          |               |             |                       |
+             /            |        +------+-------------+--------------+        |
+            |             |        |      |             | --frontend-- |        |
+            |             |        |  +---v-------------+-------+      |        |
+mediachain <              |        |  | Javascript/HTML Web App |      |        |
+ -frontend  |             |        |  +---+-------------^-------+      |        |
+            |             |        |      |             |              |        |
+             \            |        +------+-------------+--------------+        |
+                          |               |             |                       |
+                          v               v             ^                       ^
+                     (copycat/gRPC)  (JSON/REST)   (JSON/REST)            (copycat/gRPC)
+                          |               |             |                       |
+             /  +---------+------------+  |             |            +----------+-----------------+
+mediachain  |   |         | --reader-- |  |             |            |          |      --writer-- |
  -client    |   |  +------v--------+   |  |             |            |  +-------+--------------+  |
   reader   <    |  | Client Reader |   |  v             ^            |  | Client Writer        |  |
  & writer   |   |  +------+--------+   |  |             |            |  +-------^--------------+  |
-             \  |         |            |  |             |            |          |                 |
-                ----------+------------+  |             |            +----------+-----------------+
-                          |               |             |                       |		  
-                          v               v             ^                       ^		  
-                     (copycat/gRPC)  (JSON/REST)   (JSON/REST)         (Artefact-Linkage)	  
-                          |               |             |                       |		  
+            |   |         |            |  |             |            |          |                 |
+             \  ----------+------------+  |             |            +----------+-----------------+
+                          |               |             |                       |
+                          v               v             ^                       ^
+                     (copycat/gRPC)  (JSON/REST)   (JSON/REST)         (Artefact-Linkage)
+                          |               |             |                       |
                 +---------+---------------+-------------+-----------------------+-----------------+
               / |         |               |             |                       |     --indexer-- |
              |  |  +------v----------+    |             |                       |                 |
@@ -343,5 +382,5 @@ mc_neighbors<   |  |   Feature Compacting    |          |                  |    
              |  |  |                                KNN Index                                  |  |
               \ |  +---------------------------------------------------------------------------+  |
                 +---------------------------------------------------------------------------------+
-                                                                                                   
-```	  											   
+
+```
