@@ -136,8 +136,9 @@ $ mediachain-indexer-ingest ingest_bulk_blockchain
 9b) Initiate import to blockchain from media in directory `getty_small` using
 [mediachain-client](https://github.com/mediachain/mediachain-client):
 
+```
   python -m mediachain.cli.main -s localhost -p 10001 -e http://localhost:8000 ingest getty_small
-
+```
 
 #### Deduplicate & Prepare to Serve Queries
 
@@ -288,14 +289,14 @@ components.
                                       +-------------------------+
                                       |   End-User Web Browser  |
                                       +---+-------------^-------+
-       	       	       	       	       	  |    	       	|
-             /  +----------------------+  |             |      	      +---------------------------+
-            |  	|             --core-- |  |	       	|	      |                	 --core-- |
-            |   |  +---------------+   |  |	        |             |  +--------------------+   |
-mediachain <    |  | Transactors   |   |  |	        |             |  |    Transactors     |   |
- -core      |  	|  +------+--------+   |  |    	        |      	      |  +------^-------------+   |
-            |  	|         |            |  |	        | 	      |         |                 |
-             \ 	+---------+------------+  |             |             +---------+-----------------+
+                                          |             |
+             /  +----------------------+  |             |             +---------------------------+
+            |   |             --core-- |  |             |             |                  --core-- |
+            |   |  +---------------+   |  |             |             |  +--------------------+   |
+mediachain <    |  | Transactors   |   |  |             |             |  |    Transactors     |   |
+ -core      |   |  +------+--------+   |  |             |             |  +------^-------------+   |
+            |   |         |            |  |             |             |         |                 |
+             \  +---------+------------+  |             |             +---------+-----------------+
                           |               |             |                       |
                           v               v             ^                       ^
                      (copycat/gRPC)  (JSON/REST)   (JSON/REST)            (copycat/gRPC)
