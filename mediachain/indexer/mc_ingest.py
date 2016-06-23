@@ -456,7 +456,7 @@ def ingest_bulk_blockchain(last_block_ref = None,
         for line in traceback.format_exception(*sys.exc_info()):
             print line,
 
-    except e:
+    except BaseException as e:
         print '!!!CAUGHT OTHER ERROR',e
         
         import traceback, sys, os
