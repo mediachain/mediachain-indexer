@@ -498,8 +498,6 @@ if False:
                 
         def search_terms(self, *args, **kw):
             assert False,'WIP'
-
-            do_batch = 
             
             if self.num_cores == 0:
                 self.num_cores = multiprocessing.cpu_count()
@@ -525,7 +523,7 @@ if False:
             for i, i1, IX in btr:
                 for j in xrange(i1-i):
                     
-                    yield dids[i + j], [[dids[x]] for x in IX[j] if x != i + j])
+                    yield (dids[i + j], [[dids[x]] for x in IX[j] if x != i + j])
                     
                 print 'done %d/%d...' % (min(len(dids), i+batch_size), len(dids))
                     

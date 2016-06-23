@@ -38,7 +38,7 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
             'MC_NN_MODEL_DENSE_VECTORS':('mediachain.indexer.neighbors.ElasticSearchNN',
                                          'Model to use for dense vectors nearest-neighbors search.',
                                          ),
-            }
+            },
        '2. Elasticsearch Settings':
            {'MC_ES_URLS':('',
                           ['One or more comma-separated RFC-1738 formatted URLs.',
