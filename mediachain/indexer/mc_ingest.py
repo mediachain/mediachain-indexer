@@ -395,8 +395,7 @@ def ingest_bulk_blockchain(last_block_ref = None,
         tc = mediachain.transactor.client.TransactorClient(mc_config.MC_TRANSACTOR_HOST,
                                                            mc_config.MC_TRANSACTOR_PORT_INT,
                                                            )
-
-        for art in tc.canonical_stream():
+        for art in tc.canonical_stream(timeout=600):
             try:
                 print 'GOT',art.get('type')
 
