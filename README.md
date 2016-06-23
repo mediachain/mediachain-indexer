@@ -290,49 +290,50 @@ mc_ingest.py<   |  | Media Ingestion |    v             ^                       
              |  |  +------+----------+    |             |                       |                 |
               \ |         |               |             |                       |                 |
                 |         |          (Raw Media)   (Media IDs)         (Artefact-Linkage)         |
-              / |         |          (/Text Query)      |                       |                 |
-             |            |               |             |                       |                 | 
-             |  |         |         +-----v-------------+----------+            |                 | 
- mc_web.py  <   |         v         |      HTTP Search API         |            ^                 | 
-             |  |         |         +-----+-------------^----------+            |                 | 
-              \ |         |               |             |                       |                 | 
-                |         |               |        (Media IDs)                  |                 | 
-              / |         |               |             |                       |                 | 
-             |  |         |               |    +--------+----------+ +----------+--------------+  | 
-             |  |         |               |    | Search Override   | |   Dedupe Staging        |  | 
-             |  |         |               |    +--------^----------+ +----------^--------------+  | 
-             |  |         |               |             |                       |                 | 
-             |  |    (Raw Media)     (Raw Media)   (Media IDs)           (Artefact-Linkage)       | 
-             |  |    (& Metadata)    (/Text Query)      |                       |                 | 
-             |  |         |               |             |                       |                 | 
-             |  |         |               |    +--------+----------+ +----------+--------------+  | 
-             |  |         |               |    | Search Re-Ranking | |    Dedupe Clustering    |  | 
-             |  |         |               |    +--------^----------+ +----------^--------------+  | 
-             |  |         |               |             |                       |                 | 
-mc_models.py<   |         |               |       (Media IDs)           (Pair IDs+Split/Merge)    | 
-             |  |         |               |       (& Scores)                    |                 | 
-             |  |         v               v             |                       |                 | 
-             |  |         |               |    +--------+----------+ +----------+--------------+  | 
-             |  |         |               |    |  Personalization  | |  Dedupe Pairwise Model  |  | 
-             |  |         |               |    +--------^----------+ +----------^--------------+  | 
-             |  |         |               |             |                       |                 | 
-             |  |    (Raw Media)     (Raw Media)   (Media IDs)        (IDs for Candidate Groups)  | 
-             |  |    (& Metadata)    (/Text Query)      |                       |                 | 
-             |  |         |               |             |                       |                 | 
-             |  |         |               |             |            +----------+--------------+  | 
-             |  |         |               |             |            |   Dedupe All-vs-All NN  |  | 
-             |  |         |               |             |            +-----+------------^------+  | 
-             |  |         |               |             |                  |            |         | 
-              \ |         |               |             |                  |            |         | 
-                |         v               v             ^                  v            ^         | 
-              / |         |               |             |                  |            |         | 
-             |  |  +------v---------------v--+          |                  |            |         | 
-             |  |  |   Generate Features     |          |                  |            |         | 
-             |  |  +------+---------------+--+          |                  |            |         | 
-             |  |         |               |             |                  |            |         | 
-             |  |  (Descriptors)   (Descriptors)   (Media IDs)        (Media IDs)  (Media IDs)    |
+              / |         |          (/Text Query) (Ranked)                     |                 |
+             |            |               |             |                       |                 |
+             |  |         |         +-----v-------------+----------+            |                 |
+ mc_web.py  <   |         v         |      HTTP Search API         |            ^                 |
+             |  |         |         +-----+-------------^----------+            |                 |
+              \ |         |               |             |                       |                 |
+                |         |               |        (Media IDs)                  |                 |
+              / |         |               |        (Ranked)                     |                 |
+             |  |         |               |             |                       |
+             |  |         |               |    +--------+----------+ +----------+--------------+  |
+             |  |         |               |    | Search Override   | |   Dedupe Staging        |  |
+             |  |         |               |    +--------^----------+ +----------^--------------+  |
+             |  |         |               |             |                       |                 |
+             |  |    (Raw Media)     (Raw Media)   (Media IDs)           (Artefact-Linkage)       |
+             |  |    (& Metadata)    (/Text Query) (Ranked)                     |                 |
+             |  |         |               |             |                       |                 |
+             |  |         |               |    +--------+----------+ +----------+--------------+  |
+             |  |         |               |    | Search Re-Ranking | |    Dedupe Clustering    |  |
+             |  |         |               |    +--------^----------+ +----------^--------------+  |
+             |  |         |               |             |                       |                 |
+mc_models.py<   |         |               |        (Media IDs)          (Pair IDs+Split/Merge)    |
+             |  |         |               |        (& More Scores)              |                 |
+             |  |         v               v             |                       |                 |
+             |  |         |               |    +--------+----------+ +----------+--------------+  |
+             |  |         |               |    |  Personalization  | |  Dedupe Pairwise Model  |  |
+             |  |         |               |    +--------^----------+ +----------^--------------+  |
+             |  |         |               |             |                       |                 |
+             |  |    (Raw Media)     (Raw Media)   (Media IDs)        (IDs for Candidate Groups)  |
+             |  |    (& Metadata)    (/Text Query) (& Ranked by)                |                 |
+             |  |         |               |        (Basic Scores)               |                 |
+             |  |         |               |             |            +----------+--------------+  |
+             |  |         |               |             |            |   Dedupe All-vs-All NN  |  |
+             |  |         |               |             |            +-----+------------^------+  |
              |  |         |               |             |                  |            |         |
+              \ |         |               |             |                  |            |         |
+                |         v               v             ^                  v            ^         |
+              / |         |               |             |                  |            |         |
              |  |  +------v---------------v--+          |                  |            |         |
+             |  |  |   Generate Features     |          |                  |            |         |
+             |  |  +------+---------------+--+          |                  |            |         |
+             |  |         |               |             |                  |            |         |
+             |  |  (Descriptors)   (Descriptors)   (Media IDs)        (Media IDs)  (Media IDs)    |
+             |  |         |               |        (& Ranked by)           |            |         |
+             |  |  +------v---------------v--+     (Basic Scores)          |            |         |
 mc_neighbors<   |  |   Feature Compacting    |          |                  |            |         |
    .py       |  |  +------+---------------+--+          ^                  v            ^         |
              |  |         |               |             |                  |            |         |
@@ -345,5 +346,5 @@ mc_neighbors<   |  |   Feature Compacting    |          |                  |    
                 |                             --Mediachain Indexer--                              |
                 |                                                                                 |
                 +---------------------------------------------------------------------------------+
-   
+
 ```
