@@ -185,9 +185,13 @@ def ingest_bulk(iter_json = False,
             
             hh.update(xdoc)
 
-            if (hh.get('img_data') == 'NO_IMAGE') or (hh.get('img_thumb') == 'NO_IMAGE'):
+            if (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
                 ## One-off ignoring of thumbnail generation via `NO_IMAGE`.
-                pass
+                if 'img_data' in hh:
+                    del hh['img_data']
+                
+                if 'image_thumb' in hh:
+                    del hh['image_thumb']
             
             elif not ignore_thumbs:
                 if redo_thumbs:
