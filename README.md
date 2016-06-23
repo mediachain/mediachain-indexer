@@ -309,12 +309,12 @@ mc_ingest.py<   |  | Media Ingestion |    v             ^                       
              |  |         |               |    | Search Re-Ranking | |    Dedupe Clustering    |  | 
              |  |         |               |    +--------^----------+ +----------^--------------+  | 
              |  |         |               |             |                       |                 | 
-mc_models.py<   |         |               |             |               (Pair IDs+Split/Merge)    | 
-             |  |         |               |             |                       |                 | 
-             |  |         v               v             ^                       |                 | 
-             |  |         |               |             |            +----------+--------------+  | 
-             |  |         |               |             |            |  Dedupe Pairwise Model  |  | 
-             |  |         |               |             |            +----------^--------------+  | 
+mc_models.py<   |         |               |       (Media IDs)           (Pair IDs+Split/Merge)    | 
+             |  |         |               |       (& Scores)                    |                 | 
+             |  |         v               v             |                       |                 | 
+             |  |         |               |    +--------+----------+ +----------+--------------+  | 
+             |  |         |               |    |  Personalization  | |  Dedupe Pairwise Model  |  | 
+             |  |         |               |    +--------^----------+ +----------^--------------+  | 
              |  |         |               |             |                       |                 | 
              |  |    (Raw Media)     (Raw Media)   (Media IDs)        (IDs for Candidate Groups)  | 
              |  |    (& Metadata)    (/Text Query)      |                       |                 | 
