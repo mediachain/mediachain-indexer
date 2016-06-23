@@ -282,7 +282,7 @@ Args - passed as JSON-encoded body:
                           |               |             |                       |
                           v               v             ^                       ^
                      (copycat/gRPC)  (JSON/REST)   (JSON/REST)         (Artefact-Linkage)
-                          |    	          |             |                       |
+                          |               |             |                       |
                 +---------+---------------+-------------+-----------------------+-----------------+
               / |         |               |             |                       |                 |
              |  |  +------v----------+    |             |                       |                 |
@@ -291,7 +291,7 @@ mc_ingest.py<   |  | Media Ingestion |    v             ^                       
               \ |         |               |             |                       |                 |
                 |         |          (Raw Media)   (Media IDs)         (Artefact-Linkage)         |
               / |         |          (/Text Query)      |                       |                 |
-	     | 	       	  |    	       	  |    	       	|      	       	       	|		  | 
+             |            |               |             |                       |                 | 
              |  |         |         +-----v-------------+----------+            |                 | 
  mc_web.py  <   |         v         |      HTTP Search API         |            ^                 | 
              |  |         |         +-----+-------------^----------+            |                 | 
@@ -304,7 +304,7 @@ mc_ingest.py<   |  | Media Ingestion |    v             ^                       
              |  |         |               |             |                       |                 | 
              |  |    (Raw Media)     (Raw Media)   (Media IDs)           (Artefact-Linkage)       | 
              |  |    (& Metadata)    (/Text Query)      |                       |                 | 
-	     | 	|      	  |    	       	  |    	       	|      	       	       	|      	       	  | 
+             |  |         |               |             |                       |                 | 
              |  |         |               |    +--------+----------+ +----------+--------------+  | 
              |  |         |               |    | Search Re-Ranking | |    Dedupe Clustering    |  | 
              |  |         |               |    +--------^----------+ +----------^--------------+  | 
@@ -345,5 +345,5 @@ mc_neighbors<   |  |   Feature Compacting    |          |                  |    
                 |                             --Mediachain Indexer--                              |
                 |                                                                                 |
                 +---------------------------------------------------------------------------------+
-
+   
 ```
