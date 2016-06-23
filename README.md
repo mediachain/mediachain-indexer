@@ -54,39 +54,39 @@ $ mediachain-indexer-ingest config
 
 ## 1. Elasticsearch Settings:
 
-  MC_NUMBER_OF_SHARDS_INT  = 1                           <INT>  
-  MC_NUMBER_OF_REPLICAS_INT= 0                           <INT>  
-  MC_INDEX_NAME            = 'getty_test'                <STR>  
-  MC_DOC_TYPE              = 'image'                     <STR>  
+  MC_NUMBER_OF_SHARDS_INT  = 1                           <INT>
+  MC_NUMBER_OF_REPLICAS_INT= 0                           <INT>
+  MC_INDEX_NAME            = 'getty_test'                <STR>
+  MC_DOC_TYPE              = 'image'                     <STR>
 
-  # One or more comma-separated RFC-1738 formatted URLs. 
+  # One or more comma-separated RFC-1738 formatted URLs.
   # e.g. "http://user:secret@localhost:9200/,https://user:secret@other_host:443/production":
-  MC_ES_URLS               = ''                          <STR>  
+  MC_ES_URLS               = ''                          <STR>
 
 ## 2. Ingestion Settings:
 
   # AWS region of DynamoDB instance:
-  MC_REGION_NAME           = None                        <STR>  
-  MC_AWS_SECRET_ACCESS_KEY = None                        <STR>  
-  MC_AWS_ACCESS_KEY_ID     = None                        <STR>  
-  MC_DYNAMO_TABLE_NAME     = 'Mediachain'                <STR>  
+  MC_REGION_NAME           = None                        <STR>
+  MC_AWS_SECRET_ACCESS_KEY = None                        <STR>
+  MC_AWS_ACCESS_KEY_ID     = None                        <STR>
+  MC_DYNAMO_TABLE_NAME     = 'Mediachain'                <STR>
 
   # Getty key, for creating local dump of getty images:
-  MC_GETTY_KEY             = ''                          <STR>  
+  MC_GETTY_KEY             = ''                          <STR>
 
   # AWS endpoint of DynamoDB instance:
-  MC_ENDPOINT_URL          = None                        <STR>  
+  MC_ENDPOINT_URL          = None                        <STR>
 
 ## 3. Settings for Automated Tests:
 
-  MC_TEST_WEB_HOST         = 'http://127.0.0.1:23456'    <STR>  
-  MC_TEST_INDEX_NAME       = 'mc_test'                   <STR>  
-  MC_TEST_DOC_TYPE         = 'mc_test_image'             <STR>  
+  MC_TEST_WEB_HOST         = 'http://127.0.0.1:23456'    <STR>
+  MC_TEST_INDEX_NAME       = 'mc_test'                   <STR>
+  MC_TEST_DOC_TYPE         = 'mc_test_image'             <STR>
 
 ## 4. Transactor settings:
 
-  MC_TRANSACTOR_HOST       = '127.0.0.1'                 <STR>  
-  MC_TRANSACTOR_PORT_INT   = 10001                       <INT>  
+  MC_TRANSACTOR_HOST       = '127.0.0.1'                 <STR>
+  MC_TRANSACTOR_PORT_INT   = 10001                       <INT>
 ```
 
 
@@ -122,7 +122,7 @@ $ mediachain-indexer-ingest ingest_bulk_blockchain
 9) Deduplicate ingested media:
 
 ```
-$ mediachain-indexer-models dedupe_reindex 
+$ mediachain-indexer-models dedupe_reindex
 ```
 
 10) Start REST API server:
@@ -138,22 +138,22 @@ Search by text:
 ```
 $ curl "http://127.0.0.1:23456/search" -d '{"q":"crowd", "limit":5}'
 {
-    "next_page": null, 
-    "prev_page": null, 
+    "next_page": null,
+    "prev_page": null,
     "results": [
         {
-            "_id": "getty_531746924", 
-            "_index": "getty_test", 
-            "_score": 0.08742375, 
+            "_id": "getty_531746924",
+            "_index": "getty_test",
+            "_score": 0.08742375,
             "_source": {
-                "artist": "Tristan Fewings", 
-                "caption": "CANNES, FRANCE - MAY 16:  A policeman watches the crowd in front of the Palais des Festival during the red carpet arrivals of the 'Loving' premiere during the 69th annual Cannes Film Festival on May 16, 2016 in Cannes, France.  (Photo by Tristan Fewings/Getty Images)", 
-                "collection_name": "Getty Images Entertainment", 
-                "date_created": "2016-05-16T00:00:00-07:00", 
-                "editorial_source": "Getty Images Europe", 
-                "keywords": "People Vertical Crowd Watching France Police Force Cannes Film Premiere Premiere Arrival Photography Film Industry Red Carpet Event Arts Culture and Entertainment International Cannes Film Festival Celebrities Annual Event Palais des Festivals et des Congres 69th International Cannes Film Festival Loving - 2016 Film", 
+                "artist": "Tristan Fewings",
+                "caption": "CANNES, FRANCE - MAY 16:  A policeman watches the crowd in front of the Palais des Festival during the red carpet arrivals of the 'Loving' premiere during the 69th annual Cannes Film Festival on May 16, 2016 in Cannes, France.  (Photo by Tristan Fewings/Getty Images)",
+                "collection_name": "Getty Images Entertainment",
+                "date_created": "2016-05-16T00:00:00-07:00",
+                "editorial_source": "Getty Images Europe",
+                "keywords": "People Vertical Crowd Watching France Police Force Cannes Film Premiere Premiere Arrival Photography Film Industry Red Carpet Event Arts Culture and Entertainment International Cannes Film Festival Celebrities Annual Event Palais des Festivals et des Congres 69th International Cannes Film Festival Loving - 2016 Film",
                 "title": "'Loving' - Red Carpet Arrivals - The 69th Annual Cannes Film Festival"
-            }, 
+            },
             "_type": "image"
         }
     ]
@@ -165,22 +165,22 @@ Search by media content:
 ```
 $ curl "http://127.0.0.1:23456/search" -d '{"q_id":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==", "limit":5, "index_name":"mc_test", "doc_type":"mc_test_image"}'
 {
-    "next_page": null, 
-    "prev_page": null, 
+    "next_page": null,
+    "prev_page": null,
     "results": [
         {
-            "_id": "getty_1234", 
-            "_index": "mc_test", 
-            "_score": 1.0, 
+            "_id": "getty_1234",
+            "_index": "mc_test",
+            "_score": 1.0,
             "_source": {
-                "artist": "test", 
-                "caption": "test", 
-                "collection_name": "test", 
-                "date_created": "2016-05-31T17:41:06.929234", 
-                "editorial_source": "", 
-                "keywords": "test", 
+                "artist": "test",
+                "caption": "test",
+                "collection_name": "test",
+                "date_created": "2016-05-31T17:41:06.929234",
+                "editorial_source": "",
+                "keywords": "test",
                 "title": "Crowd of people walking"
-            }, 
+            },
             "_type": "mc_test_image"
         }
     ]
@@ -191,11 +191,11 @@ Search by ID:
 
 ```
 $ curl "http://127.0.0.1:23456/search" -d '{"q_id":"getty_1234", "limit":5, "index_name":"mc_test", "doc_type":"mc_test_image"}'
-{   
+{
     "next_page": null,
     "prev_page": null,
     "results": [
-        {   
+        {
             "_id": "getty_1234",
             "_index": "mc_test",
             "_score": 1.0,
@@ -219,8 +219,8 @@ Duplicate lookup by ID:
 ```
 $ curl "http://127.0.0.1:23456/dupe_lookup" -d '{"q_media":"getty_531746790"}'
 {
-    "next_page": null, 
-    "prev_page": null, 
+    "next_page": null,
+    "prev_page": null,
     "results": [
         {
             "_id": "getty_1234"
@@ -247,3 +247,101 @@ Args - passed as JSON-encoded body:
 [...]
 ```
 
+
+## Code Organization
+	  
+	  
+```	  
+                      INGESTION:               SEARCH:                       DEDUPE:
+	  
+                   +--------------+   +-------------------------+    +-------------------------+
+                   |  Transactors |   |   End-User Web Browser  |    |     Transactors         |
+                   +------+-------+   +---+-------------^-------+    +----------^--------------+
+                          |               |             |                       |
+                          v               v             ^                       ^
+                     (copycat/gRPC)  (JSON/REST)   (JSON/REST)            (copycat/gRPC)
+                          |               |             |                       |
+                +---------)---------------+-------------+-----------------------)-----------------+
+             /  |         |               |             |                       |                 |
+            |   |         |           +---v-------------+-------+               |                 |
+ mediachain<    |         |           | Javascript/HTML Web App |               |                 |
+ -frontend  |   |         |           +---+-------------^-------+               |                 |
+             \  |         |               |             |                       |                 |
+                ----------)---------------+-------------+-----------------------)-----------------+
+                          |               |             |                       |
+                          v               v             ^                       ^
+                     (copycat/gRP    (JSON/REST)   (JSON/REST)            (copycat/gRPC)
+                          |               |             |                       |
+                +---------+---------------)-------------)-----------------------+-----------------+
+             /  |         |               |             |                       |                 |
+            |   |  +------v--------+      |             |            +----------+--------------+  |
+ mediachain<    |  | Client Reader |      v             ^            |    Client Writer        |  |
+ -client    |   |  +------+--------+      |             |            +----------^--------------+  |
+             \  |         |               |             |                       |                 |
+                ----------+---------------)-------------)-----------------------+-----------------+
+                          |               |             |                       |
+                          v               v             ^                       ^
+                     (Raw Media)     (JSON/REST)   (JSON/REST)         (Artefact-Linkage)
+                          |               |             |                       |
+                +---------+---------------+-------------+-----------------------+-----------------+
+              / |         |               |             |                       |                 |
+             |  |  +------v----------+    |             |                       |                 |
+mc_ingest.py<   |  | Media Ingestion |    v             ^                       ^                 |
+             |  |  +------+----------+    |             |                       |                 |
+              \ |         |               |             |                       |                 |
+                |         |          (Raw Media)   (Media IDs)         (Artefact-Linkage)         |
+              / |         |               |             |                       |                 |
+             |  |         |         +-----v-------------+----------+            |                 |
+ mc_web.py  <   |         v         |      HTTP Search API         |            |                 |
+             |  |         |         +-----+-------------^----------+            ^                 |
+              \ |         |               |             |                       |                 |
+                |         |               |        (Media IDs)                  |                 |
+              / |         |               |             |                       |                 |
+             |  |         |               |    +--------+----------+ +----------+--------------+  |
+             |  |         |               |    | Search Override   | |   Dedupe Staging        |  |
+             |  |         |               |    +--------^----------+ +----------^--------------+  |
+             |  |    (Raw Media)          |             |                       |                 |
+             |  |         |               v        (Media IDs)           (Artefact-Linkage)       |
+             |  |         |               |             |                       |                 |
+             |  |         |               |    +--------+----------+ +----------+--------------+  |
+             |  |         |               |    | Search Re-Ranking | |    Dedupe Clustering    |  |
+             |  |         |               |    +--------^----------+ +----------^--------------+  |
+             |  |         |               |             |                       |                 |
+mc_models.py<   |         |               |             |               (Pair IDs+Split/Merge)    |
+             |  |         |          (Raw Media         |                       |                 |
+             |  |         |               |             |                       |                 |
+             |  |         |               |             |            +----------+--------------+  |
+             |  |         |               |             ^            |  Dedupe Pairwise Model  |  |
+             |  |         v               |             |            +----------^--------------+  |
+             |  |         |               |             |                       |                 |
+             |  |         |               |             |             (IDs for Candidate Groups)  |
+             |  |         |               |             |                       |                 |
+             |  |         |               v             |                       |                 |
+             |  |         |               |             |            +----------+--------------+  |
+             |  |         |               |        (Media IDs)       |   Dedupe All-vs-All NN  |  |
+             |  |         |               |             |            +-----+------------^------+  |
+             |  |         |               |             |                  |            |         |
+              \ |         |               |             |                  |            |         |
+                |         |               |             |                  |            |         |
+              / |         |               |             |                  v            ^         |
+             |  |  +------v---------------v--+          |                  |            |         |
+             |  |  |  Generate Features      |          |                  |            |         |
+             |  |  +------+---------------+--+          |                  |            |         |
+             |  |         |               |             ^             (Media IDs)  (Media IDs)    |
+             |  |   (Descriptors)         |             |                  |            |         |
+             |  |         |               |             |                  |            |         |
+             |  |  +------v---------------v--+          |                  |            |         |
+mc_neighbors<   |  |  Feature Compacting     |          |                  |            |         |
+   .py       |  |  +------+---------------+--+          |                  v            ^         |
+             |  |         |               |             |                  |            |         |
+             |  |    (Binary Codes) (Binary Codes)      |                  |            |         |
+             |  |         |               |             |                  |            |         |
+             |  |  +------v---------------v-------------+------------------v------------+------+  |
+             |  |  |                                KNN Index                                  |  |
+              \ |  +---------------------------------------------------------------------------+  |
+                |                                                                                 |
+                |                             --Mediachain Indexer--                              |
+                |                                                                                 |
+                +---------------------------------------------------------------------------------+
+
+```

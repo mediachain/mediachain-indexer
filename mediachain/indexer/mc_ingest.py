@@ -475,8 +475,9 @@ def ingest_bulk_blockchain(last_block_ref = None,
     print 'DONE_INGEST',nn
 
     
-def ingest_bulk_gettydump(#getty_path = 'getty_custom/json/images/',
-                          getty_path = 'getty_small/json/images/',
+def ingest_bulk_gettydump(max_num = 100000,
+                          #getty_path = 'getty_small/json/images/',
+                          getty_path = 'getty_archiv/json/images/',
                           index_name = mc_config.MC_INDEX_NAME,
                           doc_type = mc_config.MC_DOC_TYPE,
                           *args,
@@ -494,7 +495,8 @@ def ingest_bulk_gettydump(#getty_path = 'getty_custom/json/images/',
         from mediachain.datastore import set_use_ipfs_for_raw_data
         set_use_ipfs_for_raw_data(True)
     
-    iter_json = mc_datasets.iter_json_getty(getty_path = getty_path,
+    iter_json = mc_datasets.iter_json_getty(max_num = max_num,
+                                            getty_path = getty_path,
                                             index_name = index_name,
                                             doc_type = doc_type,
                                             *args,

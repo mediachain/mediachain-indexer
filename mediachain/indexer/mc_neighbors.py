@@ -401,8 +401,230 @@ class NearestNeighborsBase(object):
         raise NotImplementedError
 
 
+if False:
+    """
+    TODO:
+       - Add as git submodule - https://github.com/facebookresearch/pysparnn.git
+       - Due to threading issues, maybe this should run as a service in its own process?
+    """
+    
+    import pysparnn as snn
+    import numpy as np
+    import multiprocessing
+    from scipy.sparse import csr_matrix
 
-class NearestNeighborsES(NearestNeighborsBase):
+    def do_batch(cp, i, len_dids, batch_size, num_k, i1, xquery):
+        """
+        Note: must be at top level of module due to multiprocessing.
+        """
+        print ('batch',i)
+        
+        IX = cp.search(xquery,
+                       k = num_k,
+                       return_distance = False,
+                       )
+
+        IX = np.array(IX)
+        
+        return (i, i1, IX)
+
+    class PysparnnNN(NearestNeighborsBase):
+        def __init__(self):
+            assert False,'WIP'
+
+            self.num_cores = 0
+            
+            self.X_ids_idx_num = 0
+            self.X_ids_idx = {}
+            self.X_ids = []
+            self.X_terms_raw = []
+            
+        def create_index(self, *args, **kw):
+            pass
+        
+        def delete_index(self, *args, **kw):
+            pass
+        
+        def refresh_index(self, *args, **kw):
+            """
+            Actually index the data.
+            """
+            
+            ## TODO vectorization. This vectorization could be moved to parallel_bulk.:
+            X_terms_vect = vect.partial_fit_transform(X_terms_raw)
+            
+            print ('Creating index...')
+            t1 = time()
+            self.index = snn.ClusterIndex(X_terms_vect, range(X_terms_vect.shape[0]))
+            print ('Created index.',time() - t1)
+        
+        def scan_all(self, *args, **kw):
+            raise NotImplementedError
+        
+        def parallel_bulk(self,
+                          the_iter,
+                          *args, **kw):
+            """
+            Parallel inserting interface, reminiscent of the elasticsearch interface.
+
+            TODO: support plain matrix batches too.
+            """
+
+            for hh in the_iter:
+                
+                print 'NON_PARALLEL_BULK',hh
+                
+                xaction = hh['_op_type']
+                xindex = hh['_index']
+                xtype = hh['_type']
+                xid = hh['_id']
+                
+                for k,v in hh.items():
+                    if k.startswith('_'):
+                        del hh[k]
+                
+                print 'BODY',hh
+                
+                if xaction == 'index':
+                    self.X_ids_idx_num += 1
+                    self.X_ids_idx[hh['_id']] = self.X_ids_idx_num
+                    self.X_ids.append(hh['_id'])
+                    self.X_terms_raw.append([x['term'] for x in hh.items() if hh.startswith('term_')]) ## TODO: data format
+                else:
+                    raise NotImplementedError
+                
+                print 'DONE-NON_PARALLEL_BULK',xaction,xid
+
+                
+        def search_terms(self, *args, **kw):
+            assert False,'WIP'
+
+            do_batch = 
+            
+            if self.num_cores == 0:
+                self.num_cores = multiprocessing.cpu_count()
+            
+            pool = multiprocessing.Pool(self.num_cores)
+
+            tbtr = [pool.apply_async(do_batch,
+                                     [self.index,
+                                      i,
+                                      len(dids),
+                                      batch_size,
+                                      num_k,
+                                      min(len(dids), i + batch_size),
+                                      X[i:min(len(dids), i + batch_size)],
+                                     ],
+                                     )
+                    for i
+                    in xrange(0, len(dids), batch_size)
+                    ]
+            
+            btr = [r.get() for r in tbtr]
+
+            for i, i1, IX in btr:
+                for j in xrange(i1-i):
+                    
+                    yield dids[i + j], [[dids[x]] for x in IX[j] if x != i + j])
+                    
+                print 'done %d/%d...' % (min(len(dids), i+batch_size), len(dids))
+                    
+            pool.terminate()
+
+            
+        def search_full_text(self, *args, **kw):
+            raise NotImplementedError
+        
+        def search_ids(self, *args, **kw):
+            raise NotImplementedError
+
+        def count(self, *args, **kw):
+            raise NotImplementedError
+
+
+if False:
+    
+    ## TODO: WIP
+    
+    from annoy import AnnoyIndex
+
+    class AnnoyNN(NearestNeighborsBase):
+        """
+        Dense nearest-neighbors lookup index.
+        """
+        def __init__(self):
+            assert False,'WIP'
+        
+        def create_index(self, n_dims):
+            """
+            args:
+                n_dims:  Integer dimensionality of the dense vectors. E.g. 300.
+            """
+            self.ann = AnnoyIndex(n_dims)
+        
+        def delete_index(self, *args, **kw):
+            pass
+        
+        def refresh_index(self, *args, **kw):
+            self.ann.build(-1)
+        
+        def scan_all(self, *args, **kw):
+            raise NotImplementedError
+        
+        def parallel_bulk(self,
+                          the_matrix,
+                          *args, **kw):
+            """
+            Parallel inserting interface, reminiscent of the elasticsearch interface.
+
+            TODO: support plain matrix batches too.
+            """
+
+            assert False,'WIP'
+            
+            for hh in the_iter:
+
+                print 'NON_PARALLEL_BULK',hh
+
+                xaction = hh['_op_type']
+                xindex = hh['_index']
+                xtype = hh['_type']
+                xid = hh['_id']
+
+                for k,v in hh.items():
+                    if k.startswith('_'):
+                        del hh[k]
+
+                print 'BODY',hh
+
+                if xaction == 'index':
+                    self.ann.add_item(0, [1, 0, 0])
+                else:
+                    raise NotImplementedError
+
+                print 'DONE-NON_PARALLEL_BULK',xaction,xid
+
+                yield True,res
+
+                try:
+                    self.es.indices.refresh(index = xindex)
+                except:
+                    print 'REFRESH_ERROR'
+
+        def search_full_text(self, *args, **kw):
+            raise NotImplementedError
+
+        def search_terms(self, *args, **kw):
+            raise NotImplementedError
+
+        def search_ids(self, *args, **kw):
+            raise NotImplementedError
+
+        def count(self, *args, **kw):
+            raise NotImplementedError
+
+    
+class ElasticSearchNN(NearestNeighborsBase):
     """
     ElasticSearch-based nearest neighbors index.
     """
@@ -426,6 +648,12 @@ class NearestNeighborsES(NearestNeighborsBase):
         else:
             self.es = Elasticsearch()
 
+        ## TODO: be more flexible:
+        try:
+            assert self.es.cluster.stats()['nodes']['versions'][0] == u'2.3.2'
+        except:
+            raise 'INCORRECT_ES_VERSION - Requires ElasticSearch Version 2.3.2'
+        
         self.index_name = index_name
         self.doc_type = doc_type
 
@@ -464,7 +692,7 @@ class NearestNeighborsES(NearestNeighborsBase):
         
         TODO: scale better.
         """
-
+        
         for hh in the_iter:
 
             print 'NON_PARALLEL_BULK',hh

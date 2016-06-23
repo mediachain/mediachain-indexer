@@ -258,8 +258,11 @@ def config_env(cfg, glb):
     """
     Update config from environment variables. Convert types according suffixes:    
     
-       '_INT'   = integer
-       '_FLOAT' = float
+      '_INT'     = integer
+      '_FLOAT'   = float
+      '_JSON'    = JSON
+      '_FJSON'   = JSON loaded from filename.
+         *       = string
 
     Also updates the passed globals(). Don't pass locals().
     """
@@ -271,6 +274,15 @@ def config_env(cfg, glb):
                 xx = intget(xx, v)
             elif k.endswith('_FLOAT'):
                 xx = floatget(xx, v)
+            elif k.endswith('_JSON'):
+                xx = json.loads(xx) if xx else v
+            elif k.endswith('_FJSON'):
+                if xx:
+                    with open(xx) as f:
+                        dd = f.read()
+                    xx = json.loads(dd.strip())
+                else:
+                    xx = v
             cfg[kg][k] = (xx,d)
             rh[k] = xx
     glb.update(rh)
@@ -387,6 +399,8 @@ def get_version(check = ['mediachain-indexer',
                 ):
     """
     Output most important version info. Only works for installed packages.
+
+    TODO: Incorporate `subprocess.check_output('git rev-parse --show-toplevel'.split()).strip()`
     """
     rr = []
     
