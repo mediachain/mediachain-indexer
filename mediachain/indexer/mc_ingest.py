@@ -420,7 +420,8 @@ def ingest_bulk_blockchain(last_block_ref = None,
                 else:
                     rh[kk] = meta[kk]
             
-            rh['latest_ref'] = base58.b58encode(art['meta']['raw_ref'][u'@link'])
+            rh['latest_ref'] = base58.b58encode((art['meta'].get('raw_ref') or
+                                                 art['meta'].get('rawRef'))[u'@link']) #TODO: Phase out rawRef.
             
             ## TODO - use different created date?:
             rh['date_created'] = date_parser.parse(art['meta']['translatedAt']) 
