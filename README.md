@@ -249,11 +249,11 @@ Args - passed as JSON-encoded body:
 
 
 ## Code Organization
-	  
-	  
-```	  
+
+
+```
                       INGESTION:               SEARCH:                       DEDUPE:
-	  
+
                    +--------------+   +-------------------------+    +-------------------------+
                    |  Transactors |   |   End-User Web Browser  |    |     Transactors         |
                    +------+-------+   +---+-------------^-------+    +----------^--------------+
@@ -270,7 +270,7 @@ Args - passed as JSON-encoded body:
                 ----------)---------------+-------------+-----------------------)-----------------+
                           |               |             |                       |
                           v               v             ^                       ^
-                     (copycat/gRP    (JSON/REST)   (JSON/REST)            (copycat/gRPC)
+                     (copycat/gRPC)  (JSON/REST)   (JSON/REST)            (copycat/gRPC)
                           |               |             |                       |
                 +---------+---------------)-------------)-----------------------+-----------------+
              /  |         |               |             |                       |                 |
@@ -281,8 +281,8 @@ Args - passed as JSON-encoded body:
                 ----------+---------------)-------------)-----------------------+-----------------+
                           |               |             |                       |
                           v               v             ^                       ^
-                     (Raw Media)     (JSON/REST)   (JSON/REST)         (Artefact-Linkage)
-                          |               |             |                       |
+                     (copycat/gRPC)  (JSON/REST)   (JSON/REST)         (Artefact-Linkage)
+                          |    	          |             |                       |
                 +---------+---------------+-------------+-----------------------+-----------------+
               / |         |               |             |                       |                 |
              |  |  +------v----------+    |             |                       |                 |
@@ -290,44 +290,46 @@ mc_ingest.py<   |  | Media Ingestion |    v             ^                       
              |  |  +------+----------+    |             |                       |                 |
               \ |         |               |             |                       |                 |
                 |         |          (Raw Media)   (Media IDs)         (Artefact-Linkage)         |
-              / |         |               |             |                       |                 |
-             |  |         |         +-----v-------------+----------+            |                 |
- mc_web.py  <   |         v         |      HTTP Search API         |            ^                 |
-             |  |         |         +-----+-------------^----------+            |                 |
-              \ |         |               |             |                       |                 |
-                |         |               |        (Media IDs)                  |                 |
-              / |         |               |             |                       |                 |
-             |  |         |               |    +--------+----------+ +----------+--------------+  |
-             |  |         |               |    | Search Override   | |   Dedupe Staging        |  |
-             |  |         |               |    +--------^----------+ +----------^--------------+  |
-             |  |         |               |             |                       |                 |
-             |  |    (Raw Media)     (Raw Media)   (Media IDs)           (Artefact-Linkage)       |
-             |  |         |               |             |                       |                 |
-             |  |         |               |    +--------+----------+ +----------+--------------+  |
-             |  |         |               |    | Search Re-Ranking | |    Dedupe Clustering    |  |
-             |  |         |               |    +--------^----------+ +----------^--------------+  |
-             |  |         |               |             |                       |                 |
-mc_models.py<   |         |               |             |               (Pair IDs+Split/Merge)    |
-             |  |         |               |             |                       |                 |
-             |  |         v               v             ^                       |                 |
-             |  |         |               |             |            +----------+--------------+  |
-             |  |         |               |             |            |  Dedupe Pairwise Model  |  |
-             |  |         |               |             |            +----------^--------------+  |
-             |  |         |               |             |                       |                 |
-             |  |    (Raw Media)     (Raw Media)   (Media IDs)        (IDs for Candidate Groups)  |
-             |  |         |               |             |                       |                 |
-             |  |         |               |             |                       |                 |
-             |  |         |               |             |            +----------+--------------+  |
-             |  |         |               |             |            |   Dedupe All-vs-All NN  |  |
-             |  |         |               |             |            +-----+------------^------+  |
-             |  |         v               v             ^                  |            |         |
-              \ |         |               |             |                  |            |         |
-                |         |               |             |                  |            |         |
-              / |         |               |             |                  v            ^         |
-             |  |  +------v---------------v--+          |                  |            |         |
-             |  |  |   Generate Features     |          |                  |            |         |
-             |  |  +------+---------------+--+          |                  |            |         |
-             |  |         |               |             |                  |            |         |
+              / |         |          (/Text Query)      |                       |                 |
+	     | 	       	  |    	       	  |    	       	|      	       	       	|		  | 
+             |  |         |         +-----v-------------+----------+            |                 | 
+ mc_web.py  <   |         v         |      HTTP Search API         |            ^                 | 
+             |  |         |         +-----+-------------^----------+            |                 | 
+              \ |         |               |             |                       |                 | 
+                |         |               |        (Media IDs)                  |                 | 
+              / |         |               |             |                       |                 | 
+             |  |         |               |    +--------+----------+ +----------+--------------+  | 
+             |  |         |               |    | Search Override   | |   Dedupe Staging        |  | 
+             |  |         |               |    +--------^----------+ +----------^--------------+  | 
+             |  |         |               |             |                       |                 | 
+             |  |    (Raw Media)     (Raw Media)   (Media IDs)           (Artefact-Linkage)       | 
+             |  |    (& Metadata)    (/Text Query)      |                       |                 | 
+	     | 	|      	  |    	       	  |    	       	|      	       	       	|      	       	  | 
+             |  |         |               |    +--------+----------+ +----------+--------------+  | 
+             |  |         |               |    | Search Re-Ranking | |    Dedupe Clustering    |  | 
+             |  |         |               |    +--------^----------+ +----------^--------------+  | 
+             |  |         |               |             |                       |                 | 
+mc_models.py<   |         |               |             |               (Pair IDs+Split/Merge)    | 
+             |  |         |               |             |                       |                 | 
+             |  |         v               v             ^                       |                 | 
+             |  |         |               |             |            +----------+--------------+  | 
+             |  |         |               |             |            |  Dedupe Pairwise Model  |  | 
+             |  |         |               |             |            +----------^--------------+  | 
+             |  |         |               |             |                       |                 | 
+             |  |    (Raw Media)     (Raw Media)   (Media IDs)        (IDs for Candidate Groups)  | 
+             |  |    (& Metadata)    (/Text Query)      |                       |                 | 
+             |  |         |               |             |                       |                 | 
+             |  |         |               |             |            +----------+--------------+  | 
+             |  |         |               |             |            |   Dedupe All-vs-All NN  |  | 
+             |  |         |               |             |            +-----+------------^------+  | 
+             |  |         |               |             |                  |            |         | 
+              \ |         |               |             |                  |            |         | 
+                |         v               v             ^                  v            ^         | 
+              / |         |               |             |                  |            |         | 
+             |  |  +------v---------------v--+          |                  |            |         | 
+             |  |  |   Generate Features     |          |                  |            |         | 
+             |  |  +------+---------------+--+          |                  |            |         | 
+             |  |         |               |             |                  |            |         | 
              |  |  (Descriptors)   (Descriptors)   (Media IDs)        (Media IDs)  (Media IDs)    |
              |  |         |               |             |                  |            |         |
              |  |  +------v---------------v--+          |                  |            |         |
