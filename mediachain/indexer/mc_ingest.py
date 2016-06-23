@@ -394,44 +394,60 @@ def ingest_bulk_blockchain(last_block_ref = None,
                                                            )
 
         for art in tc.canonical_stream():
+            try:
+                print 'GOT',art.get('type')
 
-            print 'GOT',art.get('type')
+                if art['type'] != u'artefact':
+                    continue
 
-            if art['type'] != u'artefact':
-                continue
+                meta = art['meta']['data']
 
-            meta = art['meta']['data']
+                rh = {}
 
-            rh = {}
+                ## Copy these keys in from meta. Use tuples to rename keys. Keys can be repeated:
 
-            ## Copy these keys in from meta. Use tuples to rename keys. Keys can be repeated:
+                for kk in [u'caption', u'date_created', u'title', u'artist',
+                           u'keywords', u'collection_name', u'editorial_source',
+                           '_id',
+                           ('_id','getty_id'),
+                           ('thumbnail_base64','image_thumb'),
+                           ]:
 
-            for kk in [u'caption', u'date_created', u'title', u'artist',
-                       u'keywords', u'collection_name', u'editorial_source',
-                       '_id',
-                       ('_id','getty_id'),
-                       ('thumbnail_base64','image_thumb'),
-                       ]:
+                    if type(kk) == tuple:
+                        rh[kk[1]] = meta[kk[0]]
+                    elif kk == u'keywords':
+                        rh[kk] = ' '.join(meta[kk])
+                    else:
+                        rh[kk] = meta[kk]
 
-                if type(kk) == tuple:
-                    rh[kk[1]] = meta[kk[0]]
-                elif kk == u'keywords':
-                    rh[kk] = ' '.join(meta[kk])
+                #TODO: Phase out `rawRef`:
+                if 'raw_ref' in art['meta']:
+                    raw_ref = art['meta']['raw_ref']
+                elif 'rawRef' in art['meta']:
+                    raw_ref = art['meta']['rawRef']
                 else:
-                    rh[kk] = meta[kk]
-            
-            rh['latest_ref'] = base58.b58encode((art['meta'].get('raw_ref') or
-                                                 art['meta'].get('rawRef'))[u'@link']) #TODO: Phase out rawRef.
-            
-            ## TODO - use different created date?:
-            rh['date_created'] = date_parser.parse(art['meta']['translatedAt']) 
-            
-            rhc = rh.copy()
-            if 'img_data' in rhc:
-                del rhc['img_data']
-            print 'INSERT',rhc
-            
-            yield rh
+                    assert False,('RAW_REF',repr(art)[:500])
+                
+                rh['latest_ref'] = base58.b58encode(raw_ref[u'@link'])
+
+                ## TODO - use different created date?:
+                rh['date_created'] = date_parser.parse(art['meta']['translatedAt']) 
+
+                rhc = rh.copy()
+                if 'img_data' in rhc:
+                    del rhc['img_data']
+                print 'INSERT',rhc
+                
+                yield rh
+            except:
+                print '!!!ARTEFACT PARSING ERROR:'
+                print repr(art)
+                print 'TRACEBACK:'
+                import traceback, sys, os
+                for line in traceback.format_exception(*sys.exc_info()):
+                    print line,
+                print 'PRESS ENTER...'
+                raw_input()
         
         print 'END ITER'
     
