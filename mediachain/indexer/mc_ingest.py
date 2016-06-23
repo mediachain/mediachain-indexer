@@ -596,7 +596,31 @@ def search_by_image(limit = 5,
     
     print pretty_print(hh)
     
+
+def delete_index(index_name = mc_config.MC_INDEX_NAME):
+    print('DELETE_INDEX',index_name)
     
+    if mc_config.LOW_LEVEL:
+        es = mc_neighbors.low_level_es_connect()
+        
+        if es.indices.exists(index_name):
+            es.indices.delete(index = index_name)
+        
+    else:
+        #NOT LOW_LEVEL:
+        nes = mc_neighbors.high_level_connect(index_name = index_name,
+                                              doc_type = doc_type,
+                                              index_settings = index_settings,
+                                              use_custom_parallel_bulk = use_aggressive,
+                                              )
+        
+        nes.delete_index()
+    
+    print ('DELETED')
+        
+    
+
+
     
     
 def config():
@@ -606,6 +630,7 @@ functions=['ingest_bulk_blockchain',
            'ingest_bulk_gettydump',
            'search_by_image',
            'config',
+           'delete_index',
            ]
 
 def main():
