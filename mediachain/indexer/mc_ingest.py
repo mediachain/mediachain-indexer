@@ -431,7 +431,15 @@ def ingest_bulk_blockchain(last_block_ref = None,
                 rh['latest_ref'] = base58.b58encode(raw_ref[u'@link'])
 
                 ## TODO - use different created date?:
-                rh['date_created'] = date_parser.parse(art['meta']['translatedAt']) 
+
+                if 'translated_at' in art['meta']:
+                    xx = art['meta']['translated_at']
+                elif 'translatedAt' in art['meta']:
+                    xx = art['meta']['translatedAt']
+                else:
+                    assert False,'translatedAt'
+                
+                rh['date_created'] = date_parser.parse(xx) 
 
                 rhc = rh.copy()
                 if 'img_data' in rhc:
