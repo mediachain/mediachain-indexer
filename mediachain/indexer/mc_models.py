@@ -555,14 +555,17 @@ def dedupe_reindex(lookup_name = False,
         
         doc_update = {}
 
-        doc_update.update(vmodel.img_to_terms(hh['image_thumb']))
-        
-        rr.append({'_op_type': 'update',
-                   '_index': index_name,
-                   '_type': doc_type,
-                   '_id': hit['_id'],
-                   'body': {'doc':doc_update},
-                   })
+        if 'image_thumb' in hh:
+            doc_update.update(vmodel.img_to_terms(hh['image_thumb']))
+
+            ## For now, only bother if there was an image:
+            
+            rr.append({'_op_type': 'update',
+                       '_index': index_name,
+                       '_type': doc_type,
+                       '_id': hit['_id'],
+                       'body': {'doc':doc_update},
+                       })
                 
         #print ('ADD',c) #rr
         
