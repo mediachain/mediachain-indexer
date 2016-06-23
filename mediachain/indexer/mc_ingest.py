@@ -270,7 +270,10 @@ def ingest_bulk(iter_json = False,
                                              vectors_model = name,
                                              )
             except:
-                print 'REINDEX_ERROR'
+                print '!!! REINDEX_ERROR:'
+                import traceback, sys, os
+                for line in traceback.format_exception(*sys.exc_info()):
+                    print line,
             
             print 'REFRESHED'
         
@@ -430,8 +433,7 @@ def ingest_bulk_blockchain(last_block_ref = None,
                 
                 rh['latest_ref'] = base58.b58encode(raw_ref[u'@link'])
 
-                ## TODO - use different created date?:
-
+                ## TODO - use different created date? Phase out `translatedAt`:
                 if 'translated_at' in art['meta']:
                     xx = art['meta']['translated_at']
                 elif 'translatedAt' in art['meta']:
