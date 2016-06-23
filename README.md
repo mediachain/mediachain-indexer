@@ -292,47 +292,47 @@ mc_ingest.py<   |  | Media Ingestion |    v             ^                       
                 |         |          (Raw Media)   (Media IDs)         (Artefact-Linkage)         |
               / |         |               |             |                       |                 |
              |  |         |         +-----v-------------+----------+            |                 |
- mc_web.py  <   |         v         |      HTTP Search API         |            |                 |
-             |  |         |         +-----+-------------^----------+            ^                 |
+ mc_web.py  <   |         v         |      HTTP Search API         |            ^                 |
+             |  |         |         +-----+-------------^----------+            |                 |
               \ |         |               |             |                       |                 |
                 |         |               |        (Media IDs)                  |                 |
               / |         |               |             |                       |                 |
              |  |         |               |    +--------+----------+ +----------+--------------+  |
              |  |         |               |    | Search Override   | |   Dedupe Staging        |  |
              |  |         |               |    +--------^----------+ +----------^--------------+  |
-             |  |    (Raw Media)          |             |                       |                 |
-             |  |         |               v        (Media IDs)           (Artefact-Linkage)       |
+             |  |         |               |             |                       |                 |
+             |  |    (Raw Media)     (Raw Media)   (Media IDs)           (Artefact-Linkage)       |
              |  |         |               |             |                       |                 |
              |  |         |               |    +--------+----------+ +----------+--------------+  |
              |  |         |               |    | Search Re-Ranking | |    Dedupe Clustering    |  |
              |  |         |               |    +--------^----------+ +----------^--------------+  |
              |  |         |               |             |                       |                 |
 mc_models.py<   |         |               |             |               (Pair IDs+Split/Merge)    |
-             |  |         |          (Raw Media         |                       |                 |
+             |  |         |               |             |                       |                 |
+             |  |         v               v             ^                       |                 |
+             |  |         |               |             |            +----------+--------------+  |
+             |  |         |               |             |            |  Dedupe Pairwise Model  |  |
+             |  |         |               |             |            +----------^--------------+  |
+             |  |         |               |             |                       |                 |
+             |  |    (Raw Media)     (Raw Media)   (Media IDs)        (IDs for Candidate Groups)  |
+             |  |         |               |             |                       |                 |
              |  |         |               |             |                       |                 |
              |  |         |               |             |            +----------+--------------+  |
-             |  |         |               |             ^            |  Dedupe Pairwise Model  |  |
-             |  |         v               |             |            +----------^--------------+  |
-             |  |         |               |             |                       |                 |
-             |  |         |               |             |             (IDs for Candidate Groups)  |
-             |  |         |               |             |                       |                 |
-             |  |         |               v             |                       |                 |
-             |  |         |               |             |            +----------+--------------+  |
-             |  |         |               |        (Media IDs)       |   Dedupe All-vs-All NN  |  |
+             |  |         |               |             |            |   Dedupe All-vs-All NN  |  |
              |  |         |               |             |            +-----+------------^------+  |
-             |  |         |               |             |                  |            |         |
+             |  |         v               v             ^                  |            |         |
               \ |         |               |             |                  |            |         |
                 |         |               |             |                  |            |         |
               / |         |               |             |                  v            ^         |
              |  |  +------v---------------v--+          |                  |            |         |
-             |  |  |  Generate Features      |          |                  |            |         |
+             |  |  |   Generate Features     |          |                  |            |         |
              |  |  +------+---------------+--+          |                  |            |         |
-             |  |         |               |             ^             (Media IDs)  (Media IDs)    |
-             |  |   (Descriptors)         |             |                  |            |         |
+             |  |         |               |             |                  |            |         |
+             |  |  (Descriptors)   (Descriptors)   (Media IDs)        (Media IDs)  (Media IDs)    |
              |  |         |               |             |                  |            |         |
              |  |  +------v---------------v--+          |                  |            |         |
-mc_neighbors<   |  |  Feature Compacting     |          |                  |            |         |
-   .py       |  |  +------+---------------+--+          |                  v            ^         |
+mc_neighbors<   |  |   Feature Compacting    |          |                  |            |         |
+   .py       |  |  +------+---------------+--+          ^                  v            ^         |
              |  |         |               |             |                  |            |         |
              |  |    (Binary Codes) (Binary Codes)      |                  |            |         |
              |  |         |               |             |                  |            |         |
