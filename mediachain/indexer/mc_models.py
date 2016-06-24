@@ -538,9 +538,9 @@ def dedupe_reindex(lookup_name = False,
     
     ## Run first pass of dedupe:
     
-    print 'ABOUT_TO_INDEX_IMAGES:',len(res)
     
     for c,hit in enumerate(res):
+        print ('INDEXING_IMAGE:',c,repr(hit)[:50])
 
         ## Pre-populate these, for later:
         

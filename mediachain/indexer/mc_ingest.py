@@ -512,8 +512,8 @@ def ingest_bulk_blockchain(last_block_ref = None,
 
     
 def ingest_bulk_gettydump(max_num = 100000,
-                          #getty_path = 'getty_small/json/images/',
-                          getty_path = 'getty_archiv/json/images/',
+                          getty_path = 'getty_small/json/images/',
+                          #getty_path = 'getty_archiv/json/images/',
                           index_name = mc_config.MC_INDEX_NAME,
                           doc_type = mc_config.MC_DOC_TYPE,
                           *args,
