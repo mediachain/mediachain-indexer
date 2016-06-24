@@ -406,9 +406,9 @@ def ingest_bulk_blockchain(last_block_ref = None,
                 meta = art['meta']['data']
 
                 rh = {}
-
+                
                 ## Copy these keys in from meta. Use tuples to rename keys. Keys can be repeated:
-
+                
                 for kk in [u'caption', u'date_created', u'title', u'artist',
                            u'keywords', u'collection_name', u'editorial_source',
                            '_id',
@@ -476,6 +476,16 @@ def ingest_bulk_blockchain(last_block_ref = None,
         import traceback, sys, os
         for line in traceback.format_exception(*sys.exc_info()):
             print line,
+
+        if force_exit:
+            ## Force exit due to grpc bug:
+
+            print 'FORCE_EXIT'
+
+            sleep(1)
+
+            os._exit(-1)
+
             
     except BaseException as e:
         print '!!!CAUGHT OTHER ERROR',e
@@ -483,6 +493,16 @@ def ingest_bulk_blockchain(last_block_ref = None,
         import traceback, sys, os
         for line in traceback.format_exception(*sys.exc_info()):
             print line,
+            
+        if force_exit:
+            ## Force exit due to grpc bug:
+
+            print 'FORCE_EXIT'
+
+            sleep(1)
+
+            os._exit(-1)
+
     
     if auto_reindex:
         
@@ -490,15 +510,6 @@ def ingest_bulk_blockchain(last_block_ref = None,
         
         import mc_models
         mc_models.dedupe_reindex_all()
-
-    if force_exit:
-        ## Force exit due to grpc bug:
-
-        print 'FORCE_EXIT'
-        
-        sleep(1)
-
-        os._exit(-1)
 
     print 'DONE_INGEST',nn
 
