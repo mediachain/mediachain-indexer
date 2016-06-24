@@ -57,7 +57,7 @@ from elasticsearch.helpers import parallel_bulk, scan
 data_pat = 'data:image/jpeg;base64,'
 data_pat_2 = 'data:image/png;base64,'
 
-def shrink_and_encode_image(s, size = (255, 255)):
+def shrink_and_encode_image(s, size = (150, 150)):
     """
     Resize image to small size & base64 encode it.
     """

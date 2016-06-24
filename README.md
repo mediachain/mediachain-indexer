@@ -276,127 +276,126 @@ Args - passed as JSON-encoded body:
 
 ## Code Organization
 
-Horizontally split by the 3 modes of operation - ingestion, search, and dedupe.
+Horizontally - split by the 3 modes of operation: ingestion, search, and dedupe.
 
-Vertically split by components involved in each mode of operation, including the Indexer,
+Vertically - split by components involved in each mode of operation: the Indexer,
 [Core](https://github.com/mediachain/mediachain), Frontend, and [Client](https://github.com/mediachain/mediachain-client).
 
-		       	
-```                                                          
-                      INGESTION:                 SEARCH:                       DEDUPE:
-                 _______ ^ ______        __________ ^ ____________     __________ ^ _____________
-                /                \      /                         \   /                          \
-                                                             
-                +---------------------------------------------------------------------------------+
-                |                             End-User Web Browser                                |
-                +---------+---------------+--------^--------^-----------^-------------------------+
-                          |               |    (Typeahead)  |           |                      
-                          v               v    (Results)    ^           ^                      
-                    (Insert Media)    (Search)     | (Search Results) (Dupe or History Lookup) 
-                     (JSON/REST)     (JSON/REST)   |  (JSON/REST)     (JSON/REST)              
-                          v               v        ^        ^           ^
-                          |               |        |        |           |
-             /  +---------v---------------v--------^--------^-----------^-------------------------+
-            |   |         |               |        |        |           |            --frontend-- |
-            |   |  +------v---------------v--------+--------+-----------+---------------------+   |
-mediachain <    |  |                     Javascript/HTML Web App                              |   |
- -frontend  |   |  +------v---------------+--------^--------^-----------^---------------------+   |
-            |   |         |               |        |        |           |                         |
-             \  +---------v---------------v--------^--------^-----------^-------------------------+
-                          |               |        |        |           |
-                     (Raw Media)       (Search)(Typeahead)(Search)  (Dupe or History Lookup)
-                          |               |    (Results)  (Results)     |            
-             /  +---------v------------+  |        |        |           |
-mediachain  |   |         | --writer-- |  |        |        |           |
- -client    |   |  +------v--------+   |  |        |        |           |
-  writer   <    |  | Client Writer |   |  v        ^        ^           ^
-            |   |  +------+--------+   |  |        |        |           |
-            |   |         |            |  |        |        |           |
-             \  ----------+------------+  |        |        |           |
-                          |               |        |        |           |
-                    (copycat/gRPC)        |        |        |           |
-                          |               v        ^        ^           ^
-             /  +---------v------------+  |        |        |           | +-----------------------+
-            |   |         |   --core-- |  |        |        |           | |              --core-- |
-            |   |  +------v--------+   |  |        |        |           | |  +----------------+   |
-mediachain <    |  | Transactors   |   |  |        |        |           | |  | Transactors    |   |
- -core      |   |  +------+--------+   |  |        |        |           | |  +------^---------+   |
-(blockchain)|   |         |            |  |        |        |           | |         |             |
-             \  +---------+------------+  |        |        |           | +---------^-------------+
-                          |               |   (JSON/REST)   |           |           |
-                          v               v        ^        ^           ^           ^
-                     (copycat/gRPC)  (JSON/REST)   |   (JSON/REST) (JSON/REST)  (copycat/gRPC)
-                          |               |        |        |           |           |
-             /  +---------v------------+  |        |        |           | +---------^-------------+
-mediachain  |   |         | --reader-- |  |        |        |           | |         |  --writer-- |
- -client    |   |  +------v--------+   |  |        |        |           | | +-------+----------+  |
-  reader   <    |  | Client Reader |   |  v        ^        ^           | | | Client Writer    |  |
- & writer   |   |  +------+--------+   |  |        |        |           | | +-------^----------+  |
-            |   |         |            |  |        |        |           | |         |             |
-             \  ----------+------------+  |        |        |           | +---------^-------------+
-                          |               |   (JSON/REST)   |           |           |
-                          v               v        |        ^           ^           ^
-                     (copycat/gRPC)  (JSON/REST)   |   (JSON/REST) (JSON/REST) (Artefact-Linkage)
-                          |               |        |        |           |           |
-                +---------v---------------v--------^--------^-----------^-----------^-------------+
-              / |         |               |        |        |           |           | --indexer-- |
-             |  |  +------v----------+    |        |        |           |           |             |
-mc_ingest.py<   |  | Media Ingestion |    v        ^        ^           ^           ^             |
-             |  |  +------+----------+    |   (JSON/REST)   |           |           |             |
-              \ |         |               |        |        |           |           |             |
-                |         |          (Raw Media)   |   (Media IDs) (JSON/REST) (Artefact-Linkage) |
-              / |         |          (/Text Query) |   (Ranked)         |           |             |
-             |  |         |               |        |        |           |           |             |
-             |  |         |         +-----v--------+--------+------+    |           |             |
-mc_web.py   <   |         v         |  Search & Autocomplete API   |    ^           ^             |
-             |  |         |         +-----+-------------^----------+    |           |             |
-              \ |         |               |             |               |           |             |
-                |         |               |        (Media IDs)          |           |             |
-              / |         |               |        (Ranked)             |           |             |
-             |  |         |               |             |               |           |             |
-             |  |         |               |    +--------+----------+ +--+-----------+----------+  |
-             |  |         |               |    | Search Override   | |   Dedupe Staging        |  |
-             |  |         |               |    +--------^----------+ +----------^--------------+  |
-             |  |         |               |             |                       |                 |
-             |  |    (Raw Media)     (Raw Media)   (Media IDs)           (Artefact-Linkage)       |
-             |  |    (& Metadata)    (/Text Query) (Ranked)                     |                 |
-             |  |         |               |             |                       |                 |
-             |  |         |               |    +--------+----------+ +----------+--------------+  |
-             |  |         |               |    | Search Re-Ranking | |    Dedupe Clustering    |  |
-             |  |         |               |    +--------^----------+ +----------^--------------+  |
-             |  |         |               |             |                       |                 |
-mc_models.py<   |         |               |        (Media IDs)          (Pair IDs+Split/Merge)    |
-             |  |         |               |        (& More Scores)              |                 |
-             |  |         v               v             |                       |                 |
-             |  |         |               |    +--------+----------+ +----------+--------------+  |
-             |  |         |               |    |  Personalization  | |  Dedupe Pairwise Model  |  |
-             |  |         |               |    +--------^----------+ +----------^--------------+  |
-             |  |         |               |             |                       |                 |
-             |  |    (Raw Media)     (Raw Media)   (Media IDs)        (IDs for Candidate Groups)  |
-             |  |    (& Metadata)    (/Text Query) (& Ranked by)                |                 |
-             |  |         |               |        (Basic Scores)               |                 |
-             |  |         |               |             |            +----------+--------------+  |
-             |  |         |               |             |            |   Dedupe All-vs-All NN  |  |
-             |  |         |               |             |            +-----+------------^------+  |
-             |  |         |               |             |                  |            |         |
-              \ |         |               |             |                  |            |         |
-                |         v               v             ^                  v            ^         |
-              / |         |               |             |                  |            |         |
-             |  |  +------v---------------v--+          |                  |            |         |
-             |  |  |   Generate Features     |          |                  |            |         |
-             |  |  +------+---------------+--+          |                  |            |         |
-             |  |         |               |             |                  |            |         |
-             |  |  (Descriptors)   (Descriptors)   (Media IDs)        (Media IDs)  (Media IDs)    |
-             |  |         |               |        (& Ranked by)           |            |         |
-             |  |  +------v---------------v--+     (Basic Scores)          |            |         |
-mc_neighbors<   |  |   Feature Compacting    |          |                  |            |         |
-   .py       |  |  +------+---------------+--+          ^                  v            ^         |
-             |  |         |               |             |                  |            |         |
-             |  |    (Binary Codes) (Binary Codes)      |                  |            |         |
-             |  |         |               |             |                  |            |         |
-             |  |  +------v---------------v-------------+------------------v------------+------+  |
-             |  |  |                                KNN Index                                  |  |
-              \ |  +---------------------------------------------------------------------------+  |
-                +---------------------------------------------------------------------------------+
 
 ```
+                       INGESTION:                  DEDUPE:                      SEARCH:
+                 _________ ^ __________    __________ ^ _____________   __________ ^ ______________
+                /                      \  /                          \ /                           \
+                                                                     
+                +-----------------------------------------------------------------------------------+
+                |                             End-User Web Browser                                  |
+                +---------+----------------------------------+--^--------+--------^------^----------+
+                          |                                  |  |        |        |      |      
+                          v                                  |  |        v        ^      ^      
+                    (Insert Media)                          (Dupe)   (Search)(Typeahead)(Search)     
+                     (JSON/REST)                            (Lookups)    |   (Results)  (Results)    
+                          v                                  |  |        v        ^      ^           
+                          |                                  |  |        |        |      |           
+             /  +---------v----------------------------------v--^--------v--------^------^----------+
+            |   |         |                                  |  |        |        |      |-frontend-|
+            |   |  +------v----------------------------------v--^--------v--------+------+--------+ |
+mediachain <    |  |                         Javascript/HTML Web App                              | |
+ -frontend  |   |  +------v----------------------------------+--^--------+--------^------^--------+ |
+            |   |         |                                  |  |        |        |      |          |
+             \  +---------v----------------------------------v--^--------v--------^------^----------+
+                          |                                  |  |        |        |      |           
+                     (Raw Media)                            (Dupe)   (Search)(Typeahead)(Search)     
+                          |                                 (Lookups)    |   (Results)  (Results)    
+             /  +---------v-------------------------------+  |  |        |        |      |           
+mediachain  |   |         |                    --client-- |  |  |        |        |      |           
+ -client    |   |  +------v---------------------------+   |  |  |        |        |      |           
+  writer   <    |  |      Client Writer               |   |  v  ^        v        ^      ^           
+            |   |  +------+---------------------------+   |  |  |        |        |      |           
+            |   |         |                               |  |  |        |        |      |           
+             \  ----------v-------------------------------+  |  |        |        |      |           
+                          |                                  |  |        |        |      |           
+                    (copycat/gRPC)                           |  |        |        |      |           
+                          |                                  v  ^        v        ^      ^           
+             /  +---------v------------------------------+   |  |        |        |      |           
+            |   |         |                     --core-- |   |  |        |        |      |           
+            |   |  +------v---------------------------+  |   |  |        |        |      |           
+mediachain <    |  |            Transactors           |  |   |  |        |        |      |
+ -core      |   |  +------+---------------------------+  |   |  |        |        |      |
+(blockchain)|   |         |                              |   |  |        |        |      |
+             \  +---------+-----------------^------------+   |  |        |        |      |
+                          |                 |                |  |        |        |      |
+                          v                 |                v  ^        v        ^      ^
+                  (copycat/gRPC)     (copycat/gRPC)         (JSON/)   (JSON/)  (JSON/) (JSON/)
+                          |                 |               (REST)    (REST)   (REST)  (REST)
+             /  +---------v-----------------^------------+   |  |        |        |      |
+mediachain  |   |         |                 | --client-- |   |  |        |        |      |
+ -client    |   |  +------v---------------------------+  |   |  |        |        |      |
+  reader   <    |  |      Client Writer / Reader      |  |   v  ^        v        ^      ^
+ & writer   |   |  +------+-----------------^---------+  |   |  |        |        |      |
+            |   |         |                 |            |   |  |        |        |      |
+             \  ----------+-----------------^------------+   |  |        |        |      |
+                          |                 |                |  |        |        |      |
+                          v                 ^                |  |        v        ^      ^
+                     (copycat/gRPC)     (Artefact)         (JSON/)    (JSON/)  (JSON/) (JSON/)
+                          |             (Linkage)          (REST)     (REST)   (REST)  (REST)
+                +---------v-----------------^----------------v- ^--------v--------^------+----------+
+              / |         |                 |                |  |        |        |      | -indexer-|
+             |  |  +------v----------+      |                |  |        |        |      |          |
+mc_ingest.py<   |  | Media Ingestion |      ^                v  ^        v        ^      ^          |
+             |  |  +------+----------+      |                |  |        |   (JSON/REST) |          |
+              \ |         |                 |                |  |        |        |      |          |
+                |         |             (Artefact)         (Dupe)   (Raw Media)   |   (Media IDs)   |
+              / |         |             (Linkage)          (Lookups)(/Text Query) |   (Ranked)      |
+             |  |         |                 |                |  |        |        |      |          |
+             |  |         |                 |                |  |  +-----v--------+------+--------+ |
+mc_web.py   <   |         v                 ^                v  ^  |Search & Autocomplete REST API| |
+             |  |         |                 |                |  |  +-----+-------------^----------+ |
+              \ |         |                 |                |  |        |             |            |
+                |         |                 |                |  |        |        (Media IDs)       |
+              / |         |                 |                |  |        |        (Ranked)          |
+             |  |         |                 |                |  |        |             |            |
+             |  |         |              +--+----------------v--^--+     |    +--------+----------+ |
+             |  |         |              |   Dedupe Staging        |     |    | Search Override   | |
+             |  |         |              +----------^--------------+     |    +--------^----------+ |
+             |  |         |                         |                    |             |            |
+             |  |    (Raw Media)             (Artefact-Linkage)     (Raw Media)   (Media IDs)       |
+             |  |    (& Metadata)                   |               (/Text Query) (Ranked)          |
+             |  |         |                         |                    |             |            |
+             |  |         |              +----------+--------------+     |    +--------+----------+ |
+             |  |         |              |    Dedupe Clustering    |     |    | Search Re-Ranking | |
+             |  |         |              +----------^--------------+     |    +--------^----------+ |
+             |  |         |                         |                    |             |            |
+mc_models.py<   |         |                 (Pair IDs+Split/Merge)       |        (Media IDs)       |
+             |  |         |                         |                    |        (& More Scores)   |
+             |  |         v                         ^                    v             ^            |
+             |  |         |              +----------+--------------+     |    +--------+----------+ |
+             |  |         |              |  Dedupe Pairwise Model  |     |    |  Personalization  | |
+             |  |         |              +----------^--------------+     |    +--------^----------+ |
+             |  |         |                         |                    |             |            |
+             |  |    (Raw Media)          (IDs for Candidate Groups)(Raw Media)    (Media IDs)      |
+             |  |    (& Metadata)                   |               (/Text Query)  (& Ranked by)    |
+             |  |         |                         |                    |         (Basic Scores)   |
+             |  |         |              +----------+--------------+     |             |            |
+             |  |         |              |   Dedupe All-vs-All NN  |     |             |            |
+             |  |         |              +-----+-----------^-------+     |             |            |
+             |  |         |                    |           |             |             |            |
+              \ |         |                    |           |             |             |            |
+                |         v                    v           ^             v             ^            |
+              / |         |                    |           |             |             |            |
+             |  |  +------v-----------+        |           |      +------v-----------+ |            |
+             |  |  |Generate Features |        |           |      |Generate Features | |            |
+             |  |  +------+-----------+        |           |      +------+-----------+ |            |
+             |  |         |                    |           |             |         (Media IDs)      |
+             |  |   (Descriptors)          (Media IDs) (Media IDs) (Descriptors)   (& Ranked by)    |
+             |  |         |                    |           |             |         (Basic Scores)   |
+             |  |  +------v-----------+        |           |      +------v-----------+ |            |
+mc_neighbors<   |  |Feature Compacting|        |           |      |Feature Compacting| |            |
+   .py       |  |  +------+-----------+        v           ^      +------+-----------+ ^            |
+             |  |         |                    |           |             |             |            |
+             |  |   (Binary Codes)             |           |       (Binary Codes)      |            |
+             |  |         |                    |           |             |             |            |
+             |  |  +------v--------------------v-----------+-------------v-------------+----------+ |
+             |  |  |                                 KNN Index                                    | |
+              \ |  +------------------------------------------------------------------------------+ |
+                +-----------------------------------------------------------------------------------+
+```									  
