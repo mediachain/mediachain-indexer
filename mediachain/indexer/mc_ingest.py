@@ -399,7 +399,6 @@ def ingest_bulk_blockchain(last_block_ref = None,
             if just_tail:
                 print ('ART:',time(),art)
                 continue
-
             
             try:
                 print 'GOT',art.get('type')
