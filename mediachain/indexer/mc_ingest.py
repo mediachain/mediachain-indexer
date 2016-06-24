@@ -189,9 +189,7 @@ def ingest_bulk(iter_json = False,
 
             if (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
                 ## One-off ignoring of thumbnail generation via `NO_IMAGE`.
-
-                assert False,('NO_IMAGE',hh)
-                
+                                
                 if 'img_data' in hh:
                     del hh['img_data']
                 
