@@ -121,7 +121,11 @@ def ingest_bulk(iter_json = False,
     Examples:
         See `mc_test.py`
     """
-        
+    
+    if mc_config.MC_USE_IPFS_INT:
+        from mediachain.datastore import set_use_ipfs_for_raw_data
+        set_use_ipfs_for_raw_data(True)
+
     index_settings = {'settings': {'number_of_shards': mc_config.MC_NUMBER_OF_SHARDS_INT,
                                    'number_of_replicas': mc_config.MC_NUMBER_OF_REPLICAS_INT,                             
                                    },
@@ -527,11 +531,7 @@ def ingest_bulk_gettydump(max_num = 100000,
         index_name: Name of Indexer index to populate.
         doc_type:   Name of Indexer doc type.
     """
-    
-    if mc_config.MC_USE_IPFS_INT:
-        from mediachain.datastore import set_use_ipfs_for_raw_data
-        set_use_ipfs_for_raw_data(True)
-    
+        
     iter_json = mc_datasets.iter_json_getty(max_num = max_num,
                                             getty_path = getty_path,
                                             index_name = index_name,
