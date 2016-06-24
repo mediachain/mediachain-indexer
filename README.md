@@ -282,23 +282,23 @@ Vertically split by components involved in each mode of operation, including the
 [Core](https://github.com/mediachain/mediachain), Frontend, and [Client](https://github.com/mediachain/mediachain-client).
 
 		       	
-```
+```                                                          
                       INGESTION:                 SEARCH:                       DEDUPE:
                  _______ ^ ______        __________ ^ ____________     __________ ^ _____________
                 /                \      /                         \   /                          \
-                                                     
+                                                             
                 +---------------------------------------------------------------------------------+
                 |                             End-User Web Browser                                |
-                +---------+---------------+-----^-------^---------------^-------------------------+
-                          |               | (Typeahead) |               |
-                          v               v (Results)   ^               ^
-                    (Insert Media)    (Search)  | (Search Results)  (Dupe or History Lookup)
-                     (JSON/REST)     (JSON/REST)|  (JSON/REST)      (JSON/REST)
-                          v               v     ^       ^               ^
-                          |               |     |       |               |
-             /  +---------v---------------v-----^-------^---------------^-------------------------+
-            |   |         |               |     |       |               |            --frontend-- |
-            |   |  +------v---------------v-----+-------+---------------+---------------------+   |
+                +---------+---------------+--------^--------^-----------^-------------------------+
+                          |               |    (Typeahead)  |           |                      
+                          v               v    (Results)    ^           ^                      
+                    (Insert Media)    (Search)     | (Search Results) (Dupe or History Lookup) 
+                     (JSON/REST)     (JSON/REST)   |  (JSON/REST)     (JSON/REST)              
+                          v               v        ^        ^           ^
+                          |               |        |        |           |
+             /  +---------v---------------v--------^--------^-----------^-------------------------+
+            |   |         |               |        |        |           |            --frontend-- |
+            |   |  +------v---------------v--------+--------+-----------+---------------------+   |
 mediachain <    |  |                     Javascript/HTML Web App                              |   |
  -frontend  |   |  +------v---------------+--------^--------^-----------^---------------------+   |
             |   |         |               |        |        |           |                         |
