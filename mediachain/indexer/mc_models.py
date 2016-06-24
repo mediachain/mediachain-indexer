@@ -483,7 +483,7 @@ def dedupe_reindex(lookup_name = False,
             ii = nes.parallel_bulk(rrr)
         
         for is_success,res in ii:
-            #print is_success,res
+            print ('COMMITTED_VECTORS',is_success,res)
             pass
         
         rrr[:] = []
@@ -537,6 +537,8 @@ def dedupe_reindex(lookup_name = False,
     cur_cluster_id = [0]
     
     ## Run first pass of dedupe:
+    
+    print 'ABOUT_TO_INDEX_IMAGES:',len(res)
     
     for c,hit in enumerate(res):
 
