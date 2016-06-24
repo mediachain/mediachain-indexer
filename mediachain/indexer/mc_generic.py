@@ -253,6 +253,7 @@ def load_config(cfg,
         cfg.clear()
     cfg.update(hh)
 
+
     
 def config_env(cfg, glb):
     """
@@ -287,7 +288,8 @@ def config_env(cfg, glb):
             rh[k] = xx
     glb.update(rh)
 
-    
+    ## Load client config:
+        
 def print_config(cfg):
     """
     Pretty-print config of format {'section_title':{var_name:(var_value,'var_description')}}.

@@ -564,8 +564,8 @@ def iter_json_getty(max_num = 0,
             with open(fn) as f:
                 h = json.load(f)
 
-            #fn = dd3 + 'thumb/' + ('/'.join(h['id'][:4])) + '/' + h['id'] + '.jpg'
-            fn = dd3 + 'comp/' + ('/'.join(h['id'][:4])) + '/' + h['id'] + '.jpg'
+            fn = dd3 + 'thumb/' + ('/'.join(h['id'][:4])) + '/' + h['id'] + '.jpg'
+            #fn = dd3 + 'comp/' + ('/'.join(h['id'][:4])) + '/' + h['id'] + '.jpg'
 
             if not exists(fn):
                 print ('NOT_FOUND',fn)

@@ -20,7 +20,7 @@ import mc_config
 import mc_datasets
 import mc_neighbors
 
-from time import sleep
+from time import sleep,time
 import json
 import os
 from os.path import exists, join
@@ -94,7 +94,6 @@ def ingest_bulk(iter_json = False,
                 search_after = False,
                 redo_thumbs = True,
                 ignore_thumbs = False,
-                delete_current = True,
                 use_aggressive = True,
                 auto_reindex_blocked_wait = 5,
                 ):
@@ -111,7 +110,6 @@ def ingest_bulk(iter_json = False,
         search_after:   Manually inspect ingested records after. Probably not needed anymore.
         redo_thumbs:    Whether to recalcuate 'image_thumb' from 'img_data'.
         ignore_thumbs:  Whether to ignore thumbnail generation entirely.
-        delete_current: Whether to delete current index, if it exists.
         use_aggressive: Use slow inserter that immediately indexes & refreshes after each item.
         auto_reindex_blocked_wait: Since the input iterator may block, if `auto_reindex` is on, and the - TODO.
     
@@ -151,11 +149,6 @@ def ingest_bulk(iter_json = False,
     if mc_config.LOW_LEVEL:
         es = mc_neighbors.low_level_es_connect()
     
-        if delete_current and es.indices.exists(index_name):
-            print ('DELETE_INDEX...', index_name)
-            es.indices.delete(index = index_name)
-            print ('DELETED')
-
         if not es.indices.exists(index_name):
             print ('CREATE_INDEX...',index_name)
             es.indices.create(index = index_name,
@@ -171,10 +164,7 @@ def ingest_bulk(iter_json = False,
                                               index_settings = index_settings,
                                               use_custom_parallel_bulk = use_aggressive,
                                               )
-        
-        if delete_current:
-            nes.delete_index()
-        
+                
         nes.create_index()
             
     print('INSERTING...')
@@ -355,12 +345,19 @@ EXPECTED ARTEFACT FORMAT:
   u'type': u'artefact'}
 """
 
+
+def tail_blockchain():
+    """
+    Watch blocks arrive from blockchain.
+    """
+    ingest_bulk_blockchain(just_tail = True)
+    
 def ingest_bulk_blockchain(last_block_ref = None,
-                           delete_current = True,
                            index_name = mc_config.MC_INDEX_NAME,
                            doc_type = mc_config.MC_DOC_TYPE,
                            auto_reindex = True,
                            force_exit = True,
+                           just_tail = False,
                            ):
     """
     Ingest media from Mediachain blockchain.
@@ -387,7 +384,7 @@ def ingest_bulk_blockchain(last_block_ref = None,
                'aws_secret_access_key': mc_config.MC_AWS_SECRET_ACCESS_KEY,
                'region_name': mc_config.MC_REGION_NAME,
                }
-
+    
     aws_cfg = dict((k, v) for k, v in aws_cfg.iteritems() if v is not None)
     set_aws_config(aws_cfg)
     
@@ -399,9 +396,14 @@ def ingest_bulk_blockchain(last_block_ref = None,
                                                            mc_config.MC_TRANSACTOR_PORT_INT,
                                                            )
         for art in tc.canonical_stream(timeout=600):
+            if just_tail:
+                print ('ART:',time(),art)
+                continue
+
+            
             try:
                 print 'GOT',art.get('type')
-
+                
                 if art['type'] != u'artefact':
                     continue
 
@@ -462,12 +464,15 @@ def ingest_bulk_blockchain(last_block_ref = None,
                 raw_input()
         
         print 'END ITER'
-    
+
+    if just_tail:
+        list(the_gen())
+        return
+        
     try:
         nn = ingest_bulk(iter_json = the_gen(),
                          #index_name = index_name,
                          #doc_type = doc_type,
-                         delete_current = False,
                          )
         
         print 'GRPC EXITED SUCCESSFULLY...'
@@ -517,8 +522,7 @@ def ingest_bulk_blockchain(last_block_ref = None,
 
     
 def ingest_bulk_gettydump(max_num = 100000,
-                          getty_path = 'getty_small/json/images/',
-                          #getty_path = 'getty_archiv/json/images/',
+                          getty_path = False,
                           index_name = mc_config.MC_INDEX_NAME,
                           doc_type = mc_config.MC_DOC_TYPE,
                           *args,
@@ -527,11 +531,18 @@ def ingest_bulk_gettydump(max_num = 100000,
     Ingest media from Getty data dumps into Indexer.
     
     Args:
-        getty_path: Path to getty image JSON.
+        getty_path: Path to getty image JSON. `False` to get path from command line args.
         index_name: Name of Indexer index to populate.
         doc_type:   Name of Indexer doc type.
     """
-        
+    
+    if getty_path is False:
+        if len(sys.argv) < 3:
+            print 'Usage: mediachain-indexer-ingest ingest_bulk_gettydump getty_directory_name'
+            exit(-1)
+            
+        getty_path = sys.argv[2]
+    
     iter_json = mc_datasets.iter_json_getty(max_num = max_num,
                                             getty_path = getty_path,
                                             index_name = index_name,
@@ -618,11 +629,7 @@ def delete_index(index_name = mc_config.MC_INDEX_NAME):
         nes.delete_index()
     
     print ('DELETED')
-        
-    
 
-
-    
     
 def config():
     print_config(mc_config.cfg)
@@ -632,6 +639,7 @@ functions=['ingest_bulk_blockchain',
            'search_by_image',
            'config',
            'delete_index',
+           'tail_blockchain',
            ]
 
 def main():
