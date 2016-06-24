@@ -276,78 +276,79 @@ Args - passed as JSON-encoded body:
 
 ## Code Organization
 
-Top: The 3 modes of operation - ingestion, search, and dedupe.
+Horizontally split by the 3 modes of operation - ingestion, search, and dedupe.
 
-Side: Components and connections involved in each mode of operation, including the external
-[core](https://github.com/mediachain/mediachain), frontend, and [client](https://github.com/mediachain/mediachain-client)
-components.
+Vertically split by components involved in each mode of operation, including the Indexer,
+[Core](https://github.com/mediachain/mediachain), Frontend, and [Client](https://github.com/mediachain/mediachain-client).
 
-
+		       	
 ```
                       INGESTION:                 SEARCH:                       DEDUPE:
                  _______ ^ ______        __________ ^ ____________     __________ ^ _____________
                 /                \      /                         \   /                          \
-                                                                   
+                                                     
                 +---------------------------------------------------------------------------------+
                 |                             End-User Web Browser                                |
-                +---------+---------------+-------------^---------------^-------------------------+
-                          |               |             |               |
-                          v               v             ^               ^
-                    (Insert Media)    (Search)    (Search Results)  (Dupe or History Lookup)
-                     (JSON/REST)     (JSON/REST)   (JSON/REST)      (JSON/REST)
-                          v               v             ^               ^
-                          |               |             |               |
-             /            |     +---------+-------------+------------+  |
-            |             |     |         |             |--frontend--|  |
-            |             |     |  +------------------------------+  |  |
-mediachain <              |     |  |    Javascript/HTML Web App   |  |  |
- -frontend  |             |     |  +------+-------------^---------+  |  |
-            |             |     |         |             |            |  |
-             \            |     +---------+-------------+------------+  |
-                          |               |             |               |
-                          |               |             |               |
-             /  +---------v------------+  |             |               |
-mediachain  |   |         | --writer-- |  |             |               |
- -client    |   |  +------v--------+   |  |             |               |
-  writer   <    |  | Client Writer |   |  v             ^               ^
-            |   |  +------+--------+   |  |             |               |
-            |   |         |            |  |             |               |
-             \  ----------+------------+  |             |               |
-                          |               |             |               |
-                          |               v             ^               ^
-             /  +---------v------------+  |             |               | +-----------------------+
-            |   |         |   --core-- |  |             |               | |              --core-- |
-            |   |  +------v--------+   |  |             |               | |  +----------------+   |
-mediachain <    |  | Transactors   |   |  |             |               | |  | Transactors    |   |
- -core      |   |  +------+--------+   |  |             |               | |  +------^---------+   |
-            |   |         |            |  |             |               | |         |             |
-             \  +---------+------------+  |             |               | +---------^-------------+
-                          |               |             |               |           |
-                          v               v             ^               ^           ^
-                     (copycat/gRPC)  (JSON/REST)   (JSON/REST)     (JSON/REST)  (copycat/gRPC)
-                          |               |             |               |           |
-             /  +---------v------------+  |             |               | +---------^-------------+
-mediachain  |   |         | --reader-- |  |             |               | |         |  --writer-- |
- -client    |   |  +------v--------+   |  |             |               | | +-------+----------+  |
-  reader   <    |  | Client Reader |   |  v             ^               | | | Client Writer    |  |
- & writer   |   |  +------+--------+   |  |             |               | | +-------^----------+  |
-            |   |         |            |  |             |               | |         |             |
-             \  ----------+------------+  |             |               | +---------^-------------+
-                          |               |             |               |           |
-                          v               v             ^               ^           ^
-                     (copycat/gRPC)  (JSON/REST)   (JSON/REST)     (JSON/REST) (Artefact-Linkage)
-                          |               |             |               |           |
-                +---------v---------------v-------------^---------------^-----------^-------------+
-              / |         |               |             |               |           | --indexer-- |
-             |  |  +------v----------+    |             |               |           |             |
-mc_ingest.py<   |  | Media Ingestion |    v             ^               ^           ^             |
-             |  |  +------+----------+    |             |               |           |             |
-              \ |         |               |             |               |           |             |
-                |         |          (Raw Media)   (Media IDs)     (JSON/REST) (Artefact-Linkage) |
-              / |         |          (/Text Query) (Ranked)             |           |             |
-             |  |         |               |             |               |           |             |
-             |  |         |         +-----v-------------+----------+    |           |             |
-mc_web.py   <   |         v         |      HTTP Search API         |    ^           ^             |
+                +---------+---------------+-----^-------^---------------^-------------------------+
+                          |               | (Typeahead) |               |
+                          v               v (Results)   ^               ^
+                    (Insert Media)    (Search)  | (Search Results)  (Dupe or History Lookup)
+                     (JSON/REST)     (JSON/REST)|  (JSON/REST)      (JSON/REST)
+                          v               v     ^       ^               ^
+                          |               |     |       |               |
+             /  +---------v---------------v-----^-------^---------------^-------------------------+
+            |   |         |               |     |       |               |            --frontend-- |
+            |   |  +------v---------------v-----+-------+---------------+---------------------+   |
+mediachain <    |  |                     Javascript/HTML Web App                              |   |
+ -frontend  |   |  +------v---------------+--------^--------^-----------^---------------------+   |
+            |   |         |               |        |        |           |                         |
+             \  +---------v---------------v--------^--------^-----------^-------------------------+
+                          |               |        |        |           |
+                     (Raw Media)       (Search)(Typeahead)(Search)  (Dupe or History Lookup)
+                          |               |    (Results)  (Results)     |            
+             /  +---------v------------+  |        |        |           |
+mediachain  |   |         | --writer-- |  |        |        |           |
+ -client    |   |  +------v--------+   |  |        |        |           |
+  writer   <    |  | Client Writer |   |  v        ^        ^           ^
+            |   |  +------+--------+   |  |        |        |           |
+            |   |         |            |  |        |        |           |
+             \  ----------+------------+  |        |        |           |
+                          |               |        |        |           |
+                    (copycat/gRPC)        |        |        |           |
+                          |               v        ^        ^           ^
+             /  +---------v------------+  |        |        |           | +-----------------------+
+            |   |         |   --core-- |  |        |        |           | |              --core-- |
+            |   |  +------v--------+   |  |        |        |           | |  +----------------+   |
+mediachain <    |  | Transactors   |   |  |        |        |           | |  | Transactors    |   |
+ -core      |   |  +------+--------+   |  |        |        |           | |  +------^---------+   |
+(blockchain)|   |         |            |  |        |        |           | |         |             |
+             \  +---------+------------+  |        |        |           | +---------^-------------+
+                          |               |   (JSON/REST)   |           |           |
+                          v               v        ^        ^           ^           ^
+                     (copycat/gRPC)  (JSON/REST)   |   (JSON/REST) (JSON/REST)  (copycat/gRPC)
+                          |               |        |        |           |           |
+             /  +---------v------------+  |        |        |           | +---------^-------------+
+mediachain  |   |         | --reader-- |  |        |        |           | |         |  --writer-- |
+ -client    |   |  +------v--------+   |  |        |        |           | | +-------+----------+  |
+  reader   <    |  | Client Reader |   |  v        ^        ^           | | | Client Writer    |  |
+ & writer   |   |  +------+--------+   |  |        |        |           | | +-------^----------+  |
+            |   |         |            |  |        |        |           | |         |             |
+             \  ----------+------------+  |        |        |           | +---------^-------------+
+                          |               |   (JSON/REST)   |           |           |
+                          v               v        |        ^           ^           ^
+                     (copycat/gRPC)  (JSON/REST)   |   (JSON/REST) (JSON/REST) (Artefact-Linkage)
+                          |               |        |        |           |           |
+                +---------v---------------v--------^--------^-----------^-----------^-------------+
+              / |         |               |        |        |           |           | --indexer-- |
+             |  |  +------v----------+    |        |        |           |           |             |
+mc_ingest.py<   |  | Media Ingestion |    v        ^        ^           ^           ^             |
+             |  |  +------+----------+    |   (JSON/REST)   |           |           |             |
+              \ |         |               |        |        |           |           |             |
+                |         |          (Raw Media)   |   (Media IDs) (JSON/REST) (Artefact-Linkage) |
+              / |         |          (/Text Query) |   (Ranked)         |           |             |
+             |  |         |               |        |        |           |           |             |
+             |  |         |         +-----v--------+--------+------+    |           |             |
+mc_web.py   <   |         v         |  Search & Autocomplete API   |    ^           ^             |
              |  |         |         +-----+-------------^----------+    |           |             |
               \ |         |               |             |               |           |             |
                 |         |               |        (Media IDs)          |           |             |
