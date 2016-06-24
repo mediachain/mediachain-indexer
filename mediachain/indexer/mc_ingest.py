@@ -269,11 +269,7 @@ def ingest_bulk(iter_json = False,
             
             try:
                 import mc_models
-                for name in mc_models.VECTORS_MODEL_NAMES:
-                    mc_models.dedupe_reindex(index_name = xindex,
-                                             doc_type = xtype,
-                                             vectors_model = name,
-                                             )
+                mc_models.dedupe_reindex_all()
             except:
                 print '!!! REINDEX_ERROR:'
                 import traceback, sys, os
@@ -493,11 +489,7 @@ def ingest_bulk_blockchain(last_block_ref = None,
         print 'AUTO_REINDEX...'
         
         import mc_models
-        for name in mc_models.VECTORS_MODEL_NAMES:
-            mc_models.dedupe_reindex(index_name = index_name,
-                                     doc_type = doc_type,
-                                     vectors_model = name,
-                                     )    
+        mc_models.dedupe_reindex_all()
 
     if force_exit:
         ## Force exit due to grpc bug:
@@ -543,12 +535,7 @@ def ingest_bulk_gettydump(max_num = 100000,
     ## TODO: automatically do this for now, so we don't forget:
     
     import mc_models
-    for name in mc_models.VECTORS_MODEL_NAMES:
-        mc_models.dedupe_reindex(index_name = index_name,
-                                 doc_type = doc_type,
-                                 vectors_model = name,
-                                 )
-            
+    mc_models.dedupe_reindex_all()
 
 
 
