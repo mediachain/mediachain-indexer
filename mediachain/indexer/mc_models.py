@@ -381,12 +381,14 @@ PAIRWISE_MODEL_NAMES = {## For now, reusing the vector models, which have basic 
                         }
 
 
-def dedupe_reindex_all():
+def dedupe_reindex_all(do_models = ['baseline'],
+                       #do_models = VECTORS_MODEL_NAMES,
+                       ):
     """
     Convenience function to re-run all the major models with one call.
     """
     
-    for name in VECTORS_MODEL_NAMES:
+    for name in do_models:
         dedupe_reindex(vectors_model = name,
                        index_name = mc_config.MC_INDEX_NAME,
                        doc_type = mc_config.MC_DOC_TYPE,
@@ -483,7 +485,7 @@ def dedupe_reindex(lookup_name = False,
             ii = nes.parallel_bulk(rrr)
         
         for is_success,res in ii:
-            print ('COMMITTED_VECTORS',is_success,res)
+            #print ('COMMITTED_VECTORS',is_success,res)
             pass
         
         rrr[:] = []

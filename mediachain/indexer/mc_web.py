@@ -297,9 +297,9 @@ class handle_search(BaseHandler):
             ## Return all:
             
             rr = yield self.es.search(index = index_name,
-                                          type = doc_type,
-                                          source = {"query": {"match_all": {}}}
-                                          )
+                                      type = doc_type,
+                                      source = {"query": {"match_all": {}}}
+                                      )
             rr = json.loads(rr.body)
             rr = rr['hits']['hits']
             rr = {'results':rr,
@@ -323,6 +323,8 @@ class handle_search(BaseHandler):
                 #Resolve ID(s) for query based on content.
                 #Note that this is similar to `/dupe_lookup` with `include_docs` = True:
                 
+                print ('CONTENT-BASED-SEARCH',q_id[:50])
+                
                 model = mc_models.VECTORS_MODEL_NAMES['baseline']()
                 
                 terms = model.img_to_terms(q_id)
@@ -331,7 +333,7 @@ class handle_search(BaseHandler):
                                           type = doc_type,
                                           source = {"query": {"constant_score":{"filter":{"term": terms}}}},
                                           )
-                
+               
                 rr = json.loads(rr.body)
                 
                 rr = [x['_id'] for x in rr['hits']['hits']]
@@ -340,6 +342,8 @@ class handle_search(BaseHandler):
                 
             else:
                 #ID-based search:
+
+                print ('ID-BASED-SEARCH', q_id)
                 query = {"query":{ "ids": { "values": [ q_id ] } } }
 
         elif q_text:
@@ -361,10 +365,12 @@ class handle_search(BaseHandler):
                                   type = doc_type,
                                   source = query,
                                   )
-        
+        print ('RR',rr)
         hh = json.loads(rr.body)
 
         rr = hh['hits']['hits']
+
+        print ('QUERY GOT',rr)
         
         if not include_docs:
             
@@ -379,11 +385,7 @@ class handle_search(BaseHandler):
                 for x in rr:
                     if 'image_thumb' in x:
                         del x['image_thumb']
-        
-        if False:
-            rr = [x['_source'] for x in rr]
-
-        
+                
         # Remove terms from `dedupe_` models:
         for xx in rr:
             xx['_source']  = {x:y
