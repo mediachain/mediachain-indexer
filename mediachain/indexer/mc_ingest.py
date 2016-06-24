@@ -96,6 +96,7 @@ def ingest_bulk(iter_json = False,
                 ignore_thumbs = False,
                 delete_current = True,
                 use_aggressive = True,
+                auto_reindex_blocked_wait = 5,
                 ):
     """
     Ingest Getty dumps from JSON files.
@@ -112,7 +113,8 @@ def ingest_bulk(iter_json = False,
         ignore_thumbs:  Whether to ignore thumbnail generation entirely.
         delete_current: Whether to delete current index, if it exists.
         use_aggressive: Use slow inserter that immediately indexes & refreshes after each item.
-
+        auto_reindex_blocked_wait: Since the input iterator may block, if `auto_reindex` is on, and the - TODO.
+    
     Returns:
         Number of inserted records.
 
@@ -187,6 +189,9 @@ def ingest_bulk(iter_json = False,
 
             if (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
                 ## One-off ignoring of thumbnail generation via `NO_IMAGE`.
+
+                assert False,('NO_IMAGE',hh)
+                
                 if 'img_data' in hh:
                     del hh['img_data']
                 
@@ -367,7 +372,7 @@ def ingest_bulk_blockchain(last_block_ref = None,
         index_name:      Name of Indexer index to populate.
         doc_type:        Name of Indexer doc type.
         auto_reindex:    Automatically reindex upon completion. TODO: Reindex periodically instead of waiting for iterator exit?
-        force_exit:      Force exit interpreter upon completion. Workaround for gPRC bug that prevents the process from exiting.
+        force_exit:      Force exit interpreter upon completion. Workaround for gPRC bug that prevents the process from exiting.                           
     """
     
     import mediachain.transactor.client
@@ -469,29 +474,30 @@ def ingest_bulk_blockchain(last_block_ref = None,
         
         print 'GRPC EXITED SUCCESSFULLY...'
 
-        if auto_reindex:
-
-            print 'AUTO_REINDEX...'
-            
-            import mc_models
-            for name in mc_models.VECTORS_MODEL_NAMES:
-                mc_models.dedupe_reindex(index_name = index_name,
-                                         doc_type = doc_type,
-                                         vectors_model = name,
-                                         )    
     except grpc_errors as e:
         print '!!!CAUGHT gRPC ERROR',e
 
         import traceback, sys, os
         for line in traceback.format_exception(*sys.exc_info()):
             print line,
-
+            
     except BaseException as e:
         print '!!!CAUGHT OTHER ERROR',e
         
         import traceback, sys, os
         for line in traceback.format_exception(*sys.exc_info()):
             print line,
+    
+    if auto_reindex:
+        
+        print 'AUTO_REINDEX...'
+        
+        import mc_models
+        for name in mc_models.VECTORS_MODEL_NAMES:
+            mc_models.dedupe_reindex(index_name = index_name,
+                                     doc_type = doc_type,
+                                     vectors_model = name,
+                                     )    
 
     if force_exit:
         ## Force exit due to grpc bug:

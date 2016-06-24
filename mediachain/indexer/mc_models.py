@@ -566,6 +566,9 @@ def dedupe_reindex(lookup_name = False,
                        '_id': hit['_id'],
                        'body': {'doc':doc_update},
                        })
+            print ('YES_THUMB_PRESENT',hit['_source'])
+        else:
+            print ('NO_THUMB_PRESENT',hit['_source'])
                 
         #print ('ADD',c) #rr
         

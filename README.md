@@ -18,8 +18,8 @@ mediachain-indexer-test     | Tests and sanity checks.
 1) Install Elasticsearch. Version `2.3.2` required:
 
   - [General Instructions](https://www.elastic.co/guide/en/elasticsearch/reference/current/_installation.html).
-  - OSX: `brew install elasticsearch`
-  - Ubuntu:
+  - OSX: `brew install homebrew/versions/elasticsearch22`	       	    `
+  - Ubuntu:						
 
 ```
         $ sudo add-apt-repository -y ppa:webupd8team/java
@@ -294,7 +294,7 @@ Vertically - split by components involved in each mode of operation: the Indexer
                           v                                  |  |        v        ^      ^      
                     (Insert Media)                          (Dupe)   (Search)(Typeahead)(Search)     
                      (JSON/REST)                            (Lookups)    |   (Results)  (Results)    
-                          v                                  |  |        v        ^      ^           
+                          v                                  v  ^        v        ^      ^
                           |                                  |  |        |        |      |           
              /  +---------v----------------------------------v--^--------v--------^------^----------+
             |   |         |                                  |  |        |        |      |-frontend-|
@@ -324,7 +324,7 @@ mediachain <    |  |            Transactors           |  |   |  |        |      
 (blockchain)|   |         |                              |   |  |        |        |      |
              \  +---------+-----------------^------------+   |  |        |        |      |
                           |                 |                |  |        |        |      |
-                          v                 |                v  ^        v        ^      ^
+                          v                 ^                v  ^        v        ^      ^
                   (copycat/gRPC)     (copycat/gRPC)         (JSON/)   (JSON/)  (JSON/) (JSON/)
                           |                 |               (REST)    (REST)   (REST)  (REST)
              /  +---------v-----------------^------------+   |  |        |        |      |
@@ -335,7 +335,7 @@ mediachain  |   |         |                 | --client-- |   |  |        |      
             |   |         |                 |            |   |  |        |        |      |
              \  ----------+-----------------^------------+   |  |        |        |      |
                           |                 |                |  |        |        |      |
-                          v                 ^                |  |        v        ^      ^
+                          v                 ^                v  ^        v        ^      ^
                      (copycat/gRPC)     (Artefact)         (JSON/)    (JSON/)  (JSON/) (JSON/)
                           |             (Linkage)          (REST)     (REST)   (REST)  (REST)
                 +---------v-----------------^----------------v- ^--------v--------^------+----------+
@@ -378,7 +378,6 @@ mc_models.py<   |         |                 (Pair IDs+Split/Merge)       |      
              |  |         |              +----------+--------------+     |             |            |
              |  |         |              |   Dedupe All-vs-All NN  |     |             |            |
              |  |         |              +-----+-----------^-------+     |             |            |
-             |  |         |                    |           |             |             |            |
               \ |         |                    |           |             |             |            |
                 |         v                    v           ^             v             ^            |
               / |         |                    |           |             |             |            |
@@ -390,8 +389,8 @@ mc_models.py<   |         |                 (Pair IDs+Split/Merge)       |      
              |  |         |                    |           |             |         (Basic Scores)   |
              |  |  +------v-----------+        |           |      +------v-----------+ |            |
 mc_neighbors<   |  |Feature Compacting|        |           |      |Feature Compacting| |            |
-   .py       |  |  +------+-----------+        v           ^      +------+-----------+ ^            |
-             |  |         |                    |           |             |             |            |
+   .py       |  |  +------+-----------+        |           |      +------+-----------+ |            |
+             |  |         v                    v           ^             v             ^            |
              |  |   (Binary Codes)             |           |       (Binary Codes)      |            |
              |  |         |                    |           |             |             |            |
              |  |  +------v--------------------v-----------+-------------v-------------+----------+ |
