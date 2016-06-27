@@ -559,6 +559,8 @@ def iter_json_getty(max_num = 0,
                     ):
 
     dd = getty_path
+
+    assert '/json/images/' in dd,('Path must contain "/json/images/":',dd)
     
     dd3 = dd.replace('/json/images/','/downloads/')
     

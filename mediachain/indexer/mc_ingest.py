@@ -140,6 +140,12 @@ def ingest_bulk(iter_json = False,
                                                              'created_date':{'type':'date'},
                                                              'image_thumb':{'type':'string', 'index':'no'},
                                                              'dedupe_hsh':{'type':'string', 'index':'not_analyzed'},
+                                                             ## TODO:
+                                                             #"suggest" : { "type" : "completion",
+                                                             #              "analyzer" : "simple",
+                                                             #              "search_analyzer" : "simple",
+                                                             #              "payloads" : True,
+                                                             #              },
                                                              },
                                               },
                                    },
@@ -175,6 +181,8 @@ def ingest_bulk(iter_json = False,
 
     def iter_wrap():
         # Put in parallel_bulk() format:
+
+        nnn = 0 
         
         for hh in iter_json:
             
@@ -222,7 +230,11 @@ def ingest_bulk(iter_json = False,
             chh = hh.copy()
             if 'image_thumb' in chh:
                 del chh['image_thumb']
-            print 'INSERTING',index_name,doc_type#,chh
+            
+            if nnn % 100 == 0:
+                print 'YIELDING_FOR_INSERT',nnn, index_name, doc_type#, chh
+            
+            nnn += 1
             
             yield hh
     
@@ -370,7 +382,7 @@ def tail_blockchain(via_cli = False):
 def ingest_blockchain(last_block_ref = None,
                       index_name = mc_config.MC_INDEX_NAME,
                       doc_type = mc_config.MC_DOC_TYPE,
-                      auto_reindex = True,
+                      auto_reindex = False,
                       force_exit = True,
                       just_tail = False,
                       via_cli = False,

@@ -458,7 +458,7 @@ def dedupe_reindex(lookup_name = False,
         res = scan(client = es,
                    index = index_name,
                    doc_type = doc_type,
-                   scroll = '5m', #TODO - hard coded.
+                   scroll = '100m', #TODO - hard coded.
                    query = {"query": {'match_all': {}
                                      },
                            #'from':0,
@@ -472,35 +472,7 @@ def dedupe_reindex(lookup_name = False,
         
         res = nes.scan_all()
         
-        
-    def do_commit(rrr):
-        print ('COMMITTING BATCH...',len(rrr))
-        
-        if mc_config.LOW_LEVEL:
-            ii = parallel_bulk(es,
-                               rrr,
-                               thread_count = 1,
-                               chunk_size = 500,
-                               max_chunk_bytes = 100 * 1024 * 1024, #100MB
-                               )
-        else:
-            ii = nes.parallel_bulk(rrr)
-        
-        for is_success,res in ii:
-            #print ('COMMITTED_VECTORS',is_success,res)
-            pass
-        
-        rrr[:] = []
-        print ('COMMITTED')
 
-    print ('(1) Generate baseline image descriptors...')
-    
-    hash_to_ids = {}
-    
-    rr = []
-    
-    nn = 0
-    
     ## Instantiate representation learning model:
     
     if type(vectors_model) in [str, unicode]:
@@ -517,8 +489,37 @@ def dedupe_reindex(lookup_name = False,
         
     vmodel = VECTORS_MODEL_NAMES[vectors_model_name](**vectors_model[vectors_model_name])
     
-    print ('MODEL',vmodel)
+    #print ('MODEL',vmodel)
 
+    
+    def do_commit(rrr):
+        print ('COMMITTING BATCH...',vectors_model_name,len(rrr))
+        
+        if mc_config.LOW_LEVEL:
+            ii = parallel_bulk(es,
+                               rrr,
+                               thread_count = 1,
+                               chunk_size = 500,
+                               max_chunk_bytes = 100 * 1024 * 1024, #100MB
+                               )
+        else:
+            ii = nes.parallel_bulk(rrr)
+        
+        for is_success,res in ii:
+            #print ('COMMITTED_VECTORS',vectors_model_name,is_success,res)
+            pass
+        
+        rrr[:] = []
+        print ('COMMITTED')
+
+    print ('(1) Generate baseline image descriptors...',vectors_model_name)
+    
+    hash_to_ids = {}
+    
+    rr = []
+    
+    nn = 0
+    
     ## Instantiate pairwise classification model:
 
     if not pairwise_model:
@@ -544,7 +545,8 @@ def dedupe_reindex(lookup_name = False,
     
     
     for c,hit in enumerate(res):
-        print ('INDEXING_IMAGE:',c,repr(hit)[:50])
+        if c % 1000 == 0:
+            print ('INDEXING_IMAGE:',vectors_model_name,c,repr(hit)[:50])
 
         ## Pre-populate these, for later:
         
@@ -572,9 +574,13 @@ def dedupe_reindex(lookup_name = False,
                        '_id': hit['_id'],
                        'body': {'doc':doc_update},
                        })
-            print ('YES_THUMB_PRESENT',hit['_source'])
+            
+            if c % 1000 == 0:
+                print ('YES_THUMB_PRESENT',vectors_model_name,)#hit['_source'])
         else:
-            print ('NO_THUMB_PRESENT',hit['_source'])
+            
+            if c % 1000 == 0:
+                print ('NO_THUMB_PRESENT',vectors_model_name,)#hit['_source'])
                 
         #print ('ADD',c) #rr
         
@@ -584,19 +590,19 @@ def dedupe_reindex(lookup_name = False,
     if rr:
         do_commit(rr)
     
-    print ('UPDATED',nn)
+    print ('UPDATED',vectors_model_name,nn)
 
     if mc_config.LOW_LEVEL:
-        print ('REFRESHING', index_name)
+        print ('REFRESHING', vectors_model_name, index_name)
         es.indices.refresh(index = index_name)
-        print ('REFRESHED')
+        print ('REFRESHED', vectors_model_name)
     else:
         nes.refresh_index()
     
     ### Following code can be skipped for v1 baseline:
     
     if v1_mode:
-        print ('DONE_DEDUPE')
+        print ('DONE_DEDUPE',vectors_model_name)
         return
     
     assert False,"WIP - didn't test yet."
@@ -717,11 +723,49 @@ def dedupe_reindex(lookup_name = False,
     print ('DONE_DEDUPE')
     
     return nn
+
+
+
+def typeahead_generate():
+    """
+    Re-generate typeahead search. This consists of a weighted set of completions for every possible query.
+
+    Weighing ideas:
+        - query frequency.
+        - query results quality / count.
+        - language model.
     
+    TODO: Consider having the `NearestNeighborsBase` storage create this incrementally? 
+          Is that approach really better in a clustered setup?
+    """
+    
+    assert False,'WIP'
+    
+    if mc_config.LOW_LEVEL:
+        es = mc_neighbors.low_level_es_connect()    
+
+        res = scan(client = es,
+                   index = index_name,
+                   doc_type = doc_type,
+                   scroll = '5m', #TODO - hard coded.
+                   query = {"query": {'match_all': {}
+                                     },
+                           #'from':0,
+                           #'size':1,                           
+                           },
+                   )
+    else:
+        nes = mc_neighbors.high_level_connect(index_name = index_name,
+                                              doc_type = doc_type,
+                                              )
+        
+        res = nes.scan_all()
+
 
 functions=['dedupe_train',
            'dedupe_reindex',
            'dedupe_reindex_all',
+           'typeahead_generate',
            ]
 
 def main():    
