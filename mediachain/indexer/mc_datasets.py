@@ -545,11 +545,11 @@ def getty_create_dumps(INC_SIZE = 100,
     
     for t in tt:
         t.join()
-        print ('JOINED')
+        print ('JOINED',)
 
     if typ == 'custom':
         print 'DONE_CUSTOM',set_entertainment,'->',dd4
-    print ('DONE ALL')
+    print ('DONE ALL',)
 
 
 def iter_json_getty(max_num = 0,
@@ -571,7 +571,7 @@ def iter_json_getty(max_num = 0,
             nn += 1
 
             if max_num and (nn + 1 >= max_num):
-                print ('ENDING EARLY...')
+                print ('ENDING EARLY...',)
                 return
 
             fn = join(dir_name,
@@ -579,7 +579,10 @@ def iter_json_getty(max_num = 0,
                       )
 
             with open(fn) as f:
-                h = json.load(f)
+                try:
+                    h = json.load(f)
+                except:
+                    assert False,('BAD_JSON',fn)
 
             fn = dd3 + 'thumb/' + ('/'.join(h['id'][:4])) + '/' + h['id'] + '.jpg'
             #fn = dd3 + 'comp/' + ('/'.join(h['id'][:4])) + '/' + h['id'] + '.jpg'

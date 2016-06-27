@@ -101,7 +101,7 @@ def ingest_bulk(iter_json = False,
                 ):
     """
     Ingest Getty dumps from JSON files.
-
+    
     Currently does not attempt to import media to the Mediachain chain.
     
     Args:
@@ -119,7 +119,7 @@ def ingest_bulk(iter_json = False,
     
     Returns:
         Number of inserted records.
-
+    
     Examples:
         See `mc_test.py`
     """
@@ -649,7 +649,7 @@ def delete_index(index_name = mc_config.MC_INDEX_NAME,
         
         nes.delete_index()
     
-    print ('DELETED')
+    print ('DELETED',index_name)
 
 
 def refresh_index(index_name = mc_config.MC_INDEX_NAME,

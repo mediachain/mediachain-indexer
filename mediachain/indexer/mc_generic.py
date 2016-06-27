@@ -444,10 +444,35 @@ def get_version(check = ['mediachain-indexer',
                          ],
                 ):
     """
-    Output most important version info. Only works for installed packages.
-
-    TODO: Incorporate `subprocess.check_output('git rev-parse --show-toplevel'.split()).strip()`
+    Output most important version info. TODO: incomplete.
     """
+    
+    if False:
+        if sys.argv[0].startswith('mediachain-'):
+            ## Indexer is installed:
+
+            try:
+                from mediachain.indexer.version import __version__
+                return 'installed=' + __version__
+            except:
+                return 'could_not_get_version'
+        else:
+            ## Indexer running from local directory:
+            
+            import subprocess
+            try:
+                top_path = subprocess.check_output('git rev-parse --show-toplevel'.split()).strip().strip('"')
+                assert 'mediachain-indexer' in top_path
+            except:
+                return 'unknown_version'
+
+            try:
+                exec(open(top_path + '/mediachain/indexer/version.py').read())
+
+                return __version__
+            except:
+                return 'could_not_get_version'
+        
     rr = []
     
     try:
