@@ -287,8 +287,7 @@ def ingest_bulk(iter_json = False,
         first = gen.next() ## TODO: parallel_bulk silently eats exceptions. Here's a quick hack to watch for errors.
         is_empty = False
     except StopIteration:
-        print 'GOT EMPTY INPUT ITERATOR'
-        return
+        print '!!!WARN: GOT EMPTY INPUT ITERATOR'
 
     if not is_empty:
         if mc_config.LOW_LEVEL:

@@ -70,6 +70,7 @@ class Application(tornado.web.Application):
                     (r'/score',handle_score,),
                     (r'/record_dupes',handle_record_dupes,),
                     (r'/record_relevance',handle_record_relevance,),
+                    (r'/autocomplete',handle_autocomplete,),
                     #(r'.*', handle_notfound,),
                     ]
         
@@ -409,7 +410,25 @@ class handle_search(BaseHandler):
                         max_indent_depth = data.get('max_indent_depth', False),
                         )
 
+class handle_autocomplete(BaseHandler):
+    
+    @tornado.gen.coroutine
+    def get(self):
+        """
+        Fake autocomplete results for testing.
+        """
+        
+        from random import choice, randint
+        from string import lowercase
+        
+        q = self.get_argument('q','')
+        
+        rr = [q + ' '.join(choice(lowercase)*randint(1,5) for x in xrange(randint(1,4))) for x in xrange(randint(6,20))]
 
+        rr = [(str(100 - c) + '\t' + x + '\t' + json.dumps({'q':x,'q_id':randint(1,1000000000)})) for c,x in enumerate(rr)]
+        
+        self.set_header("Content-Type", "text/plain")
+        self.write('\n'.join(rr))
 
 class handle_dupe_lookup(BaseHandler):
     
