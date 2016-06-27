@@ -280,31 +280,39 @@ def ingest_bulk(iter_json = False,
         use_inserter = non_parallel_bulk
     else:
         use_inserter = parallel_bulk
-    
-    first = gen.next() ## TODO: parallel_bulk silently eats exceptions. Here's a quick hack to watch for errors.
 
-    if mc_config.LOW_LEVEL:
-        ii = use_inserter(es,
-                          itertools.chain([first], gen),
-                          thread_count = thread_count,
-                          chunk_size = 1,
-                          max_chunk_bytes = 100 * 1024 * 1024, #100MB
-                          )
-    else:
-        ii = nes.parallel_bulk(itertools.chain([first], gen))
-                              
-    for is_success,res in ii:
-        """
-        #FORMAT:
-        (True,
-            {u'index': {u'_id': u'getty_100113781',
-                        u'_index': u'getty_test',
-                        u'_shards': {u'failed': 0, u'successful': 1, u'total': 1},
-                        u'_type': u'image',
-                        u'_version': 1,
-                        u'status': 201}})
-        """
-        pass
+    is_empty = True
+    
+    try:
+        first = gen.next() ## TODO: parallel_bulk silently eats exceptions. Here's a quick hack to watch for errors.
+        is_empty = False
+    except StopIteration:
+        print 'GOT EMPTY INPUT ITERATOR'
+        return
+
+    if not is_empty:
+        if mc_config.LOW_LEVEL:
+            ii = use_inserter(es,
+                              itertools.chain([first], gen),
+                              thread_count = thread_count,
+                              chunk_size = 1,
+                              max_chunk_bytes = 100 * 1024 * 1024, #100MB
+                              )
+        else:
+            ii = nes.parallel_bulk(itertools.chain([first], gen))
+
+        for is_success,res in ii:
+            """
+            #FORMAT:
+            (True,
+                {u'index': {u'_id': u'getty_100113781',
+                            u'_index': u'getty_test',
+                            u'_shards': {u'failed': 0, u'successful': 1, u'total': 1},
+                            u'_type': u'image',
+                            u'_version': 1,
+                            u'status': 201}})
+            """
+            pass
 
     rr = False
     
