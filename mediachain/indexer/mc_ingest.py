@@ -305,6 +305,8 @@ def ingest_bulk(iter_json = False,
                         u'status': 201}})
         """
         pass
+
+    rr = False
     
     if refresh_after:
         if mc_config.LOW_LEVEL:
@@ -545,9 +547,9 @@ def ingest_gettydump(max_num = 100000,
     
     if via_cli:
         if len(sys.argv) < 3:
-            print 'Usage: mediachain-indexer-ingest ingest_gettydump getty_directory_name'
+            print 'Usage Example: mediachain-indexer-ingest ingest_gettydump getty_small/json/images/'
             exit(-1)
-            
+        
         getty_path = sys.argv[2]
     else:
         assert getty_path
