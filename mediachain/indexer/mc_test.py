@@ -18,6 +18,7 @@ from time import sleep
 
 def sanity_check(index_name = mc_config.MC_TEST_INDEX_NAME,
                  doc_type = mc_config.MC_TEST_DOC_TYPE,
+                 via_cli = False,
                  ):
     """
     Quick sanity check. WIP while API is being finalized. TODO: full tests.

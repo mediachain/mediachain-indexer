@@ -316,7 +316,7 @@ def dedupe_lookup_async(media_id,
     raise tornado.gen.Return(rr)
 
     
-def dedupe_train():
+def dedupe_train(via_cli = False):
     """
     Train dedupe models. Not needed for unsupervised v1 baseline.
     """
@@ -383,6 +383,7 @@ PAIRWISE_MODEL_NAMES = {## For now, reusing the vector models, which have basic 
 
 def dedupe_reindex_all(do_models = ['baseline'],
                        #do_models = VECTORS_MODEL_NAMES,
+                       via_cli = False,
                        ):
     """
     Convenience function to re-run all the major models with one call.
@@ -404,6 +405,7 @@ def dedupe_reindex(lookup_name = False,
                    index_name = mc_config.MC_INDEX_NAME,
                    doc_type = mc_config.MC_DOC_TYPE,
                    v1_mode = True,
+                   via_cli = False,
                    ):
     """
     Regenerate duplicate lookup tables. Currently implements v1 - a simple, greedy, in-memory baseline.

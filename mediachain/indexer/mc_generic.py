@@ -338,13 +338,57 @@ def print_config(cfg):
     print
 
 
+def shell_source(fn_glob,
+                 allow_unset = False,
+                 ):
+    """
+    Source bash variables from file. Input filename can use globbing patterns.
+    
+    Returns changed vars.
+    """
+    import os
+    from os.path import expanduser
+    from glob import glob
+    from subprocess import check_output
+    from pipes import quote
+    
+    orig = set(os.environ.items())
+    
+    for fn in glob(fn_glob):
+        
+        fn = expanduser(fn)
+        
+        print ('SOURCING',fn)
+        
+        rr = check_output("source %s; env -0" % quote(fn),
+                          shell = True,
+                          executable = "/bin/bash",
+                          )
+        
+        env = dict(line.split('=',1) for line in rr.split('\0'))
+        
+        changed = [x for x in env.items() if x not in orig]
+        
+        print ('CHANGED',fn,changed)
+
+        if allow_unset:
+            os.environ.clear()
+        
+        os.environ.update(env)
+        print env
+    
+    all_changed = [x for x in os.environ.items() if x not in orig]
+    return all_changed
+    
+
 def terminal_size():
     """
     Get terminal size.
     """
-    h, w, hp, wp = struct.unpack('HHHH',
-        fcntl.ioctl(0, termios.TIOCGWINSZ,
-        struct.pack('HHHH', 0, 0, 0, 0)))
+    h, w, hp, wp = struct.unpack('HHHH',fcntl.ioctl(0,
+                                                    termios.TIOCGWINSZ,
+                                                    struct.pack('HHHH', 0, 0, 0, 0),
+                                                    ))
     return w, h
 
 def usage(functions,
@@ -454,7 +498,32 @@ def setup_main(functions,
 
     ff=glb[f]
 
-    ff()
+    ff(via_cli = True) ## New: make it easier for the functions to have dual CLI / API use.
+
+
+from random import randint,choice,shuffle
+from time import time,sleep
+
+def sleep_loud(a, b = False):
+    """
+    Noisy sleeper. Set b == False to sleep a non-random amount of time.
+    
+    Args:
+        a:  Minimum seconds to sleep.
+        b:  Maximum seconds to sleep. `False` to disable randomization.
+    """
+    
+    if b is False:
+        x = a
+    else:
+        a = int(1000 * a)
+        b = int(1000 * b)
+        x = randint(a, b)
+        x = x / 1000.0
+    
+    print ('SLEEPING %.3f' % x)
+    sleep(x)
+    print ('SLEEP_DONE')
 
 
 class Remaining:

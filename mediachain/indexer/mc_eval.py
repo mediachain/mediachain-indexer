@@ -49,6 +49,7 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
                       parallel_mode = False,
                       parallel_db = 'mongo://localhost:12345/foo_db/jobs',
                       USE_NN = True,
+                      via_cli = False,
                       ):
     """
     Hyper-parameter optimization for the vector representation learning models.
@@ -286,6 +287,7 @@ def eval_demo(max_num = 500,
               ignore_self = False,
               index_name = 'eval_index',
               doc_type = 'eval_doc',
+              via_cli = False,
               ):
     """
     Some exploratory visualizations of the representation-learning models.
@@ -617,6 +619,7 @@ def test_scoring_sim(docs = ['the brown fox is nice', 'the house is big', 'nice 
                      #query = 'a b v z',
                      index_name = 'query_test',
                      doc_type = 'query_test_doc',
+                     via_cli = False,
                      ):
     """
     Let's see if we can exactly reproduce the Lucene classic scoring function.

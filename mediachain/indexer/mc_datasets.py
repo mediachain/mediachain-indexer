@@ -288,9 +288,18 @@ def iter_ukbench(max_num = 0,
 
 def getty_create_dumps(INC_SIZE = 100,
                        NUM_WORKERS = 30,
+                       typ = False,
+                       custom_ids = False,
+                       via_cli = False,
                        ):
     """
     Quick and dirty Getty API downloader.
+    
+    Args:
+        INC_SIZE:    Number of image IDs to include per Getty API call. (Seems the maximum allowed is 100.)
+        NUM_WORKERS: Number of worker threads to use.
+        typ:         Name of getty image IDs file to use.
+        custom_ids:  List of getty image IDs to download.
     """
 
     if not mc_config.MC_GETTY_KEY:
@@ -303,8 +312,13 @@ def getty_create_dumps(INC_SIZE = 100,
         print ('Example: mediachain-indexer-datasets getty_create_dumps arciv')
         print ('Example: mediachain-indexer-datasets getty_create_dumps custom JD6484-001 JD6484-002 JD6484-003')
         exit(-1)
-    
-    typ = sys.argv[2]
+
+    if via_cli:
+        typ = sys.argv[2]
+    else:
+        if custom_ids:
+            typ = 'custom'
+        assert typ
 
     assert typ in ['archiv', 'entertainment', 'rf', 'small', 'custom']
     
@@ -329,7 +343,10 @@ def getty_create_dumps(INC_SIZE = 100,
 
     elif typ == 'custom':
         ## Specify IDs on command line:
-        set_entertainment = sys.argv[3:]
+        if via_cli:
+            set_entertainment = sys.argv[3:]
+        else:
+            set_entertainment = custom_ids
         print 'DOING_CUSTOM',set_entertainment
         ids.update(set_entertainment)
         

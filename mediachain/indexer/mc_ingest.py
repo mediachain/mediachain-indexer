@@ -14,7 +14,7 @@ Scraping / downloading functions also contained here.
 Later may be extended to insert media that comes from off-chain into the chain.
 """
 
-from mc_generic import setup_main, group, raw_input_enter, pretty_print, intget, print_config
+from mc_generic import setup_main, group, raw_input_enter, pretty_print, intget, print_config, sleep_loud
 
 import mc_config
 import mc_datasets
@@ -57,6 +57,7 @@ from elasticsearch.helpers import parallel_bulk, scan
 data_pat = 'data:image/jpeg;base64,'
 data_pat_2 = 'data:image/png;base64,'
 
+
 def shrink_and_encode_image(s, size = (150, 150)):
     """
     Resize image to small size & base64 encode it.
@@ -72,6 +73,7 @@ def shrink_and_encode_image(s, size = (150, 150)):
         s = f2.read()
     
     return data_pat + base64.b64encode(s)
+
 
 def decode_image(s):
 
@@ -94,8 +96,8 @@ def ingest_bulk(iter_json = False,
                 search_after = False,
                 redo_thumbs = True,
                 ignore_thumbs = False,
-                use_aggressive = True,
-                auto_reindex_blocked_wait = 5,
+                use_aggressive = False,   ## For demo use only
+                refresh_after = False,    ## For demo use only
                 ):
     """
     Ingest Getty dumps from JSON files.
@@ -111,7 +113,9 @@ def ingest_bulk(iter_json = False,
         redo_thumbs:    Whether to recalcuate 'image_thumb' from 'img_data'.
         ignore_thumbs:  Whether to ignore thumbnail generation entirely.
         use_aggressive: Use slow inserter that immediately indexes & refreshes after each item.
-        auto_reindex_blocked_wait: Since the input iterator may block, if `auto_reindex` is on, and the - TODO.
+        
+        auto_reindex_inactive:   Auto-reindex after `auto_reindex_inactive` seconds of inactivity.
+        auto_reindex_max:        Auto-reindex at least every `auto_reindex_max` seconds, regardless of ingestion activity.
     
     Returns:
         Number of inserted records.
@@ -223,7 +227,7 @@ def ingest_bulk(iter_json = False,
             yield hh
     
     gen = iter_wrap()
-
+    
     def non_parallel_bulk(es,
                           the_iter,
                           *args, **kw):
@@ -271,7 +275,7 @@ def ingest_bulk(iter_json = False,
             print 'REFRESHED'
         
         print 'EXIT-LOOP_NON_PARALLEL_BULK'
-
+        
     if use_aggressive:
         use_inserter = non_parallel_bulk
     else:
@@ -301,15 +305,16 @@ def ingest_bulk(iter_json = False,
                         u'status': 201}})
         """
         pass
-
-    if mc_config.LOW_LEVEL:
-        print ('REFRESHING', index_name)
-        es.indices.refresh(index = index_name)
-        print ('REFRESHED')
-        rr = es.count(index_name)['count']
-    else:
-        nes.refresh_index()
-        rr = nes.count()
+    
+    if refresh_after:
+        if mc_config.LOW_LEVEL:
+            print ('REFRESHING', index_name)
+            es.indices.refresh(index = index_name)
+            print ('REFRESHED')
+            rr = es.count(index_name)['count']
+        else:
+            nes.refresh_index()
+            rr = nes.count()
         
     return rr
 
@@ -346,19 +351,21 @@ EXPECTED ARTEFACT FORMAT:
 """
 
 
-def tail_blockchain():
+def tail_blockchain(via_cli = False):
     """
-    Watch blocks arrive from blockchain.
+    Watch blocks arrive from blockchain via the mediachain Reader. 
     """
-    ingest_bulk_blockchain(just_tail = True)
-    
-def ingest_bulk_blockchain(last_block_ref = None,
-                           index_name = mc_config.MC_INDEX_NAME,
-                           doc_type = mc_config.MC_DOC_TYPE,
-                           auto_reindex = True,
-                           force_exit = True,
-                           just_tail = False,
-                           ):
+    ingest_blockchain(just_tail = True)
+
+
+def ingest_blockchain(last_block_ref = None,
+                      index_name = mc_config.MC_INDEX_NAME,
+                      doc_type = mc_config.MC_DOC_TYPE,
+                      auto_reindex = True,
+                      force_exit = True,
+                      just_tail = False,
+                      via_cli = False,
+                      ):
     """
     Ingest media from Mediachain blockchain.
     
@@ -488,7 +495,7 @@ def ingest_bulk_blockchain(last_block_ref = None,
 
             print 'FORCE_EXIT'
 
-            sleep(1)
+            sleep_loud(1)
 
             os._exit(-1)
 
@@ -505,7 +512,7 @@ def ingest_bulk_blockchain(last_block_ref = None,
 
             print 'FORCE_EXIT'
 
-            sleep(1)
+            sleep_loud(1)
 
             os._exit(-1)
 
@@ -520,12 +527,13 @@ def ingest_bulk_blockchain(last_block_ref = None,
     print 'DONE_INGEST',nn
 
     
-def ingest_bulk_gettydump(max_num = 100000,
-                          getty_path = False,
-                          index_name = mc_config.MC_INDEX_NAME,
-                          doc_type = mc_config.MC_DOC_TYPE,
-                          *args,
-                          **kw):
+def ingest_gettydump(max_num = 100000,
+                     getty_path = False,
+                     index_name = mc_config.MC_INDEX_NAME,
+                     doc_type = mc_config.MC_DOC_TYPE,
+                     via_cli = False,
+                     *args,
+                     **kw):
     """
     Ingest media from Getty data dumps into Indexer.
     
@@ -535,12 +543,14 @@ def ingest_bulk_gettydump(max_num = 100000,
         doc_type:   Name of Indexer doc type.
     """
     
-    if getty_path is False:
+    if via_cli:
         if len(sys.argv) < 3:
-            print 'Usage: mediachain-indexer-ingest ingest_bulk_gettydump getty_directory_name'
+            print 'Usage: mediachain-indexer-ingest ingest_gettydump getty_directory_name'
             exit(-1)
             
         getty_path = sys.argv[2]
+    else:
+        assert getty_path
     
     iter_json = mc_datasets.iter_json_getty(max_num = max_num,
                                             getty_path = getty_path,
@@ -558,40 +568,45 @@ def ingest_bulk_gettydump(max_num = 100000,
 
 
 
-def search_by_image(limit = 5,
+def search_by_image(fn = False,
+                    limit = 5,
                     index_name = mc_config.MC_INDEX_NAME,
                     doc_type = mc_config.MC_DOC_TYPE,
+                    via_cli = False,
                     ):
     """
     Command-line content-based image search.
     
     Example:
-    $ mediachain-indexer-ingest ingest_bulk_gettydump
+    $ mediachain-indexer-ingest ingest_gettydump
     $ mediachain-indexer-ingest search_by_image getty_small/downloads/thumb/5/3/1/7/531746924.jpg
     """
-
-    if len(sys.argv) < 3:
-        print 'Usage: mediachain-indexer-ingest search_by_image <image_file_name> [limit_num] [index_name] [doc_type]'
-        exit(-1)
-
-    fn = sys.argv[2]
     
-    if len(sys.argv) >= 4:
-        limit = intget(sys.argv[3], 5)
-    
-    if len(sys.argv) >= 5:
-        index_name = sys.argv[4]
+    if via_cli:
+        if len(sys.argv) < 3:
+            print 'Usage: mediachain-indexer-ingest search_by_image <image_file_name> [limit_num] [index_name] [doc_type]'
+            exit(-1)
         
-    if len(sys.argv) >= 6:
-        doc_type = sys.argv[5]
-    
-    if not exists(fn):
-        print ('File Not Found:',fn)
-        exit(-1)
+        fn = sys.argv[2]
+        
+        if len(sys.argv) >= 4:
+            limit = intget(sys.argv[3], 5)
+        
+        if len(sys.argv) >= 5:
+            index_name = sys.argv[4]
+        
+        if len(sys.argv) >= 6:
+            doc_type = sys.argv[5]
+        
+        if not exists(fn):
+            print ('File Not Found:',fn)
+            exit(-1)
+    else:
+        assert fn,'File name required.'
     
     with open(fn) as f:
         d = f.read()
-        
+    
     img_uri = shrink_and_encode_image(d)
     
     hh = requests.post(mc_config.MC_TEST_WEB_HOST + '/search',
@@ -606,9 +621,16 @@ def search_by_image(limit = 5,
                        ).json()
     
     print pretty_print(hh)
-    
 
-def delete_index(index_name = mc_config.MC_INDEX_NAME):
+
+def delete_index(index_name = mc_config.MC_INDEX_NAME,
+                 doc_type = mc_config.MC_DOC_TYPE,
+                 via_cli = False,
+                 ):
+    """
+    Delete an Indexer index.
+    """
+    
     print('DELETE_INDEX',index_name)
     
     if mc_config.LOW_LEVEL:
@@ -629,15 +651,51 @@ def delete_index(index_name = mc_config.MC_INDEX_NAME):
     
     print ('DELETED')
 
+
+def refresh_index(index_name = mc_config.MC_INDEX_NAME,
+                  via_cli = False,
+                  ):
+    """
+    Refresh an Indexer index. NOTE: newly inserted / updated items are not searchable until index is refreshed.
+    """
     
-def config():
+    if mc_config.LOW_LEVEL:
+        print ('REFRESHING', index_name)
+        es.indices.refresh(index = index_name)
+        print ('REFRESHED')
+        rr = es.count(index_name)['count']
+    else:
+        nes.refresh_index()
+        rr = nes.count()
+
+def refresh_index_repeating(index_name = mc_config.MC_INDEX_NAME,
+                            repeat_interval = 600,
+                            via_cli = False,
+                            ):
+    """
+    Repeatedly refresh Indexer indexes at specified interval.
+
+    TODO: delay refresh if a refresh was already called elsewhere.
+    """
+    
+    while True:
+        refresh_index(index_name = index_name)
+        sleep_loud(repeat_interval)
+        
+def config(via_cli = False):
+    """
+    Print config.
+    """
+    
     print_config(mc_config.cfg)
 
-functions=['ingest_bulk_blockchain',
-           'ingest_bulk_gettydump',
+functions=['ingest_blockchain',
+           'ingest_gettydump',
+           'delete_index',
+           'refresh_index',
+           'refresh_index_repeating',
            'search_by_image',
            'config',
-           'delete_index',
            'tail_blockchain',
            ]
 

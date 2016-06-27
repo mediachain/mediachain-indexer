@@ -617,6 +617,7 @@ class handle_record_relevance(BaseHandler):
 
 
 def web(port = 23456,
+        via_cli = False,
         ):
     """
     Bind Tornado server to specified port.    
