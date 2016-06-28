@@ -23,21 +23,12 @@ Config structure in `mediachain.indexer.mc_config`:
 
 
 cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
-           {'MC_LOOKUP_MODEL_TEXT':('mediachain.indexer.neighbors.ElasticSearchNN',
-                                    ['Built-in options: ',
-                                     '`mediachain.indexer.neighbors.AnnoyNN`, ',
-                                     '`mediachain.indexer.neighbors.ElasticSearchNN`',
-                                    ]
-                                    ),
-            'MC_LOOKUP_MODEL_SPARSE_VECTORS':('mediachain.indexer.neighbors.ElasticSearchNN',
-                                              ['Built-in options: ',
-                                               '`mediachain.indexer.neighbors.PysparnnNN`, ',
-                                               '`mediachain.indexer.neighbors.ElasticSearchNN`',
-                                               ],
-                                              ),  
-            'MC_NN_MODEL_DENSE_VECTORS':('mediachain.indexer.neighbors.ElasticSearchNN',
-                                         'Model to use for dense vectors nearest-neighbors search.',
-                                         ),
+           {'MC_MODELS_JSON':('{"model_1":{"descriptors":{"name":"VectorsBaseline"},"neighbors":{"name":"ElasticSearchNN"},"rerank":{"name":"ReRankBasic"}}}',
+                             'JSON hyper-parameter settings for each model that should be trained.'
+                             ),
+            'MC_MODELS_FJSON':(None,
+                              'Rather pass a the path to your model config JSON? Do so here. If passed, this overrides `MC_MODEL_JSON`.'
+                              ),
             },
        '2. Elasticsearch Settings':
            {'MC_ES_URLS':('',

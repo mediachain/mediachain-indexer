@@ -97,7 +97,7 @@ def ingest_bulk(iter_json = False,
                 redo_thumbs = True,
                 ignore_thumbs = False,
                 use_aggressive = False,   ## For demo use only
-                refresh_after = False,    ## For demo use only
+                refresh_after = True,
                 ):
     """
     Ingest Getty dumps from JSON files.
@@ -140,32 +140,26 @@ def ingest_bulk(iter_json = False,
                                                              'created_date':{'type':'date'},
                                                              'image_thumb':{'type':'string', 'index':'no'},
                                                              'dedupe_hsh':{'type':'string', 'index':'not_analyzed'},
-                                                             ## TODO:
-                                                             #"suggest" : { "type" : "completion",
-                                                             #              "analyzer" : "simple",
-                                                             #              "search_analyzer" : "simple",
-                                                             #              "payloads" : True,
-                                                             #              },
                                                              },
                                               },
                                    },
                       }
-
+    
     if not iter_json:
         iter_json = mc_datasets.iter_json_getty(index_name = index_name,
                                                 doc_type = doc_type,
                                                 )
-
+    
     if mc_config.LOW_LEVEL:
         es = mc_neighbors.low_level_es_connect()
-    
+        
         if not es.indices.exists(index_name):
             print ('CREATE_INDEX...',index_name)
             es.indices.create(index = index_name,
                               body = index_settings,
                               #ignore = 400, # ignore already existing index
                               )
-
+            
             print('CREATED',index_name)
     else:
         #NOT LOW_LEVEL:

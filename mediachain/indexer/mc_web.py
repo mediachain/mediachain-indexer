@@ -212,16 +212,20 @@ class handle_search(BaseHandler):
         Search for images based on text query, a media work, or a combination of both.
         
         Args, as JSON-encoded POST body:
-            q:             Query text.
-            q_id:          Query media. See `Media Identifiers`.
-           
-            limit:         Maximum number of results to return.
-            include_self:  Include ID of query document in results.
-            include_docs:  Return entire indexed docs, instead of just IDs.
-            include_thumb: Whether to include base64-encoded thumbnails in returned results.
+            q:                Query text.
+            q_id:             Query media. See `Media Identifiers`.
+            
+            limit:            Maximum number of results to return.
+            include_self:     Include ID of query document in results.
+            include_docs:     Return entire indexed docs, instead of just IDs.
+            include_thumb:    Whether to include base64-encoded thumbnails in returned results.
+            
+            model_name:       Model name to use.
+            rerank_eq:        Override the re-ranking equation.
+            
+            pretty:           Pretty-print JSON output.
+            max_indent_depth: Maximum depth at which to indent for pretty-printed JSON output.
 
-            pretty:              Pretty-print JSON output.
-            max_indent_depth:    Maximum depth at which to indent for pretty-printed JSON output.
 
         Returns:
             List of image IDs, possibly with relevancy scores.
@@ -366,12 +370,12 @@ class handle_search(BaseHandler):
                                   type = doc_type,
                                   source = query,
                                   )
-        print ('RR',rr)
+        #print ('RR',rr)
         hh = json.loads(rr.body)
 
         rr = hh['hits']['hits']
 
-        print ('QUERY GOT',rr)
+        #print ('QUERY GOT',rr)
         
         if not include_docs:
             

@@ -265,6 +265,8 @@ def config_env(cfg, glb):
       '_FJSON'   = JSON loaded from filename.
          *       = string
 
+    Note: `_FJSON` values will override `_JSON` values.
+
     Also updates the passed globals(). Don't pass locals().
     """
     rh = {}
@@ -284,6 +286,7 @@ def config_env(cfg, glb):
                     xx = json.loads(dd.strip())
                 else:
                     xx = v
+                k = k.replace('_FJSON','_JSON')
             cfg[kg][k] = (xx,d)
             rh[k] = xx
     glb.update(rh)

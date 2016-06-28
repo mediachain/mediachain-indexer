@@ -10,6 +10,14 @@ mediachain-indexer-eval     | Hyper-parameter optimization and evaluation of mod
 mediachain-indexer-web      | Search & dedupe REST API.
 mediachain-indexer-test     | Tests and sanity checks.
 
+## TOC
+
+- [Core Setup](https://github.com/mediachain/mediachain-indexer#core-setup)
+- [Quick Test](https://github.com/mediachain/mediachain-indexer#quick-test)
+- [Ingest Data](https://github.com/mediachain/mediachain-indexer#create-dataset-to-be-ingested)
+- [Query Server](https://github.com/mediachain/mediachain-indexer#query-server)
+- [Specify and Configure Models](https://github.com/mediachain/mediachain-indexer#specify-and-configure-models)
+- [System Diagram](https://github.com/mediachain/mediachain-indexer#system-diagram)
 
 ## Getting Started
 
@@ -19,7 +27,7 @@ mediachain-indexer-test     | Tests and sanity checks.
 
   - [General Instructions](https://www.elastic.co/guide/en/elasticsearch/reference/current/_installation.html).
   - OSX: `brew install homebrew/versions/elasticsearch22`	       	    `
-  - Ubuntu:						
+  - Ubuntu:
 
 ```
         $ sudo add-apt-repository -y ppa:webupd8team/java
@@ -274,28 +282,111 @@ Args - passed as JSON-encoded body:
 ```
 
 
-## Code Organization
+## Passing Custom Hyper-Parameters to Models
 
-Horizontally - split by the 3 modes of operation: ingestion, search, and dedupe.
+TODO: This section is WIP.
 
-Vertically - split by components involved in each mode of operation: the Indexer,
-[Core](https://github.com/mediachain/mediachain), Frontend, and [Client](https://github.com/mediachain/mediachain-client).
+The selection of model components and hyper-parameters can be customized.
+Note that since the architecture has fixed, pre-defined connections between components,
+as shown in the [System Diagram](https://github.com/mediachain/mediachain-indexer#system-diagram),
+only the hyper-parameters to the components can be adjusted, not the connections between components.
+This should not be a major limitation in practice.
+
+
+#### Components:
+
+Descriptor Generator Names     | Info
+-------------------------------|--------------------------
+VectorsBaseline                | Perceptual hashing baseline. Produces sparse or dense descriptors. Location: `mediachain.indexer.mc_models.VectorsBaseline`.
+VectorsBaselineNG              | Simple visual bag of image words model. Produces sparse descriptors. Location: `mediachain.indexer.mc_models.VectorsBaselineNG`.
+NeuralBaseline                 | (WIP) Baseline neural model. Produces dense descriptors. Location: `mediachain.indexer.mc_models.NeuralBaseline`.
+
+
+Nearest Neighbor Indexes Names | Info
+-------------------------------|--------------------------
+ElasticSearchNN                | ElasticSearch-backed nearest neighbor lookups. Accepts sparse descriptors. Location: `mediachain.indexer.mc_neighbors.ElasticSearchNN`.
+AnnoyNN                        | (WIP) Annoy-backed nearest neighbor lookups. Accepts dense descriptors. Location: `mediachain.indexer.mc_neighbors.AnnoyNN`.
+
+
+Re-Ranking Models Names        | Info
+-------------------------------|--------------------------
+ReRankingBasic                 | Simple re-ranking model that allows you to pass custom re-ranking equations at query time. Location: `mediachain.indexer.mc_rerank.ReRankingBasic`.
+
+
+#### Passing Custom Hyper-Parameters at Runtime
+
+Hyper-parameters of the model components can be configured prior to ingestion or on-the-fly at query time.
+
+Multiple separate pipelines can be created, and their names be passed to API endpoints such as `/search` or '/dupe_lookup'.
+
+Note that some hyper-parameters can only be set at ingestion time, prior to search or dedupe lookups.
+
+Add `'is_temp':true` to a model to indicate that this is for one-off use, e.g. in hyper-parameter optimization routines.
+
+Example configuration JSON:
+
+```
+{"model_1":{"descriptors":{"name":"VectorsBaseline",
+                           "params":{"hash_size":64,
+                                     "use_hash":"phash",
+                                     "patch_size":10,
+                                     "max_patches":64
+                                    }
+                           },
+            "neighbors":{"name":"ElasticSearchNN"},
+            "rerank":{"name":"ReRankBasic",
+                      "params":{"eq":"item['_score']"},
+                     }
+           }
+"model_2":{"descriptors":{"name":"VectorsBaseline",
+                           "params":{"hash_size":42,
+                                     "use_hash":"dhash",
+                                     "patch_size":5,
+                                     "max_patches":32
+                                    }
+                           },
+            "neighbors":{"name":"ElasticSearchNN"},
+            "rerank":{"name":"ReRankBasic",
+                      "params":{"eq":"item['_score']"},
+                     }
+           }
+}
+```
+
+#### External Plugins
+
+For model components listed above, you may pass just the class name, and the packages `mediachain.indexer.mc_models`, `mediachain.indexer.mc_rerank`, and `mediachain.indexer.mc_neighbors` will be searched.
+
+External plugin may also be passed, by specifying the full import path for the class in the `"name"` field.
+
+Note that some plugins may require separate pre-training on external data sources before they can be used by the Indexer.
+
+
+## System Diagram
+
+Modes of operation vs components involved in each mode of operation.
+
+Links:
+[Indexer](https://github.com/mediachain/mediachain-indexer),
+[Core](https://github.com/mediachain/mediachain),
+Frontend,
+[Client](https://github.com/mediachain/mediachain-client).
 
 
 ```
                        INGESTION:                  DEDUPE:                      SEARCH:
                  _________ ^ __________    __________ ^ _____________   __________ ^ ______________
                 /                      \  /                          \ /                           \
-                                                                     
+
                 +-----------------------------------------------------------------------------------+
                 |                             End-User Web Browser                                  |
                 +---------+----------------------------------+--^--------+--------^------^----------+
-                          |                                  |  |        |        |      |      
-                          v                                  |  |        v        ^      ^      
-                    (Insert Media)                          (Dupe)   (Search)(Typeahead)(Search)     
-                     (JSON/REST)                            (Lookups)    |   (Results)  (Results)    
+                          |                                  |  |        |        |      |
+                          v                                  |  |        v        ^      ^
+                    (Insert Media)                          (Dupe)   (Search)(Typeahead)(Search)
+                     (JSON/REST)                            (Lookups)    |   (Results)  (Results)
                           v                                  v  ^        v        ^      ^
-                          |                                  |  |        |        |      |           
+                          |                                  |  |        |        |      |
              /  +---------v----------------------------------v--^--------v--------^------^----------+
             |   |         |                                  |  |        |        |      |-frontend-|
             |   |  +------v----------------------------------v--^--------v--------+------+--------+ |
@@ -303,22 +394,22 @@ mediachain <    |  |                         Javascript/HTML Web App            
  -frontend  |   |  +------v----------------------------------+--^--------+--------^------^--------+ |
             |   |         |                                  |  |        |        |      |          |
              \  +---------v----------------------------------v--^--------v--------^------^----------+
-                          |                                  |  |        |        |      |           
-                     (Raw Media)                            (Dupe)   (Search)(Typeahead)(Search)     
-                          |                                 (Lookups)    |   (Results)  (Results)    
-             /  +---------v-------------------------------+  |  |        |        |      |           
-mediachain  |   |         |                    --client-- |  |  |        |        |      |           
- -client    |   |  +------v---------------------------+   |  |  |        |        |      |           
-  writer   <    |  |      Client Writer               |   |  v  ^        v        ^      ^           
-            |   |  +------+---------------------------+   |  |  |        |        |      |           
-            |   |         |                               |  |  |        |        |      |           
-             \  ----------v-------------------------------+  |  |        |        |      |           
-                          |                                  |  |        |        |      |           
-                    (copycat/gRPC)                           |  |        |        |      |           
-                          |                                  v  ^        v        ^      ^           
-             /  +---------v------------------------------+   |  |        |        |      |           
-            |   |         |                     --core-- |   |  |        |        |      |           
-            |   |  +------v---------------------------+  |   |  |        |        |      |           
+                          |                                  |  |        |        |      |
+                     (Raw Media)                            (Dupe)   (Search)(Typeahead)(Search)
+                          |                                 (Lookups)    |   (Results)  (Results)
+             /  +---------v-------------------------------+  |  |        |        |      |
+mediachain  |   |         |                    --client-- |  |  |        |        |      |
+ -client    |   |  +------v---------------------------+   |  |  |        |        |      |
+  writer   <    |  |      Client Writer               |   |  v  ^        v        ^      ^
+            |   |  +------+---------------------------+   |  |  |        |        |      |
+            |   |         |                               |  |  |        |        |      |
+             \  ----------v-------------------------------+  |  |        |        |      |
+                          |                                  |  |        |        |      |
+                    (copycat/gRPC)                           |  |        |        |      |
+                          |                                  v  ^        v        ^      ^
+             /  +---------v------------------------------+   |  |        |        |      |
+            |   |         |                     --core-- |   |  |        |        |      |
+            |   |  +------v---------------------------+  |   |  |        |        |      |
 mediachain <    |  |            Transactors           |  |   |  |        |        |      |
  -core      |   |  +------+---------------------------+  |   |  |        |        |      |
 (blockchain)|   |         |                              |   |  |        |        |      |
@@ -397,4 +488,5 @@ mc_neighbors<   |  |Feature Compacting|        |           |      |Feature Compa
              |  |  |                                 KNN Index                                    | |
               \ |  +------------------------------------------------------------------------------+ |
                 +-----------------------------------------------------------------------------------+
-```									  
+```
+

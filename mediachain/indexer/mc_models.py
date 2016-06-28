@@ -455,6 +455,8 @@ def dedupe_reindex(lookup_name = False,
     if mc_config.LOW_LEVEL:
         es = mc_neighbors.low_level_es_connect()    
 
+        ## TODO: https://www.elastic.co/guide/en/elasticsearch/reference/current/breaking_21_search_changes.html
+        
         res = scan(client = es,
                    index = index_name,
                    doc_type = doc_type,
@@ -743,7 +745,7 @@ def typeahead_generate():
     
     if mc_config.LOW_LEVEL:
         es = mc_neighbors.low_level_es_connect()    
-
+        
         res = scan(client = es,
                    index = index_name,
                    doc_type = doc_type,
