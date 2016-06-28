@@ -27,7 +27,7 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
                              'JSON hyper-parameter settings for each model that should be trained.'
                              ),
             'MC_MODELS_FJSON':(None,
-                              'Rather pass a the path to your model config JSON? Do so here. If passed, this overrides `MC_MODEL_JSON`.'
+                              'This overrides `MC_MODEL_JSON`. Pass path to JSON file containing `MC_MODEL_JSON` settings.'
                               ),
             },
        '2. Elasticsearch Settings':

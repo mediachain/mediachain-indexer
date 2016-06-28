@@ -286,9 +286,19 @@ def config_env(cfg, glb):
                     xx = json.loads(dd.strip())
                 else:
                     xx = v
-                k = k.replace('_FJSON','_JSON')
             cfg[kg][k] = (xx,d)
             rh[k] = xx
+
+    ## Override with values from files, if filenames passed:
+    
+    for kg,vg in cfg.items():
+        for k,(v,d) in vg.items():
+            xx = os.environ.get(k,v)
+            if k.endswith('_FJSON'):
+                if xx:
+                    cfg[kg][k.replace('_FJSON','_JSON')] = 'OVERRIDDEN_FROM_FJSON:' + cfg[kg][k]
+                    rh[k.replace('_FJSON','_JSON')] = rh[k]
+    
     glb.update(rh)
 
     ## Load client config:

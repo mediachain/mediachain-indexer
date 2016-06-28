@@ -3,6 +3,8 @@
 
 """
 Models for search re-ranking.
+
+NOTE: Please see here for the restrictions of asteval: https://newville.github.io/asteval/basics.html
 """
 
 from mc_generic import setup_main, group, raw_input_enter, pretty_print, intget, print_config, sleep_loud
@@ -14,6 +16,8 @@ import math
 class ReRankingBasic():
     """
     Basic search results re-ranking model. Allows you to specify a simple custom re-ranking equation.
+
+    NOTE: Please see here for the restrictions of asteval: https://newville.github.io/asteval/basics.html
     """
     
     def __init__(self,
@@ -25,12 +29,14 @@ class ReRankingBasic():
         self.aeval = Interpreter()
 
         ## Access all functions of these modules:
+
+        ## Turns out that asteval already imports all of `math`.
         
-        for mod in [math]:
-            for attr in dir(mod):
-                if attr.startswith('_'):
-                    continue
-                self.aeval.symtable[attr] = getattr(math, attr)
+        #for mod in [math]:
+        #    for attr in dir(mod):
+        #        if attr.startswith('_'):
+        #            continue
+        #        self.aeval.symtable[attr] = getattr(math, attr)
 
         ## numpy:
         
