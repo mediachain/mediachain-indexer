@@ -12,12 +12,15 @@ mediachain-indexer-test     | Tests and sanity checks.
 
 ## TOC
 
-- [Core Setup](https://github.com/mediachain/mediachain-indexer#core-setup)
-- [Quick Test](https://github.com/mediachain/mediachain-indexer#quick-test)
-- [Ingest Data](https://github.com/mediachain/mediachain-indexer#create-dataset-to-be-ingested)
-- [Query Server](https://github.com/mediachain/mediachain-indexer#query-server)
-- [Specify and Configure Models](https://github.com/mediachain/mediachain-indexer#specify-and-configure-models)
-- [System Diagram](https://github.com/mediachain/mediachain-indexer#system-diagram)
+- Setup:
+    - [Core Setup](https://github.com/mediachain/mediachain-indexer#core-setup)
+    - [Quick Test](https://github.com/mediachain/mediachain-indexer#quick-test)
+    - [Ingest Data](https://github.com/mediachain/mediachain-indexer#create-dataset-to-be-ingested)
+    - [Query Server](https://github.com/mediachain/mediachain-indexer#query-server)
+- Customizing:
+    - [Customizing and Plugins](https://github.com/mediachain/mediachain-indexer#customizing-and-plugins)
+- Internals:
+    - [System Diagram](https://github.com/mediachain/mediachain-indexer#system-diagram)
 
 ## Getting Started
 
@@ -282,9 +285,9 @@ Args - passed as JSON-encoded body:
 ```
 
 
-## Passing Custom Hyper-Parameters to Models
+## Customizing and Plugins
 
-TODO: This section is WIP.
+TODO: WIP.
 
 The selection of model components and hyper-parameters can be customized.
 Note that since the architecture has fixed, pre-defined connections between components,
@@ -364,9 +367,7 @@ Note that some plugins may require separate pre-training on external data source
 
 ## System Diagram
 
-Modes of operation vs components involved in each mode of operation.
-
-Links:
+Modes of operation -versus- components involved in each mode of operation. Components links:
 [Indexer](https://github.com/mediachain/mediachain-indexer),
 [Core](https://github.com/mediachain/mediachain),
 Frontend,
