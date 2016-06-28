@@ -318,15 +318,11 @@ ReRankingBasic                 | Simple re-ranking model that allows you to pass
 
 #### Passing Custom Hyper-Parameters at Runtime
 
-Hyper-parameters of the model components can be configured prior to ingestion or on-the-fly at query time.
+Hyper-parameters of the model components can be configured prior to ingestion or on-the-fly at query time. Multiple separate pipelines can be created, and later identified by name when using API endpoints such as `/search` or '/dupe_lookup'.
 
-Multiple separate pipelines can be created, and their names be passed to API endpoints such as `/search` or '/dupe_lookup'.
+Note that some hyper-parameters can only be set at ingestion time, prior to search or dedupe lookups. Add `'is_temp':true` to a model configuration to indicate that this is for one-off use and should be deleted after the current API call, e.g. for use in hyper-parameter optimization routines.
 
-Note that some hyper-parameters can only be set at ingestion time, prior to search or dedupe lookups.
-
-Add `'is_temp':true` to a model to indicate that this is for one-off use, e.g. in hyper-parameter optimization routines.
-
-Example configuration JSON:
+Below is an example configuration, which can be passed in via `MC_MODELS_JSON` and `MC_MODELS_FJSON`, or the endpoints `/search` and '/dupe_lookup':
 
 ```
 {"model_1":{"descriptors":{"name":"VectorsBaseline",
