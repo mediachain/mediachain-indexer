@@ -296,7 +296,7 @@ only the hyper-parameters to the components can be adjusted, not the connections
 This should not be a major limitation in practice.
 
 
-#### Components:
+#### System Components
 
 Descriptor Generator Names     | Info
 -------------------------------|--------------------------
@@ -360,7 +360,7 @@ Example configuration JSON:
 
 For model components listed above, you may pass just the class name, and the packages `mediachain.indexer.mc_models`, `mediachain.indexer.mc_rerank`, and `mediachain.indexer.mc_neighbors` will be searched.
 
-External plugin may also be passed, by specifying the full import path for the class in the `"name"` field.
+External plugins may also be passed, by specifying the full import path for the class in the `"name"` field.
 
 Note that some plugins may require separate pre-training on external data sources before they can be used by the Indexer.
 

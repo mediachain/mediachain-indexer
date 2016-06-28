@@ -12,3 +12,4 @@ hyperopt==0.0.2
 pymongo==3.2.2
 base58==0.2.2
 #mediachain-client==0.1.0
+asteval==0.9.7
