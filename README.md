@@ -84,17 +84,12 @@ $ mediachain-indexer-ingest config
 
 ## 2. Ingestion Settings:
 
-  # AWS region of DynamoDB instance:
-  MC_REGION_NAME           = None                        <STR>
-  MC_AWS_SECRET_ACCESS_KEY = None                        <STR>
-  MC_AWS_ACCESS_KEY_ID     = None                        <STR>
-  MC_DYNAMO_TABLE_NAME     = 'Mediachain'                <STR>
+  # Mediachain datastore settings:
+  MC_DATASTORE_HOST        = None                        <STR>
+  MC_DATASTORE_PORT_INT    = 10002                       <INT>
 
   # Getty key, for creating local dump of getty images:
   MC_GETTY_KEY             = ''                          <STR>
-
-  # AWS endpoint of DynamoDB instance:
-  MC_ENDPOINT_URL          = None                        <STR>
 
 ## 3. Settings for Automated Tests:
 

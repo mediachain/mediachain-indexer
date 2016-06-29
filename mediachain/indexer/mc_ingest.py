@@ -399,16 +399,15 @@ def ingest_blockchain(last_block_ref = None,
     grpc_errors = (AbortionError, CancellationError, ExpirationError, LocalShutdownError, \
                    NetworkError, RemoteShutdownError, RemoteError)
     
-    from mediachain.datastore.dynamo import set_aws_config
-    aws_cfg = {'endpoint_url': mc_config.MC_ENDPOINT_URL,
-               'mediachain_table_name': mc_config.MC_DYNAMO_TABLE_NAME,
-               'aws_access_key_id': mc_config.MC_AWS_ACCESS_KEY_ID,
-               'aws_secret_access_key': mc_config.MC_AWS_SECRET_ACCESS_KEY,
-               'region_name': mc_config.MC_REGION_NAME,
-               }
-    
-    aws_cfg = dict((k, v) for k, v in aws_cfg.iteritems() if v is not None)
-    set_aws_config(aws_cfg)
+    from mediachain.datastore.rpc import set_rpc_datastore_config
+    store_cfg = {'host': mc_config.MC_DATASTORE_HOST,
+                 'port': mc_config.MC_DATASTORE_PORT_INT
+                 }
+    if not store_cfg['host']:
+        store_cfg['host'] = mc_config.MC_TRANSACTOR_HOST
+
+
+    set_rpc_datastore_config(store_cfg)
     
     def the_gen():
         

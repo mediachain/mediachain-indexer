@@ -42,11 +42,8 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
            },
        '3. Ingestion Settings':
            {'MC_GETTY_KEY':('', 'Getty key, for creating local dump of getty images'),
-            'MC_AWS_ACCESS_KEY_ID':(None, ''),
-            'MC_AWS_SECRET_ACCESS_KEY':(None, ''),
-            'MC_DYNAMO_TABLE_NAME':('Mediachain', ''),
-            'MC_REGION_NAME':(None, 'AWS region of DynamoDB instance'),
-            'MC_ENDPOINT_URL':(None, 'AWS endpoint of DynamoDB instance'),
+            'MC_DATASTORE_HOST': ('', ''),
+            'MC_DATASTORE_PORT_INT': ('10002', ''),
             'MC_USE_IPFS_INT':(1, 'Use IPFS for image ingestion.'),
            },
        '4. Settings for Automated Tests':
