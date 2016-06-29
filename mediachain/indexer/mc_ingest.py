@@ -146,9 +146,7 @@ def ingest_bulk(iter_json = False,
                       }
     
     if not iter_json:
-        iter_json = mc_datasets.iter_json_getty(index_name = index_name,
-                                                doc_type = doc_type,
-                                                )
+        iter_json = mc_datasets.iter_json_getty()
     
     if mc_config.LOW_LEVEL:
         es = mc_neighbors.low_level_es_connect()
@@ -186,7 +184,9 @@ def ingest_bulk(iter_json = False,
                     }
             
             hh.update(xdoc)
-
+            
+            assert '_id' in hh,hh.keys()
+            
             if (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
                 ## One-off ignoring of thumbnail generation via `NO_IMAGE`.
                                 
@@ -400,13 +400,13 @@ def ingest_blockchain(last_block_ref = None,
                    NetworkError, RemoteShutdownError, RemoteError)
     
     from mediachain.datastore.rpc import set_rpc_datastore_config
+    
     store_cfg = {'host': mc_config.MC_DATASTORE_HOST,
                  'port': mc_config.MC_DATASTORE_PORT_INT
                  }
     if not store_cfg['host']:
         store_cfg['host'] = mc_config.MC_TRANSACTOR_HOST
-
-
+    
     set_rpc_datastore_config(store_cfg)
     
     def the_gen():

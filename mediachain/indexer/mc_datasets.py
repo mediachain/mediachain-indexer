@@ -29,12 +29,12 @@ from os.path import exists,join
 from time import sleep
 import json
 import os
-from os import mkdir, listdir, walk, unlink
+from os import mkdir, listdir, walk, unlink, system, walk, rename
 from Queue import Queue
 from threading import current_thread,Thread
 
 import requests
-from random import shuffle
+from random import shuffle, randint
 from shutil import copyfile
 import sys
 from sys import exit
@@ -46,6 +46,163 @@ from mc_generic import group, setup_main, raw_input_enter, download_streamed, tc
 import mc_config
 import mc_ingest
 
+import base64
+import hashlib
+
+from gzip import GzipFile
+from subprocess import check_output
+from pipes import quote as pipes_quote
+import gzip
+
+##
+### Single-file compact sorted format:
+##
+
+def convert_getty_to_compact(dir_out = 'getty_small_compact',
+                             getty_path = 'getty_small/json/images/',
+                             max_num = 0,
+                             do_sort = True,
+                             split_num = 3,
+                             via_cli = False,
+                             num_digits = 4,
+                             delete_existing = True,
+                             ):
+    """
+    Post-processing step to convert getty images dataset to the new single-file format. Requires GNU `sort`.
+    
+    Optionally sort the file to ensure that any contiguous sample of the output file will be representative 
+    of the overall dataset.
+    
+    Args:
+        dir_out:         Prefix for output file name. A suffix of the form "-split-0001.gz" will be appended.
+        getty_path:      Path to getty-formatted directory.
+        do_sort:         Sort output files by ID afterward.
+        split_num:       Output will be split among `split_into` output files. Useful for parallel loading.
+    """
+    
+    if exists(dir_out) and delete_existing:
+        print ('Clearing existing output directory...',dir_out)
+        for fn in listdir(dir_out):
+            fn = join(dir_out, fn)
+            unlink(fn)
+
+    if not exists(dir_out):
+        mkdir(dir_out)
+    
+    fn_out = join(dir_out, dir_out)
+    
+    fn_out_temp = fn_out + '-temp' + str(randint(1,1000000000000))
+    fn_out_temp_2 = fn_out_temp + '-2'
+    fn_out_temp_3 = fn_out_temp + '-3'
+
+    try:
+        with open(fn_out_temp, 'w') as f:
+            
+            for hh in iter_json_getty(getty_path = getty_path,
+                                      max_num = max_num,
+                                      ):
+                
+                new_id = hashlib.md5(hh['_id'].hexdigest())
+                
+                #assert len(new_id) == 24,new_id ## Fixed-length makes sorting easier.
+                assert '\t' not in new_id
+                assert '\n' not in new_id            
+                
+                dd = json.dumps(hh, separators=(',', ':'))
+                
+                assert '\t' not in dd
+                assert '\n' not in dd
+
+                f.write(new_id + '\t' + dd + '\n')
+
+        if not do_sort:
+            rename(fn_out_temp, fn_out_temp_2)
+        
+        else:
+
+            assert exists(fn_out_temp),(fn_out_temp,)
+            
+            ## Sort via gnu `sort`:
+            
+            print ('FILES', fn_out_temp, fn_out_temp_2)
+            
+            cmd = "sort %s > %s" % (pipes_quote(fn_out_temp), pipes_quote(fn_out_temp_2))
+            
+            print ('SORTING',cmd)
+            
+            rr = check_output(cmd,
+                              shell = True,
+                              executable = "/bin/bash",
+                              )
+            
+            unlink(fn_out_temp)
+
+        assert exists(fn_out_temp_2),(fn_out_temp_2,)
+        
+        print ('DONE_STEP_1', fn_out_temp_2)
+        
+        if split_num == 1:
+            print ('WRITE_AND_COMPRESS')
+            
+            with open(fn_out_temp_2) as src, gzip.open(fn_out_temp_3, 'wb') as dst:
+                dst.writelines(src)
+
+            unlink(fn_out_temp_2)
+            
+            rename(fn_out_temp_3, fn_out + (('-split-%0' + str(int(num_digits)) + 'd.gz') % 1))
+            
+        else:
+
+            print ('SPLITTING_AND_COMPRESS',split_num)
+
+            fns = [(x,fn_out + (('-split-%0' + str(int(num_digits)) + 'd.gz') % x)) for x in xrange(split_num)]
+            
+            hh = {x:GzipFile(fn, 'w') for x,fn in fns}
+            
+            with open(fn_out_temp_2) as f:
+                for c,line in enumerate(f):
+                    ff = hh[c % split_num]
+                    ff.write(line)
+            
+            unlink(fn_out_temp_2)
+            
+            for ff in hh.values():
+                ff.close()
+            
+        print ('DONE',dir_out)
+    
+    finally:
+        try: unlink(fn_out_temp)
+        except: pass
+        try: unlink(fn_out_temp_2)
+        except: pass
+        try: unlink(fn_out_temp_3)
+        except: pass
+        try: unlink(fn_out)
+        except: pass
+
+
+def iter_tsvgz_format(fn_in_glob = 'getty_small-split-*'):
+    """
+    Iterate records from files of the format created by `convert_getty_to_compact`.
+
+    Args:
+        fn_in_glob:   Input file(s) to read from. Wildcards allowed.
+    """
+    
+    from os.path import expanduser
+    from glob import glob
+    
+    for fn_in in glob(fn_in_glob):
+        
+        fn_in = expanduser(fn_in)
+        
+        with GzipFile(fn_in) as f:
+            for line in f:
+                new_id, dd = f.strip('\n').split('\t', 1)
+                yield json.loads(dd)
+
+                
 ##
 #### START TRAINING/EVALUATION DATASET ITERATORS:
 ##
@@ -282,9 +439,22 @@ def iter_ukbench(max_num = 0,
             yield hh
 
 ##
-#### START INGESTION DATASETS ITERATORS:
+#### START INGESTION DATASETS ITERATORS: https://github.com/mediachainlabs/mediachain-indexer-medium/issues/7
 ##
 
+def create_flickr_dumps():
+    """
+
+    See:
+    http://code.flickr.net/2014/10/15/the-ins-and-outs-of-the-yahoo-flickr-100-million-creative-commons-dataset/
+    http://webscope.sandbox.yahoo.com/catalog.php?datatype=i&did=67
+    
+    https://multimediacommons.wordpress.com/core-datasets/
+    http://multimedia-commons.s3-website-us-west-2.amazonaws.com/
+
+
+    """
+    pass
 
 def getty_create_dumps(INC_SIZE = 100,
                        NUM_WORKERS = 30,
@@ -554,8 +724,6 @@ def getty_create_dumps(INC_SIZE = 100,
 
 def iter_json_getty(max_num = 0,
                     getty_path = 'getty_small/json/images/',
-                    index_name = mc_config.MC_INDEX_NAME,
-                    doc_type = mc_config.MC_DOC_TYPE,                
                     ):
 
     dd = getty_path
@@ -604,7 +772,7 @@ def iter_json_getty(max_num = 0,
                   'caption':h['caption'],
                   'editorial_source':h['editorial_source'].get('name',None),
                   'keywords':' '.join([x['text'] for x in h['keywords'] if 'text' in x]),
-                  'date_created':date_parser.parse(h['date_created']),
+                  'date_created':date_parser.parse(h['date_created']).isoformat(),  ## Leave as string, just normalize format.
                   'img_data':mc_ingest.shrink_and_encode_image(img_data),
                   #'artist_id':[md5(x['uri']).hexdigest() for x in h['links'] if x['rel'] == 'artist'][0],                
                   #'dims':h['max_dimensions']
@@ -612,15 +780,9 @@ def iter_json_getty(max_num = 0,
                   #               for x in h['display_sizes']
                   #               if x['name'] == 'thumb'][0],
                   }                
-            
-            rr = {'_op_type': 'index',
-                  '_index': index_name,
-                  '_type': doc_type,
-                  '_id': hh['_id'],
-                  #'doc': hh,
-                  }
-            rr.update(hh)
 
+            rr = hh
+            
             print ('YIELDING',rr['_id'])
 
             yield rr
@@ -633,6 +795,8 @@ def transforms_1():
     WIP image transforms collection.
     """
 
+    assert False,'TODO'
+    
     from PIL import Image, ImageEnhance
     image = Image.open('downloads/jcfeb2011.jpg')
 
@@ -768,6 +932,7 @@ def iter_perturb_images(iter_in,
     
 
 functions=['getty_create_dumps',
+           'convert_getty_to_compact'
            ]
 
 def main():

@@ -91,6 +91,9 @@ $ mediachain-indexer-ingest config
   # Getty key, for creating local dump of getty images:
   MC_GETTY_KEY             = ''                          <STR>
 
+  # AWS endpoint of DynamoDB instance:
+  MC_ENDPOINT_URL          = None                        <STR>
+
 ## 3. Settings for Automated Tests:
 
   MC_TEST_WEB_HOST         = 'http://127.0.0.1:23456'    <STR>
@@ -293,20 +296,20 @@ This should not be a major limitation in practice.
 
 #### System Components
 
-Descriptor Generator Names     | Info
+Descriptor Generator Name      | Info
 -------------------------------|--------------------------
 VectorsBaseline                | Perceptual hashing baseline. Produces sparse or dense descriptors. Location: `mediachain.indexer.mc_models.VectorsBaseline`.
 VectorsBaselineNG              | Simple visual bag of image words model. Produces sparse descriptors. Location: `mediachain.indexer.mc_models.VectorsBaselineNG`.
 NeuralBaseline                 | (WIP) Baseline neural model. Produces dense descriptors. Location: `mediachain.indexer.mc_models.NeuralBaseline`.
 
 
-Nearest Neighbor Indexes Names | Info
+Nearest Neighbor Lookup Name   | Info
 -------------------------------|--------------------------
 ElasticSearchNN                | ElasticSearch-backed nearest neighbor lookups. Accepts sparse descriptors. Location: `mediachain.indexer.mc_neighbors.ElasticSearchNN`.
 AnnoyNN                        | (WIP) Annoy-backed nearest neighbor lookups. Accepts dense descriptors. Location: `mediachain.indexer.mc_neighbors.AnnoyNN`.
 
 
-Re-Ranking Models Names        | Info
+Re-Ranking Model Name          | Info
 -------------------------------|--------------------------
 ReRankingBasic                 | Simple re-ranking model that allows you to pass custom re-ranking equations at query time. Location: `mediachain.indexer.mc_rerank.ReRankingBasic`.
 
@@ -317,7 +320,7 @@ Hyper-parameters of the model components can be configured prior to ingestion or
 
 Note that some hyper-parameters can only be set at ingestion time, prior to search or dedupe lookups. Add `'is_temp':true` to a model configuration to indicate that this is for one-off use and should be deleted after the current API call, e.g. for use in hyper-parameter optimization routines.
 
-Below is an example configuration, which can be passed in via `MC_MODELS_JSON` and `MC_MODELS_FJSON`, or the endpoints `/search` and '/dupe_lookup':
+Below is an example configuration, which can be passed in via `MC_MODELS_JSON` and `MC_MODELS_FJSON`, or the endpoints `/search` and `/dupe_lookup`:
 
 ```
 {"model_1":{"descriptors":{"name":"VectorsBaseline",
@@ -333,7 +336,7 @@ Below is an example configuration, which can be passed in via `MC_MODELS_JSON` a
                      }
            }
 "model_2":{"descriptors":{"name":"VectorsBaseline",
-                           "params":{"hash_size":42,
+                          "params":{"hash_size":42,
                                      "use_hash":"dhash",
                                      "patch_size":5,
                                      "max_patches":32
