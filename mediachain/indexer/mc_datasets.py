@@ -42,7 +42,7 @@ from sys import exit
 from datetime import datetime
 from dateutil import parser as date_parser
 
-from mc_generic import group, setup_main, raw_input_enter, download_streamed, tcache, pretty_print, tarfile_extract_if_not_exists
+from mc_generic import group, setup_main, raw_input_enter, download_streamed, tcache, pretty_print, tarfile_extract_if_not_exists, walk_files
 import mc_config
 import mc_ingest
 
@@ -58,15 +58,17 @@ import gzip
 ### Single-file compact sorted format:
 ##
 
-def convert_getty_to_compact(dir_out = 'getty_small_compact',
-                             getty_path = 'getty_small/json/images/',
-                             max_num = 0,
-                             do_sort = True,
-                             split_num = 3,
-                             via_cli = False,
-                             num_digits = 4,
-                             delete_existing = True,
-                             ):
+def convert_to_compactsplit(the_iter = False,
+                            dir_out = 'getty_small_compactsplit',
+                            getty_path = 'getty_small/json/images/',
+                            do_sort = True,
+                            pre_split_num = 32,
+                            max_num_per_split = 1000000,
+                            num_digits = 4,
+                            delete_existing = True,
+                            max_num = 0,
+                            via_cli = False,
+                            ):
     """
     Post-processing step to convert getty images dataset to the new single-file format. Requires GNU `sort`.
     
@@ -74,11 +76,28 @@ def convert_getty_to_compact(dir_out = 'getty_small_compact',
     of the overall dataset.
     
     Args:
-        dir_out:         Prefix for output file name. A suffix of the form "-split-0001.gz" will be appended.
-        getty_path:      Path to getty-formatted directory.
-        do_sort:         Sort output files by ID afterward.
-        split_num:       Output will be split among `split_into` output files. Useful for parallel loading.
+        the_iter:           Input iterator that outputs dicts containing, at a minimum, an '_id' key.
+        dir_out:            Prefix for output file name. A suffix of the form "-split-0001.gz" will be appended.
+        getty_path:         Path to getty-formatted directory.
+        do_sort:            Sort output files by ID afterward.
+        pre_split_num:      Pre-split output into at least `pre_split_num` files, for easy parallel loading. Probably best to
+                            error on the high side here.
+        max_num_per_split:  If any of the splits have more than `max_num_per_split` records, then multiple files per split will 
+                            be created.
+        num_digits:         How much to zero-pad numbers in output. Should probably leave this at `4`.
+        delete_existing:    Delete any existing files in `dir_out` folder.
+        max_num:            Terminate early after `max_num` records.
     """
+    
+    assert pre_split_num <= (10 ** num_digits - 1),(pre_split_num, num_digits)
+
+    if not the_iter:
+        
+        assert via_cli,('REQUIRED: the_iter',)
+        
+        the_iter = iter_json_getty(getty_path = getty_path,
+                                   max_num = max_num,
+                                   )
     
     if exists(dir_out) and delete_existing:
         print ('Clearing existing output directory...',dir_out)
@@ -94,15 +113,17 @@ def convert_getty_to_compact(dir_out = 'getty_small_compact',
     fn_out_temp = fn_out + '-temp' + str(randint(1,1000000000000))
     fn_out_temp_2 = fn_out_temp + '-2'
     fn_out_temp_3 = fn_out_temp + '-3'
-
+    
     try:
         with open(fn_out_temp, 'w') as f:
             
-            for hh in iter_json_getty(getty_path = getty_path,
-                                      max_num = max_num,
-                                      ):
+            for hh in the_iter:
+
+                xid = hh['_id']
+                if type(xid) == unicode:
+                    xid = xid.encode('utf8')
                 
-                new_id = hashlib.md5(hh['_id'].hexdigest())
+                new_id = hashlib.md5(xid).hexdigest()
                 
                 #assert len(new_id) == 24,new_id ## Fixed-length makes sorting easier.
                 assert '\t' not in new_id
@@ -141,7 +162,7 @@ def convert_getty_to_compact(dir_out = 'getty_small_compact',
         
         print ('DONE_STEP_1', fn_out_temp_2)
         
-        if split_num == 1:
+        if pre_split_num == 1:
             print ('WRITE_AND_COMPRESS')
             
             with open(fn_out_temp_2) as src, gzip.open(fn_out_temp_3, 'wb') as dst:
@@ -153,22 +174,39 @@ def convert_getty_to_compact(dir_out = 'getty_small_compact',
             
         else:
 
-            print ('SPLITTING_AND_COMPRESS',split_num)
+            print ('SPLITTING_AND_COMPRESS',pre_split_num)
 
-            fns = [(x,fn_out + (('-split-%0' + str(int(num_digits)) + 'd.gz') % x)) for x in xrange(split_num)]
             
-            hh = {x:GzipFile(fn, 'w') for x,fn in fns}
+            
+            hh = {x:[False, x, 0, 0] ## [output_file, this_split_num, file_num_this_split, record_count_this_split]
+                  for x
+                  in xrange(pre_split_num)
+                  }
             
             with open(fn_out_temp_2) as f:
                 for c,line in enumerate(f):
-                    ff = hh[c % split_num]
-                    ff.write(line)
+                    
+                    xx = hh[c % pre_split_num]
+                    
+                    if (xx[0] is False) or (xxh[3] > max_num_per_split):
+                        if xx[0] is not False:
+                            xx[0].close()
+                        fn = fn_out + (('-compactsplit-%0' + str(int(num_digits)) + 'd-%0' + str(int(num_digits)) + 'd.gz') % (xx[1], xx[2]))
+                        print ('NEW_FILE',fn)
+                        xx[0] = GzipFile(fn, 'w')
+                        xx[2] += 1
+                        xx[3] = 0
+                    
+                    xx[0].write(line)
+                    xx[3] += 1
             
             unlink(fn_out_temp_2)
             
-            for ff in hh.values():
-                ff.close()
-            
+            for xx in hh.values():
+                if xx[0] is not False:
+                    print ('CLOSE_FILE',xx[0])
+                    xx[0].close()
+        
         print ('DONE',dir_out)
     
     finally:
@@ -182,7 +220,7 @@ def convert_getty_to_compact(dir_out = 'getty_small_compact',
         except: pass
 
 
-def iter_tsvgz_format(fn_in_glob = 'getty_small-split-*'):
+def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit'):
     """
     Iterate records from files of the format created by `convert_getty_to_compact`.
 
@@ -190,17 +228,28 @@ def iter_tsvgz_format(fn_in_glob = 'getty_small-split-*'):
         fn_in_glob:   Input file(s) to read from. Wildcards allowed.
     """
     
-    from os.path import expanduser
+    from os.path import expanduser, isfile
     from glob import glob
     
-    for fn_in in glob(fn_in_glob):
+    fn_in_glob = expanduser(fn_in_glob)
+    
+    lst = list(glob(fn_in_glob))
+    
+    assert lst,('NO_FILES_FOUND',fn_in_glob)
+    
+    for fn_in in lst:
         
-        fn_in = expanduser(fn_in)
+        if isfile(fn_in):
+            fns = [fn_in]
+        else:
+            fns = walk_files(fn_in)
         
-        with GzipFile(fn_in) as f:
-            for line in f:
-                new_id, dd = f.strip('\n').split('\t', 1)
-                yield json.loads(dd)
+        for fn in fns:
+            
+            with GzipFile(fn) as f:
+                for line in f:
+                    new_id, dd = line.strip('\n').split('\t', 1)
+                    yield json.loads(dd)
 
                 
 ##
@@ -932,7 +981,7 @@ def iter_perturb_images(iter_in,
     
 
 functions=['getty_create_dumps',
-           'convert_getty_to_compact'
+           'convert_to_compactsplit',
            ]
 
 def main():
