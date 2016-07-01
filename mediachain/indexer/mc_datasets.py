@@ -125,8 +125,8 @@ def convert_to_compactsplit(the_iter = False,
     the_path, the_dir = split_path(dir_out)
     assert exists(the_path),('PATH_DOES_NOT_EXIST', the_path)
     assert the_dir,('SPECIFY_OUTPUT_DIR',the_dir)
-    if not exists(the_dir):
-        makedirs(the_dir)
+    if not exists(dir_out):
+        makedirs(dir_out)
     
     fn_out = join(dir_out, the_dir)
     
