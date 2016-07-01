@@ -58,9 +58,10 @@ import gzip
 ### Single-file compact sorted format:
 ##
 
+VERSION_COMPACTSPLIT = '0001'
+
 def convert_to_compactsplit(the_iter = False,
-                            dir_out = 'getty_small_compactsplit',
-                            getty_path = 'getty_small/json/images/',
+                            dir_out = False,
                             do_sort = True,
                             pre_split_num = 32,
                             max_num_per_split = 1000000,
@@ -90,14 +91,19 @@ def convert_to_compactsplit(the_iter = False,
     """
     
     assert pre_split_num <= (10 ** num_digits - 1),(pre_split_num, num_digits)
-
+    
     if not the_iter:
         
         assert via_cli,('REQUIRED: the_iter',)
+
+        dir_out = 'getty_small_compactsplit'
         
         the_iter = iter_json_getty(getty_path = getty_path,
                                    max_num = max_num,
                                    )
+    
+    assert the_iter is not False
+    assert dir_out is not False
     
     if exists(dir_out) and delete_existing:
         print ('Clearing existing output directory...',dir_out)
@@ -191,7 +197,9 @@ def convert_to_compactsplit(the_iter = False,
                     if (xx[0] is False) or (xxh[3] > max_num_per_split):
                         if xx[0] is not False:
                             xx[0].close()
-                        fn = fn_out + (('-compactsplit-%0' + str(int(num_digits)) + 'd-%0' + str(int(num_digits)) + 'd.gz') % (xx[1], xx[2]))
+                        fn = fn_out + (('-compactsplit-v' + VERSION_COMPACTSPLIT + \
+                                        '-%0' + str(int(num_digits)) + 'd-%0' + \
+                                        str(int(num_digits)) + 'd.gz') % (xx[1], xx[2]))
                         print ('NEW_FILE',fn)
                         xx[0] = GzipFile(fn, 'w')
                         xx[2] += 1
