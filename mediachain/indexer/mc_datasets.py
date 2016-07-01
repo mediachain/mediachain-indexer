@@ -208,7 +208,7 @@ def convert_to_compactsplit(the_iter = False,
                     
                     xx = hh[c % pre_split_num]
                     
-                    if (xx[0] is False) or (xxh[3] > max_num_per_split):
+                    if (xx[0] is False) or (xx[3] > max_num_per_split):
                         if xx[0] is not False:
                             xx[0].close()
                         fn = fn_out + (('-compactsplit-v' + VERSION_COMPACTSPLIT + \
@@ -835,23 +835,20 @@ def iter_json_getty(max_num = 0,
 
             with open(fn) as f:
                 img_data = f.read()
-
+            
             hh = {'_id':'getty_' + h['id'],
                   'title':h['title'],
                   'artist':h['artist'],
-                  'collection_name':h['collection_name'],
-                  'caption':h['caption'],
-                  'editorial_source':h['editorial_source'].get('name',None),
+                  'description':h['caption'],
                   'keywords':' '.join([x['text'] for x in h['keywords'] if 'text' in x]),
                   'date_created':date_parser.parse(h['date_created']).isoformat(),  ## Leave as string, just normalize format.
                   'img_data':mc_ingest.shrink_and_encode_image(img_data),
-                  #'artist_id':[md5(x['uri']).hexdigest() for x in h['links'] if x['rel'] == 'artist'][0],                
-                  #'dims':h['max_dimensions']
-                  #'dims_thumb':[{'width':x['width'],'height':x['height']}
-                  #               for x in h['display_sizes']
-                  #               if x['name'] == 'thumb'][0],
+                  'source_record':h,
+                  ## Not yet standardized:
+                  'editorial_source':h['editorial_source'].get('name',None),
+                  'collection_name':h['collection_name'],
                   }                
-
+            
             rr = hh
             
             print ('YIELDING',rr['_id'])

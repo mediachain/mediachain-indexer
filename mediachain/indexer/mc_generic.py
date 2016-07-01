@@ -442,8 +442,8 @@ def set_console_title(title):
     """
     try:
         title = title.replace("'",' ').replace('"',' ').replace('\\',' ')
-        cmd = r"echo -ne '\ek%s\e\\' > /dev/null" % title
-        system(cmd)
+        #cmd = r"echo -ne '\ek%s\e\\' > /dev/null" % title
+        #system(cmd)
         cmd = "printf '\033k%s\033\\'" % title
         system(cmd)
         #cmd = 'screen -X title "%s" 2> /dev/null' % title
