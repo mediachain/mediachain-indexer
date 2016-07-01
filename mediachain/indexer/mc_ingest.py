@@ -67,7 +67,8 @@ def shrink_and_encode_image(s, size = (150, 150)):
     
     if (img.size[0] > size[0]) or (img.size[1] > size[1]):
         f2 = StringIO()
-        img.thumbnail(size, Image.ANTIALIAS).convert('RGB').save(f2, "JPEG")
+        img.thumbnail(size, Image.ANTIALIAS)
+        img.convert('RGB').save(f2, "JPEG")
         f2.seek(0)
         s = f2.read()
     
