@@ -841,7 +841,14 @@ def iter_json_getty(max_num = 0,
 
             with open(fn) as f:
                 img_data = f.read()
-            
+
+            try:
+                img_data_uri = mc_ingest.shrink_and_encode_image(img_data)
+            except:
+                print ('BAD_IMAGE_FILE',fn)
+                nn -= 1
+                continue
+                
             hh = {'_id':'getty_' + h['id'],
                   'dataset':'getty',
                   'title':h['title'],
@@ -849,7 +856,7 @@ def iter_json_getty(max_num = 0,
                   'description':h['caption'],
                   'keywords':' '.join([x['text'] for x in h['keywords'] if 'text' in x]),
                   'date_created':date_parser.parse(h['date_created']).isoformat(),  ## Leave as string, just normalize format.
-                  'img_data':mc_ingest.shrink_and_encode_image(img_data),
+                  'img_data':img_data_uri,
                   'source_record':h,
                   ## Not yet standardized:
                   'editorial_source':h['editorial_source'].get('name',None),
