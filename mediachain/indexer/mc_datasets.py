@@ -68,6 +68,7 @@ def convert_to_compactsplit(the_iter = False,
                             num_digits = 4,
                             delete_existing = True,
                             max_num = 0,
+                            confirm_clear = True,
                             via_cli = False,
                             ):
     """
@@ -89,6 +90,7 @@ def convert_to_compactsplit(the_iter = False,
         num_digits:         How much to zero-pad numbers in output. Should probably leave this at `4`.
         delete_existing:    Delete any existing files in `dir_out` folder.
         max_num:            Terminate early after `max_num` records.
+        confirm_clear:      Prompt for confirmation before clearing output directory.
     """
     
     assert pre_split_num <= (10 ** num_digits - 1),(pre_split_num, num_digits)
@@ -107,9 +109,17 @@ def convert_to_compactsplit(the_iter = False,
     assert dir_out is not False
     
     if exists(dir_out) and delete_existing:
-        print ('Clearing existing output directory...',dir_out)
-        for fn in listdir(dir_out):
+        xdd = listdir(dir_out)
+        if len(xdd) and confirm_clear:
+            print ('Clearing existing output directory...',dir_out)
+            print 'PRESS ENTER TO CONFIRM'
+            raw_input()
+            print 'AGAIN'
+            raw_input()
+        
+        for fn in xdd:
             fn = join(dir_out, fn)
+            print ('UNLINK',fn)
             unlink(fn)
 
     the_path, the_dir = split_path(dir_out)
