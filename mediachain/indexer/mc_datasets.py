@@ -831,8 +831,8 @@ def iter_json_getty(max_num = 0,
                 except:
                     assert False,('BAD_JSON',fn)
 
-            fn = join(dd3, 'thumb/' + ('/'.join(h['id'][:4])) + '/' + h['id'] + '.jpg')
-            #fn = join(dd3, 'comp/' + ('/'.join(h['id'][:4])) + '/' + h['id'] + '.jpg')
+            #fn = join(dd3, 'thumb/' + ('/'.join(h['id'][:4])) + '/' + h['id'] + '.jpg')
+            fn = join(dd3, 'comp/' + ('/'.join(h['id'][:4])) + '/' + h['id'] + '.jpg')
 
             if not exists(fn):
                 print ('NOT_FOUND',fn)
@@ -841,7 +841,7 @@ def iter_json_getty(max_num = 0,
 
             with open(fn) as f:
                 img_data = f.read()
-
+            
             try:
                 img_data_uri = mc_ingest.shrink_and_encode_image(img_data)
             except:
