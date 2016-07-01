@@ -25,7 +25,7 @@ import tarfile
 import sys
 
 from os import mkdir, listdir, makedirs, walk
-from os.path import exists,join
+from os.path import exists,join,split as split_path
 from time import sleep
 import json
 import os
@@ -79,6 +79,7 @@ def convert_to_compactsplit(the_iter = False,
     Args:
         the_iter:           Input iterator that outputs dicts containing, at a minimum, an '_id' key.
         dir_out:            Prefix for output file name. A suffix of the form "-split-0001.gz" will be appended.
+                            Can also be a path to a prefix name, e.g. 'output_prefix' or 'a/b/c/output_prefix'.
         getty_path:         Path to getty-formatted directory.
         do_sort:            Sort output files by ID afterward.
         pre_split_num:      Pre-split output into at least `pre_split_num` files, for easy parallel loading. Probably best to
@@ -111,10 +112,13 @@ def convert_to_compactsplit(the_iter = False,
             fn = join(dir_out, fn)
             unlink(fn)
 
-    if not exists(dir_out):
-        mkdir(dir_out)
+    the_path, the_dir = split_path(dir_out)
+    assert exists(the_path),('PATH_DOES_NOT_EXIST', the_path)
+    assert the_dir,('SPECIFY_OUTPUT_DIR',the_dir)
+    if not exists(the_dir):
+        makedirs(the_dir)
     
-    fn_out = join(dir_out, dir_out)
+    fn_out = join(dir_out, the_dir)
     
     fn_out_temp = fn_out + '-temp' + str(randint(1,1000000000000))
     fn_out_temp_2 = fn_out_temp + '-2'
