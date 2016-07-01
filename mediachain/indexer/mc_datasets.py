@@ -110,16 +110,18 @@ def convert_to_compactsplit(the_iter = False,
     
     if exists(dir_out) and delete_existing:
         xdd = listdir(dir_out)
-        if len(xdd) and confirm_clear:
-            print ('Clearing existing output directory...',dir_out)
-            print 'PRESS ENTER TO CONFIRM'
-            raw_input()
-            print 'AGAIN'
-            raw_input()
-        
+            
         for fn in xdd:
             fn = join(dir_out, fn)
             print ('UNLINK',fn)
+        
+        if len(xdd) and confirm_clear:
+            print ('CLEAR FILES FROM EXISTING OUTPUT DIRECTORY?',dir_out)
+            print ('PRESS ENTER TO CONFIRM',)
+            raw_input()
+            
+        for fn in xdd:
+            fn = join(dir_out, fn)
             unlink(fn)
 
     the_path, the_dir = split_path(dir_out)
@@ -809,6 +811,10 @@ def iter_json_getty(max_num = 0,
     for dir_name, subdir_list, file_list in walk(dd):
 
         for fn in file_list:
+
+            if nn % 100 == 0:
+                print ('iter_json_getty',nn)
+
             nn += 1
 
             if max_num and (nn + 1 >= max_num):
@@ -837,6 +843,7 @@ def iter_json_getty(max_num = 0,
                 img_data = f.read()
             
             hh = {'_id':'getty_' + h['id'],
+                  'dataset':'getty',
                   'title':h['title'],
                   'artist':h['artist'],
                   'description':h['caption'],
@@ -850,8 +857,8 @@ def iter_json_getty(max_num = 0,
                   }                
             
             rr = hh
-            
-            print ('YIELDING',rr['_id'])
+
+            #print ('YIELDING',rr['_id'])
 
             yield rr
 
