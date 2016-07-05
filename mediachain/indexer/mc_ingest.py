@@ -124,10 +124,6 @@ def ingest_bulk(iter_json = False,
         See `mc_test.py`
     """
     
-    if mc_config.MC_USE_IPFS_INT:
-        from mediachain.datastore import set_use_ipfs_for_raw_data
-        set_use_ipfs_for_raw_data(True)
-
     index_settings = {'settings': {'number_of_shards': mc_config.MC_NUMBER_OF_SHARDS_INT,
                                    'number_of_replicas': mc_config.MC_NUMBER_OF_REPLICAS_INT,                             
                                    },
@@ -334,92 +330,41 @@ def ingest_bulk(iter_json = False,
     return rr
 
 
-"""
-EXPECTED ARTEFACT FORMAT:
-----
-
-{ 'entity': { u'meta': { u'data': { u'name': u'Randy Brooke'},
-                         u'rawRef': { u'@link': '\x12 u\xbb\xdaP\xf6\x1d\x1d\xf4\xff\xcbFD\xac\xe9\x92\xb3,\xf1\x9a;\x08J\r\xd2L\x97\xd0\x8cKY\xd5\x1a'},
-                         u'translatedAt': u'2016-06-08T15:25:50.254139',
-                         u'translator': u'GettyTranslator/0.1'},
-              u'type': u'entity'},
-  u'meta': { u'data': { u'_id': u'getty_521396048',
-                        u'artist': u'Randy Brooke',
-                        u'caption': u'NEW YORK, NY - APRIL 15:  A model walks the runway wearing the Ines Di Santo Bridal Collection Spring 2017 on April 15, 2016 in New York City.  (Photo by Randy Brooke/Getty Images for Ines Di Santo)',
-                        u'collection_name': u'Getty Images Entertainment',
-                        u'date_created': u'2016-04-15T00:00:00-07:00',
-                        u'editorial_source': u'Getty Images North America',
-                        u'keywords': [ u'Vertical',
-                                       u'Walking',
-                                       u'USA',
-                                       u'New York City',
-                                       u'Catwalk - Stage',
-                                       u'Fashion Model',
-                                       u'Photography',
-                                       u'Arts Culture and Entertainment',
-                                       u'Bridal Show'],
-                        u'title': u'Ines Di Santo Bridal Collection Spring 2017 - Runway'},
-             u'rawRef': { u'@link': "\x12 r\x1a\xed'#\xc8\xbe\xb1'Qu\xadePG\x01@\x19\x88N\x17\xa9\x01a\x1e\xa9v\xc9L\x00\xe6c"},
-             u'translatedAt': u'2016-06-08T15:26:12.622240',
-             u'translator': u'GettyTranslator/0.1'},
-  u'type': u'artefact'}
-"""
-
-
 def tail_blockchain(via_cli = False):
     """
-    Watch blocks arrive from blockchain via the mediachain Reader. 
+    Debugging tool - Watch blocks arrive from blockchain. 
     """
-    ingest_blockchain(just_tail = True)
+    from mc_simpleclient import SimpleClient
 
+    cur = SimpleClient()
+    
+    for art in cur.read_artefacts():
+        print ('ART:',time(),art)
+    
 
-def ingest_blockchain(last_block_ref = None,
-                      index_name = mc_config.MC_INDEX_NAME,
-                      doc_type = mc_config.MC_DOC_TYPE,
-                      auto_reindex = False,
-                      force_exit = True,
-                      just_tail = False,
-                      via_cli = False,
-                      ):
+    
+def receive_blockchain_into_indexer(last_block_ref = None,
+                                    index_name = mc_config.MC_INDEX_NAME,
+                                    doc_type = mc_config.MC_DOC_TYPE,
+                                    via_cli = False,
+                                    ):
     """
-    Ingest media from Mediachain blockchain.
+    Read media from Mediachain blockchain and write it into Indexer.
     
     Args:
         last_block_ref:  (Optional) Last block ref to start from.
         index_name:      Name of Indexer index to populate.
         doc_type:        Name of Indexer doc type.
-        auto_reindex:    Automatically reindex upon completion. TODO: Reindex periodically instead of waiting for iterator exit?
-        force_exit:      Force exit interpreter upon completion. Workaround for gPRC bug that prevents the process from exiting.                           
     """
     
-    import mediachain.transactor.client
-    from grpc.framework.interfaces.face.face import ExpirationError, AbortionError, CancellationError, ExpirationError, \
-        LocalShutdownError, NetworkError, RemoteShutdownError, RemoteError
-
-    grpc_errors = (AbortionError, CancellationError, ExpirationError, LocalShutdownError, \
-                   NetworkError, RemoteShutdownError, RemoteError)
+    from mc_simpleclient import SimpleClient
     
-    from mediachain.datastore.rpc import set_rpc_datastore_config
-    
-    store_cfg = {'host': mc_config.MC_DATASTORE_HOST,
-                 'port': mc_config.MC_DATASTORE_PORT_INT
-                 }
-    if not store_cfg['host']:
-        store_cfg['host'] = mc_config.MC_TRANSACTOR_HOST
-    
-    set_rpc_datastore_config(store_cfg)
+    cur = SimpleClient()
     
     def the_gen():
+        ## Convert from blockchain format to Indexer format:
         
-        print 'STREAMING FROM TRANSACTORCLIENT...',(mc_config.MC_TRANSACTOR_HOST, mc_config.MC_TRANSACTOR_PORT_INT)
-        
-        tc = mediachain.transactor.client.TransactorClient(mc_config.MC_TRANSACTOR_HOST,
-                                                           mc_config.MC_TRANSACTOR_PORT_INT,
-                                                           )
-        for art in tc.canonical_stream(timeout=600):
-            if just_tail:
-                print ('ART:',time(),art)
-                continue
+        for art in cur.read_artefacts(force_exit = via_cli): ## Force exit after loop is complete, if CLI.
             
             try:
                 print 'GOT',art.get('type')
@@ -474,7 +419,7 @@ def ingest_blockchain(last_block_ref = None,
                 
                 yield rh
             except:
-                print '!!!ARTEFACT PARSING ERROR:'
+                print ('!!!ARTEFACT PARSING ERROR:',)
                 print repr(art)
                 print 'TRACEBACK:'
                 import traceback, sys, os
@@ -485,81 +430,137 @@ def ingest_blockchain(last_block_ref = None,
         
         print 'END ITER'
 
-    if just_tail:
-        list(the_gen())
-        return
-        
-    try:
-        nn = ingest_bulk(iter_json = the_gen(),
-                         #index_name = index_name,
-                         #doc_type = doc_type,
-                         )
-        
-        print 'GRPC EXITED SUCCESSFULLY...'
 
-    except grpc_errors as e:
-        print '!!!CAUGHT gRPC ERROR',e
-
-        import traceback, sys, os
-        for line in traceback.format_exception(*sys.exc_info()):
-            print line,
-
-        if force_exit:
-            ## Force exit due to grpc bug:
-
-            print 'FORCE_EXIT'
-
-            sleep_loud(1)
-
-            os._exit(-1)
-
-            
-    except BaseException as e:
-        print '!!!CAUGHT OTHER ERROR',e
-        
-        import traceback, sys, os
-        for line in traceback.format_exception(*sys.exc_info()):
-            print line,
-            
-        if force_exit:
-            ## Force exit due to grpc bug:
-
-            print 'FORCE_EXIT'
-
-            sleep_loud(1)
-
-            os._exit(-1)
+    ## Do the ingestion:
+    
+    nn = ingest_bulk(iter_json = the_gen(),
+                     #index_name = index_name,
+                     #doc_type = doc_type,
+                     )
+    
+    print 'GRPC EXITED SUCCESSFULLY...'
 
     
-    if auto_reindex:
-        
-        print 'AUTO_REINDEX...'
-        
-        import mc_models
-        mc_models.dedupe_reindex_all()
-
     print 'DONE_INGEST',nn
 
-    
-def ingest_gettydump(max_num = 100000,
-                     getty_path = False,
-                     index_name = mc_config.MC_INDEX_NAME,
-                     doc_type = mc_config.MC_DOC_TYPE,
-                     via_cli = False,
-                     *args,
-                     **kw):
+
+def send_compactsplit_to_blockchain(path_glob = False,
+                                    max_num = 5,
+                                    via_cli = False,
+                                    ):
     """
-    Ingest media from Getty data dumps into Indexer.
+    Read in from compactsplit dumps, write to blockchain.
+    
+    Why this endpoint instead of the `mediachain.client` endpoint? This endpoint allows us to do sophisticated
+    dedupe analysis prior to sending media to the blockchain.
+    
+    Args:
+        path_glob:  Directory containing compactsplit files.
+        max_num:    End ingestion early after `max_num` records. For testing.
+        index_name: Name of Indexer index to populate.
+        doc_type:   Name of Indexer doc type.
+    
+    """
+    
+    import sys
+    
+    from mc_datasets import iter_compactsplit
+    from mc_generic import set_console_title
+    
+    from mc_simpleclient import SimpleClient
+    
+    if via_cli:
+        if (len(sys.argv) < 3):
+            print ('Usage: ' + sys.argv[0]  + ' ' + sys.argv[1] + ' directory_containing_compactsplit_files')
+            exit(-1)
+        
+        path_glob = sys.argv[2]
+        
+        set_console_title(sys.argv[0] + ' ' + sys.argv[1] + ' ' + sys.argv[2] + ' ' + str(max_num))
+    
+    else:
+        assert path_glob
+    
+    ## Simple:
+    
+    the_iter = iter_compactsplit(path_glob, max_num = max_num)
+    cur = SimpleClient()
+    cur.write_artefacts(the_iter)        
+    
+    ## NOTE - May not reach here due to gRPC hang bug.
+    
+    print ('DONE ALL',)
+
+
+def send_compactsplit_to_indexer(path_glob = False,
+                                 max_num = 0,
+                                 index_name = mc_config.MC_INDEX_NAME,
+                                 doc_type = mc_config.MC_DOC_TYPE,
+                                 auto_dedupe = False,
+                                 via_cli = False,
+                                 ):
+    """
+    [TESTING_ONLY] Read from compactsplit dumps, write directly to Indexer. (Without going through blockchain.)
+    
+    Args:
+        path_glob:  Directory containing compactsplit files.
+        max_num:    End ingestion early after `max_num` records. For testing.
+        index_name: Name of Indexer index to populate.
+        doc_type:   Name of Indexer doc type.
+    """
+    
+    from mc_datasets import iter_compactsplit
+    from mc_generic import set_console_title
+    
+    if via_cli:
+        if (len(sys.argv) < 3):
+            print ('Usage: ' + sys.argv[0] + ' ' + sys.argv[1] + ' directory_containing_compactsplit_files')
+            exit(-1)
+        
+        path_glob = sys.argv[2]
+        
+        set_console_title(sys.argv[0] + ' send_compactsplit_to_indexer ' + sys.argv[2] + ' ' + str(max_num))
+        
+    else:
+        assert path_glob
+        
+    iter_json = iter_compactsplit(path_glob,
+                                  max_num = max_num,
+                                  )
+    
+    ingest_bulk(iter_json = iter_json)
+    
+
+    if auto_dedupe:
+        ## TODO: automatically do this for now, so we don't forget:
+        import mc_models
+        mc_models.dedupe_reindex_all()
+    else:
+        print 'NOT AUTOMATICALLY RUNNING DEDUPE.'
+    
+
+def send_gettydump_to_indexer(max_num = 0,
+                              getty_path = False,
+                              index_name = mc_config.MC_INDEX_NAME,
+                              doc_type = mc_config.MC_DOC_TYPE,
+                              auto_dedupe = False,
+                              via_cli = False,
+                              *args,
+                              **kw):
+    """
+    [DEPRECATED] Read Getty dumps, write directly to Indexer. (Without going through blockchain.)
     
     Args:
         getty_path: Path to getty image JSON. `False` to get path from command line args.
         index_name: Name of Indexer index to populate.
         doc_type:   Name of Indexer doc type.
     """
+
+    print ('!!!DEPRECATED: Use `ingest_compactsplit_indexer` now instead.')
     
     if via_cli:
         if len(sys.argv) < 3:
-            print 'Usage Example: mediachain-indexer-ingest ingest_gettydump getty_small/json/images/'
+            print 'Usage: ' + sys.argv[0] + ' ' + sys.argv[1] + ' getty_small/json/images/'
             exit(-1)
         
         getty_path = sys.argv[2]
@@ -575,10 +576,13 @@ def ingest_gettydump(max_num = 100000,
 
     ingest_bulk(iter_json = iter_json)
 
-    ## TODO: automatically do this for now, so we don't forget:
-    
-    import mc_models
-    mc_models.dedupe_reindex_all()
+    if auto_dedupe:
+        ## TODO: automatically do this for now, so we don't forget:
+        import mc_models
+        mc_models.dedupe_reindex_all()
+    else:
+        print 'NOT AUTOMATICALLY RUNNING DEDUPE.'
+
 
 
 
@@ -598,7 +602,7 @@ def search_by_image(fn = False,
     
     if via_cli:
         if len(sys.argv) < 3:
-            print 'Usage: mediachain-indexer-ingest search_by_image <image_file_name> [limit_num] [index_name] [doc_type]'
+            print 'Usage: ' + sys.argv[0] + ' ' + sys.argv[1] + ' <image_file_name> [limit_num] [index_name] [doc_type]'
             exit(-1)
         
         fn = sys.argv[2]
@@ -695,7 +699,8 @@ def refresh_index_repeating(index_name = mc_config.MC_INDEX_NAME,
     while True:
         refresh_index(index_name = index_name)
         sleep_loud(repeat_interval)
-        
+
+
 def config(via_cli = False):
     """
     Print config.
@@ -703,8 +708,11 @@ def config(via_cli = False):
     
     print_config(mc_config.cfg)
 
-functions=['ingest_blockchain',
-           'ingest_gettydump',
+
+functions=['receive_blockchain_into_indexer',
+           'send_compactsplit_to_blockchain',
+           'send_compactsplit_to_indexer',
+           'send_gettydump_to_indexer',
            'delete_index',
            'refresh_index',
            'refresh_index_repeating',

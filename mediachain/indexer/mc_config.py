@@ -52,7 +52,7 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
             'MC_TEST_DOC_TYPE':('mc_test_image', 'Document type, required for some neighbors models.'),
            },
            '5. Transactor Settings':
-           {'MC_TRANSACTOR_HOST':('127.0.0.1', ''),
+           {'MC_TRANSACTOR_HOST':('54.88.3.43', ''),
             'MC_TRANSACTOR_PORT_INT':('10001', ''),
            },
        }

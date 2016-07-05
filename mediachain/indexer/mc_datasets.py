@@ -132,7 +132,7 @@ def convert_to_compactsplit(the_iter = False,
     
     fn_out = join(dir_out, the_dir)
     
-    fn_out_temp = fn_out + '-temp' + str(randint(1,1000000000000))
+    fn_out_temp = fn_out + '-tempfile' + str(randint(1,1000000000000))
     fn_out_temp_2 = fn_out_temp + '-2'
     fn_out_temp_3 = fn_out_temp + '-3'
     
@@ -169,7 +169,9 @@ def convert_to_compactsplit(the_iter = False,
             
             print ('FILES', fn_out_temp, fn_out_temp_2)
             
-            cmd = "sort %s > %s" % (pipes_quote(fn_out_temp), pipes_quote(fn_out_temp_2))
+            cmd = "LC_ALL=C sort --temporary-directory=%s %s > %s" % (pipes_quote(dir_out),
+                                                                      pipes_quote(fn_out_temp),
+                                                                      pipes_quote(fn_out_temp_2))
             
             print ('SORTING',cmd)
             
@@ -228,7 +230,7 @@ def convert_to_compactsplit(the_iter = False,
             
             for xx in hh.values():
                 if xx[0] is not False:
-                    print ('CLOSE_FILE',xx[0])
+                    print ('CLOSING_FILE',xx[0])
                     xx[0].close()
         
         print ('DONE',dir_out)
@@ -244,7 +246,9 @@ def convert_to_compactsplit(the_iter = False,
         except: pass
 
 
-def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit'):
+def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit',
+                      max_num = 0,
+                      ):
     """
     Iterate records from files of the format created by `convert_getty_to_compact`.
 
@@ -260,6 +264,8 @@ def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit'):
     lst = list(glob(fn_in_glob))
     
     assert lst,('NO_FILES_FOUND',fn_in_glob)
+
+    nn = 0
     
     for fn_in in lst:
         
@@ -270,10 +276,21 @@ def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit'):
         
         for fn in fns:
             
+            if '-tempfile' in fn:
+                continue
+            
             with GzipFile(fn) as f:
                 for line in f:
+                    if nn % 100 == 0:
+                        print ('iter_compactsplit', nn, max_num)
+                    
                     new_id, dd = line.strip('\n').split('\t', 1)
                     yield json.loads(dd)
+                    nn += 1
+
+                    if max_num and (nn >= max_num):
+                        break
+                    
 
                 
 ##
@@ -511,23 +528,11 @@ def iter_ukbench(max_num = 0,
             
             yield hh
 
+
 ##
-#### START INGESTION DATASETS ITERATORS: https://github.com/mediachainlabs/mediachain-indexer-medium/issues/7
+#### START INGESTION DATASETS ITERATORS:
 ##
 
-def create_flickr_dumps():
-    """
-
-    See:
-    http://code.flickr.net/2014/10/15/the-ins-and-outs-of-the-yahoo-flickr-100-million-creative-commons-dataset/
-    http://webscope.sandbox.yahoo.com/catalog.php?datatype=i&did=67
-    
-    https://multimediacommons.wordpress.com/core-datasets/
-    http://multimedia-commons.s3-website-us-west-2.amazonaws.com/
-
-
-    """
-    pass
 
 def getty_create_dumps(INC_SIZE = 100,
                        NUM_WORKERS = 30,
