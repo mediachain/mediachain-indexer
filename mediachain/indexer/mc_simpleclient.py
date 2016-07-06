@@ -4,7 +4,7 @@
 """
 Simple blockchain client interface.
 
-Beware of bugs related to unicode_literals.
+Beware of bugs related to unicode_literals & mediachain.client.
 """
 
 
@@ -308,7 +308,7 @@ def test_blockchain(via_cli = False):
     from uuid import uuid4
     
     cur = SimpleClient()
-
+    
     test_id = 'test_' + uuid4().hex
     
     cur.write_artefacts([{'source_record':{'_id':test_id,
@@ -321,7 +321,7 @@ def test_blockchain(via_cli = False):
                                      '0Y4OHwAAAABJRU5ErkJggg==',
                                            
                           }])
-
+    
     for art in cur.read_artefacts():
         print 'ART',
         try:
@@ -330,9 +330,10 @@ def test_blockchain(via_cli = False):
             continue
 
         if xid == test_id:
-            print ('SUCCESS',test_id)
-
-    print ('EXIT')
+            print ('PASSED_ROUND_TRIP',test_id)
+            return
+    
+    assert False,'FAILED_ROUND_TRIP'
 
 
 functions=['test_blockchain']
