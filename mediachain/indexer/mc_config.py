@@ -44,6 +44,8 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
            {'MC_GETTY_KEY':('', 'Getty key, for creating local dump of getty images'),
             'MC_DATASTORE_HOST': ('', 'Datastore host.'),
             'MC_DATASTORE_PORT_INT': ('10002', 'Datastore port.'),
+            'MC_IPFS_URL': ('http://localhost:8000', 'IPFS URL.'),
+            'MC_IPFS_PORT_INT': ('5000', 'IPFS port.'),
             'MC_USE_IPFS_INT':(1, 'Use IPFS for image ingestion.'),
            },
        '4. Settings for Automated Tests':
