@@ -4,7 +4,7 @@
 """
 Simple blockchain client interface.
 
-Beware of bugs related to unicode_literals & mediachain.client.
+TODO: Much of this should be pushed up to `mediachain.client`.
 """
 
 
@@ -18,6 +18,8 @@ from os.path import exists, join, split, lexists
 
 from tempfile import NamedTemporaryFile
 
+from mediachain.reader import api
+
 from mediachain.translation.translator import Translator
 from mediachain.ingestion.dataset_iterator import DatasetIterator
 from mediachain.transactor.client import TransactorClient
@@ -29,6 +31,13 @@ from mediachain.datastore import set_use_ipfs_for_raw_data
 from mediachain.datastore.ipfs import set_ipfs_config
 from mediachain.datastore.rpc import set_rpc_datastore_config, close_db
 
+from grpc.framework.interfaces.face.face import (ExpirationError, AbortionError, 
+    CancellationError, ExpirationError, LocalShutdownError, NetworkError, 
+    RemoteShutdownError, RemoteError)
+        
+grpc_errors = (AbortionError, CancellationError, ExpirationError, 
+               LocalShutdownError, NetworkError, RemoteShutdownError, 
+               RemoteError,)
 
 
 def consistent_json_dumper(h):
@@ -143,8 +152,11 @@ class SimpleIterator(DatasetIterator):
     def __iter__(self):
         nn = 0
         
-        for hh in self.the_iter:
-
+        for obh in self.the_iter:
+            
+            metadata = obh['metadata']
+            raw_source = obh['raw']
+            
             try:
                 
                 with NamedTemporaryFile(delete = True,
@@ -153,26 +165,24 @@ class SimpleIterator(DatasetIterator):
                                         ) as ft:
                         
                     uri_temp = 'file://' + ft.name
-
-                    if 'img_data' in hh:
-                        ft.write(mc_ingest.decode_image(hh['img_data']))
+                    
+                    if 'img_data' in metadata:
+                        ft.write(mc_ingest.decode_image(metadata['img_data']))
                         ft.flush()
-                        del hh['img_data']
+                        del metadata['img_data']
                     else:
                         assert False,('NO_IMG_DATA',)
                     
-                    parsed = hh['source_record']
-                    
-                    translated = self.translator.translate(parsed)
+                    translated = self.translator.translate(metadata)
                     
                     local_assets = {'thumbnail': {'__mediachain_asset__': True,
                                                   'uri': uri_temp
                                                   }
                                     }
                     
-                    yield {'translated': translated,
-                           'raw_content': consistent_json_dumper(parsed),
-                           'parsed': parsed,
+                    yield {'parsed': metadata,
+                           'translated': translated,
+                           'raw_content': raw_source,
                            'local_assets': local_assets
                            }
             
@@ -230,112 +240,270 @@ class SimpleClient(object):
         set_rpc_datastore_config({'host': datastore_host, 'port': datastore_port})
         set_ipfs_config({'host': 'http://localhost:8000', 'port': 5001})
         set_use_ipfs_for_raw_data(True)
-        
     
-    def write_artefacts(self,
-                        the_iter,
-                        ):
+    
+    def write_artefacts(self, *args, **kw):
+        """ Convenience wrapper for `write_objects` """
+        kw['object_type'] = 'artefacts'
+        for x in self.write_objects(*args, **kw):
+            yield x
+    
+    
+    def write_objects(self,
+                      the_iter,
+                      object_type = False,
+                      ):
         """
-        Write artefacts to blockchain.
+        Write objects to blockchain. Yields back blockchain IDs.
 
         Args:
-            the_iter:   Iterates dicts containing, at least, the following keys at the top level:
-                        - '_id'
-                        - 'img_data'
+            the_iter:   Yields tuples of (metadata_dict, raw_byte_string), defined as:
+                        
+                        metadata_dict: Must contain the following keys
+                            '_id'      - ID of object.
+                            'img_data' - data URI of image. TODO: Supporting other types.
+                        
+                        raw_byte_string:
+                            Raw byte string, recorded as the source of this record's metadata.
         """
         
-        iterator = SimpleIterator(the_iter,
-                                  SimpleTranslator,
-                                  )
+        ## Generally required args:
+        assert object_type in ['artefacts', 'entities']
         
-        writer = Writer(self.transactor,
-                        download_remote_assets=False,
-                        )
+        ## Not yet implemented:
+        if object_type != 'artefacts':
+            raise NotImplemented
         
-        writer.write_dataset(iterator)
+        ## Write:
         
+        if object_type == 'artefacts':
+            
+            iterator = SimpleIterator(the_iter,
+                                      SimpleTranslator,
+                                      )
+            
+            writer = Writer(self.transactor,
+                            download_remote_assets=False,
+                            )
+
+            ## Broken TODO - How to get the blockchain IDs that were generated?:
+            
+            for x in writer.write_dataset(iterator):
+                yield x
+            
+        else:
+            assert False
     
-    def read_artefacts(self,
-                       timeout = 600,
-                       force_exit = True,
-                       ):
-        """
-        Read artefacts from blockchain.
-        """
-        
-        from grpc.framework.interfaces.face.face import ExpirationError, AbortionError, CancellationError, ExpirationError, \
-            LocalShutdownError, NetworkError, RemoteShutdownError, RemoteError
-        
-        grpc_errors = (AbortionError, CancellationError, ExpirationError, LocalShutdownError, \
-                       NetworkError, RemoteShutdownError, RemoteError)
-        
-        print ('STREAMING FROM TRANSACTOR...', self.transactor_host, self.transactor_port)
-        
-        try:
+    
+    def get_artefacts(self, *args, **kw):
+        """ Convenience wrapper for `get_objects` """
+        kw['object_type'] = 'artefacts'
+        for x in self.get_objects(*args, **kw):
+            yield x
 
-            for art in self.transactor.canonical_stream(timeout = timeout):
-                yield art
+            
+    def get_entities(self, *args, **kw):
+        """ Convenience wrapper for `get_objects` """
+        kw['object_type'] = 'entities'
+        for x in self.get_objects(*args, **kw):
+            yield x
+    
         
-        except grpc_errors as e:
-            print ('!!!CAUGHT gRPC ERROR',e)            
-            from time import sleep
-            import traceback, sys, os
-            for line in traceback.format_exception(*sys.exc_info()):
-                print line,
-            os._exit(-1)
+    def get_objects(self,
+                    start_id = False,
+                    end_id = False,
+                    only_ids = False,
+                    artist_ids = False,
+                    fetch_images = False,
+                    reverse = False,
+                    timeout = 600,
+                    force_exit_on_grpc_error = True,
+                    object_type = False
+                    ):
+        """
+        Get Artefacts or Entities from the blockchain.
         
-        except BaseException as e:
-            raise
-            #print ('!!!CAUGHT OTHER ERROR',e)
+        Items will be returned in "blockchain order" - TODO: exact definition of "blockchain order".
+        
+        The following args behave as filters, and most combinations of these args are supported:
+        `start_id`, `end_id`, `only_art_ids`, `by_entity_ids`.
+        
+        Filtering Args for All Object Types:
+            start_id:    (Object ID) Starting iteration from this Object ID.        
+            end_id:      (Object ID) Iterate all artefacts, until and including this Object ID.
+            only_ids:    (List of Object IDs) Filter to only these Object IDs.
+        
+        Artefact-Specific Filtering:
+            art_by_ent_ids:  (List of Entity IDs) Return Artefacts connected to these Entities.
+        
+        Entity-Specific Filtering:
+            ent_by_art_ids:  (List of Entity IDs) Return Entities connected to these Artefacts.
+        
+        Sorting Args:
+            reverse:      (Boolean) Return results in reverse of specified sorting order type.
+                                    (Currently only the "blockchain order" sorting type is supported.)
+        Other Args:
+            fetch_images: (Boolean) Whether to include thumbnail images as data URIs in the responses.
+            timeout:      (Integer) Seconds before underlying GRPc timeout. TODO: should have a deeper
+                                    look at this. Allow explicit resource freeing instead of timeout-based?
+                
+        General TODOs:
+            - Batch up requests for `only_ids`, instead of 1 by 1.
+            - `transactor.canonical_stream` can block indefinitely. Not appropriate for some use cases.
+        """
+        
+        ## Generally required args:
+        assert object_type in ['artefacts', 'entities']
+        
+        ## Invalid combinations:
+        assert not (only_ids and (start_id or end_id)),'Conflicting combination or args.'
+        
+        ## Not yet implemented:        
+        if object_type != 'artefacts':
+            raise NotImplemented
+        
+        if reverse:
+            raise NotImplemented
+        
+        ## Collect results:
+        
+        if only_ids:
 
-            #import traceback, sys, os
-            #for line in traceback.format_exception(*sys.exc_info()):
-            #    print line,
-            #os._exit(-1)
+            ## Filter by object IDs:
+            
+            for oid in only_ids:
+                
+                obj = api.get_object(self.transactor,
+                                     object_id = oid,
+                                     fetch_images = fetch_images,
+                                     )
+                yield obj
         
-        if force_exit:
-            ## Force exit due to grpc bug:
-            print ('FORCE_EXIT_ON_COMPLETION',)
-            sleep(1)
-            os._exit(-1)
+        else:
+
+            ## No filtering:
+            
+            print ('STREAMING FROM TRANSACTOR...', self.transactor_host, self.transactor_port)
+            
+            try:
+                started = False
+                
+                for obj in self.transactor.canonical_stream(timeout = timeout):
+                    
+                    if (start_id is not False) and (not started):
+                        if obj['data']['_id'] == start_id:
+                            started = True
+                        else:
+                            continue
+                    
+                    yield art
+                    
+                    if (end_id is not False):
+                        if obj['data']['_id'] == end_id:
+                            break
+                    
+            
+            except grpc_errors as e:
+                
+                print ('!!!CAUGHT gRPC ERROR',e)
+                
+                if force_exit_on_grpc_error:
+                    print ('FORCING EXIT',)
+                    from time import sleep
+                    import traceback, sys, os
+                    for line in traceback.format_exception(*sys.exc_info()):
+                        print line,
+                    os._exit(-1)
+                        
 
 
 def test_blockchain(via_cli = False):
     """
     Simple round-trip test.
+
+    TODO:
+        This code assumes that once `write_artefacts` completes, the
+        object is guarenteed to be immediately retrievable.
+        
+        Should either:
+            - Make `write_objects` block until the object is retrievable.
+            - Make `get_objects` block until the object is available.
+            - Modify / clarify the blockchain's consistency guarantees.
     """
     
-    from uuid import uuid4
+    ## Create client cursor:
     
     cur = SimpleClient()
     
+    ## Test object:
+    
+    from uuid import uuid4
+    
     test_id = 'test_' + uuid4().hex
     
-    cur.write_artefacts([{'source_record':{'_id':test_id,
-                                           'artist':'Test Artist',
-                                           'description':'Test Description',
+    original_meta = {'_id': test_id,
+                     'artist': 'Test Artist',
+                     'description': 'Test Description',
+                     'img_data': 'data:image/png;base64,iVBORw0KGgoAAAAN'\
+                                 'SUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQV'\
+                                 'QI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL'\
+                                 '0Y4OHwAAAABJRU5ErkJggg==',
+                     }
+
+    raw_meta = consistent_json_dumper(original_meta)
+    
+    ## Write object:
+    
+    blockchain_ids = cur.write_artefacts([{'metadata':original_meta,
+                                           'raw':raw_meta,
                                            },
-                          'img_data':'data:image/png;base64,iVBORw0KGgoAAAAN'\
-                                     'SUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQV'\
-                                     'QI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL'\
-                                     '0Y4OHwAAAABJRU5ErkJggg==',
-                                           
-                          }])
+                                          ])
+
+    b_ids = list(blockchain_ids)
+
+    print ('b_id',b_ids)
     
-    for art in cur.read_artefacts():
-        print 'ART',
-        try:
-            xid = art['meta']['data']['_id']
-        except:
-            continue
-
-        if xid == test_id:
-            print ('PASSED_ROUND_TRIP',test_id)
-            return
+    ## Check that object of same `_id` is returned:
     
-    assert False,'FAILED_ROUND_TRIP'
+    got_obj = False
+    
+    for art in cur.get_artefacts(only_ids = b_ids,
+                                 fetch_images = True,
+                                 ):
+        print ('GOT_ART')
+        
+        returned_meta = art['meta']['data']
+        
+        if returned_meta['_id'] == original_meta['_id']:
+            print ('PASSED_ROUND_TRIP',
+                   original_meta['_id'],
+                   returned_meta['_id'],
+                   )
+            got_obj = True
+        
+        else:
+            assert False,('MISMATCHED_ID',
+                          original_meta['_id'],
+                          returned_meta['_id'],
+                          )
+    
+    assert got_obj,'NO_OBJECTS_RETURNED'
 
+    
+    ## Check metadata, excluding images / thumbnails:
+    
+    del returned_meta['img_data']
+    del original_meta['thumbnail']
+    
+    returned_d = consistent_json_dumper(returned_meta)
+    original_d = consistent_json_dumper(original_meta)
+    
+    assert returned_d == original_d,('RETURNED_META_DIFFERS')
+    
+    print ('PASSED_ALL')
+    
 
+    
 functions=['test_blockchain']
 
 def main():

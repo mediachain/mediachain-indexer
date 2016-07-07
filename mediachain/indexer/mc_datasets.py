@@ -110,7 +110,7 @@ def convert_to_compactsplit(the_iter = False,
     
     if exists(dir_out) and delete_existing:
         xdd = listdir(dir_out)
-            
+        
         for fn in xdd:
             fn = join(dir_out, fn)
             print ('UNLINK',fn)
