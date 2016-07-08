@@ -20,7 +20,8 @@ from tempfile import NamedTemporaryFile
 
 from mediachain.reader import api
 
-from mediachain.translation.simple.translator import SimpleTranslator
+#from mediachain.translation.simple.translator import SimpleTranslator
+from mediachain.translation.translator import Translator
 from mediachain.ingestion.dataset_iterator import DatasetIterator
 from mediachain.transactor.client import TransactorClient
 from mediachain.writer import Writer
@@ -59,6 +60,90 @@ def consistent_json_hash(h):
 def force_all_keys_unicode(h):
     ## TODO - prevent future unicode_literals bugs
     pass
+
+
+
+class SimpleTranslator(Translator):
+    """
+    Minimal pass-through artefact translator.
+    
+    - `artist_names` string used to generate attribution blockchain links.
+    - `img_data` - data URI for image thumbnail that will be inserted in blockchain.
+    - Rest of artefact metadata is passed through as-is.
+    
+    Fields required by external apps built on top of the blockchain:
+        Indexer:
+            - `_id`      - globally-unique ID for image.
+    
+    TODO: Support multiple attribution links (multiple artists.)
+    """
+    
+    @staticmethod
+    def translator_id():
+        return 'SimpleTranslator/0.1'
+    
+    @staticmethod
+    def translate(parsed_metadata):
+        simple_json = parsed_metadata
+
+        ## Create artist Entity
+        
+        artist_name = simple_json.get('artist_names')
+
+        if artist_name:
+            artist_entity = {
+                u'__mediachain_object__': True,
+                u'type': u'entity',
+                u'meta': {
+                    u'data': {
+                        u'name': artist_name
+                    }
+                }
+            }
+        else:
+            artist_entity = None
+
+        
+        ## Create thumbnail object:
+            
+        thumb_uri = parsed_metadata['img_data']
+
+        data[u'thumbnail'] = {
+            u'__mediachain_asset__': True,
+            u'uri': thumb_uri
+        }
+
+        
+        ## Pass through rest of metadata as-is:
+        
+        data = simple_json
+
+        
+        ## Finish creating chain:
+        
+        artwork_artefact = {
+            u'__mediachain_object__': True,
+            u'type': u'artefact',
+            u'meta': {'data': data}
+        }
+
+        chain = []
+        if artist_entity is not None:
+            chain.append({u'__mediachain_object__': True,
+                          u'type': u'artefactCreatedBy',
+                          u'meta': {},
+                          u'entity': artist_entity
+                          })
+
+        return {
+            u'canonical': artwork_artefact,
+            u'chain': chain
+        }
+
+    @staticmethod
+    def can_translate_file(file_path):
+        return True
+
 
 
 class SimpleIterator(DatasetIterator):

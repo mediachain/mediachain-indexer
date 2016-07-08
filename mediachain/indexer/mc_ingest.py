@@ -446,6 +446,7 @@ def receive_blockchain_into_indexer(last_block_ref = None,
 
 def send_compactsplit_to_blockchain(path_glob = False,
                                     max_num = 5,
+                                    normalizer_name = False,
                                     via_cli = False,
                                     ):
     """
@@ -455,35 +456,44 @@ def send_compactsplit_to_blockchain(path_glob = False,
     dedupe analysis prior to sending media to the blockchain.
     
     Args:
-        path_glob:  Directory containing compactsplit files.
-        max_num:    End ingestion early after `max_num` records. For testing.
-        index_name: Name of Indexer index to populate.
-        doc_type:   Name of Indexer doc type.
-    
+        path_glob:             Directory containing compactsplit files.
+        max_num:               End ingestion early after `max_num` records. For testing.
+        index_name:            Name of Indexer index to populate.
+        doc_type:              Name of Indexer doc type.
+        normalizer_name:       Name or function for applying normalization / translation to records.
     """
     
     import sys
     
     from mc_datasets import iter_compactsplit
     from mc_generic import set_console_title
+    from mc_normalizer import apply_normalizer, normalizer_names
     
     from mc_simpleclient import SimpleClient
     
-    if via_cli:
-        if (len(sys.argv) < 3):
-            print ('Usage: ' + sys.argv[0]  + ' ' + sys.argv[1] + ' directory_containing_compactsplit_files')
+    if via_cli: 
+        if (len(sys.argv) < 4):
+            print ('Usage: mediachain-indexer-ingest' + sys.argv[1] + ' directory_containing_compactsplit_files [normalizer_name or auto]')
+            print ('Normalizer names:', normalizer_names.keys())
             exit(-1)
         
         path_glob = sys.argv[2]
-        
-        set_console_title(sys.argv[0] + ' ' + sys.argv[1] + ' ' + sys.argv[2] + ' ' + str(max_num))
+
+        normalizer_name = sys.argv[3]
+
+        set_console_title(sys.argv[0] + ' ' + sys.argv[1] + ' ' + sys.argv[2] + ' ' + sys.argv[3] + ' ' + str(max_num))
     
     else:
         assert path_glob
     
     ## Simple:
+
+    the_iter = lambda : iter_compactsplit(path_glob, max_num = max_num)
     
-    the_iter = iter_compactsplit(path_glob, max_num = max_num)
+    iter_json = apply_normalizer(iter_json,
+                                 normalizer_name,
+                                 )
+    
     cur = SimpleClient()
     cur.write_artefacts(the_iter)        
     
@@ -491,44 +501,51 @@ def send_compactsplit_to_blockchain(path_glob = False,
     
     print ('DONE ALL',)
 
-
+    
 def send_compactsplit_to_indexer(path_glob = False,
                                  max_num = 0,
                                  index_name = mc_config.MC_INDEX_NAME,
                                  doc_type = mc_config.MC_DOC_TYPE,
                                  auto_dedupe = False,
+                                 extra_translator_func = False,
                                  via_cli = False,
                                  ):
     """
     [TESTING_ONLY] Read from compactsplit dumps, write directly to Indexer. (Without going through blockchain.)
     
     Args:
-        path_glob:  Directory containing compactsplit files.
-        max_num:    End ingestion early after `max_num` records. For testing.
-        index_name: Name of Indexer index to populate.
-        doc_type:   Name of Indexer doc type.
+        path_glob:             Directory containing compactsplit files.
+        max_num:               End ingestion early after `max_num` records. For testing.
+        index_name:            Name of Indexer index to populate.
+        doc_type:              Name of Indexer doc type.
+        extra_translator_func: Function, or name of function, that applies normalization / translation to records.
     """
     
     from mc_datasets import iter_compactsplit
     from mc_generic import set_console_title
+    from mc_normalize import apply_normalizer, normalizer_names
     
     if via_cli:
-        if (len(sys.argv) < 3):
-            print ('Usage: ' + sys.argv[0] + ' ' + sys.argv[1] + ' directory_containing_compactsplit_files')
+        if (len(sys.argv) < 4):
+            print ('Usage: mediachain-indexer-ingest'  + ' ' + sys.argv[1] + ' directory_containing_compactsplit_files [normalizer_name or auto]')
+            print ('Normalizer names:', normalizer_names.keys())
             exit(-1)
         
         path_glob = sys.argv[2]
-        
-        set_console_title(sys.argv[0] + ' send_compactsplit_to_indexer ' + sys.argv[2] + ' ' + str(max_num))
-        
+
+        normalizer_name = sys.argv[3]
+
+        set_console_title(sys.argv[0] + ' ' + sys.argv[1] + ' ' + sys.argv[2] + ' ' + sys.argv[3] + ' ' + str(max_num))        
     else:
         assert path_glob
         
-    iter_json = iter_compactsplit(path_glob,
-                                  max_num = max_num,
-                                  )
+    iter_json = lambda : iter_compactsplit(path_glob, max_num = max_num)
     
-    ingest_bulk(iter_json = iter_json)
+    iter_json = apply_normalizer(iter_json,
+                                 normalizer_name,
+                                 )
+
+    rr = ingest_bulk(iter_json = iter_json)
     
 
     if auto_dedupe:
@@ -537,7 +554,8 @@ def send_compactsplit_to_indexer(path_glob = False,
         mc_models.dedupe_reindex_all()
     else:
         print 'NOT AUTOMATICALLY RUNNING DEDUPE.'
-    
+
+    return rr
 
 def send_gettydump_to_indexer(max_num = 0,
                               getty_path = False,
