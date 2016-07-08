@@ -20,7 +20,7 @@ setup(version = '0.0.10',
                                           'mediachain-indexer-test = mediachain.indexer.mc_test:main',
                                           'mediachain-indexer-eval = mediachain.indexer.mc_eval:main',
                                           'mediachain-indexer-datasets = mediachain.indexer.mc_datasets:main',
-                                          'mediachain-indexer-simpleclient = mediachain.indexer.mc_simpleclient:main'
+                                          'mediachain-indexer-simpleclient = mediachain.indexer.mc_simpleclient:main',
                                           ## Short versions:
                                           'mci-models = mediachain.indexer.mc_models:main',
                                           'mci-ingest = mediachain.indexer.mc_ingest:main',
