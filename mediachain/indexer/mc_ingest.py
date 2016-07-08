@@ -481,6 +481,11 @@ def send_compactsplit_to_blockchain(path_glob = False,
 
         normalizer_name = sys.argv[3]
 
+        if normalizer_name not in normalizer_names:
+            print ('INVALID:',normalizer_name)
+            print ('Normalizer names:', normalizer_names.keys())
+            exit(-1)
+
         set_console_title(sys.argv[0] + ' ' + sys.argv[1] + ' ' + sys.argv[2] + ' ' + sys.argv[3] + ' ' + str(max_num))
     
     else:
@@ -535,6 +540,11 @@ def send_compactsplit_to_indexer(path_glob = False,
 
         normalizer_name = sys.argv[3]
 
+        if normalizer_name not in normalizer_names:
+            print ('INVALID:',normalizer_name)
+            print ('Normalizer names:', normalizer_names.keys())
+            exit(-1)
+        
         set_console_title(sys.argv[0] + ' ' + sys.argv[1] + ' ' + sys.argv[2] + ' ' + sys.argv[3] + ' ' + str(max_num))        
     else:
         assert path_glob
