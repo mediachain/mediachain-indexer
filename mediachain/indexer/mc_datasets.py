@@ -258,6 +258,7 @@ def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit',
     
     from os.path import expanduser, isfile
     from glob import glob
+    from ujson import loads
     
     fn_in_glob = expanduser(fn_in_glob)
     
@@ -285,7 +286,7 @@ def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit',
                         print ('iter_compactsplit', nn, max_num)
                     
                     new_id, dd = line.strip('\n').split('\t', 1)
-                    yield json.loads(dd)
+                    yield loads(dd)
                     nn += 1
 
                     if max_num and (nn >= max_num):

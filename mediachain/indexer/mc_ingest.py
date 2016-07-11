@@ -171,6 +171,8 @@ def ingest_bulk(iter_json = False,
         # Put in parallel_bulk() format:
 
         nnn = 0 
+
+        t0 = time()
         
         for hh in iter_json:
             
@@ -222,7 +224,7 @@ def ingest_bulk(iter_json = False,
                 del chh['image_thumb']
             
             if nnn % 100 == 0:
-                print 'YIELDING_FOR_INSERT',nnn, index_name, doc_type#, chh
+                print 'YIELDING_FOR_INSERT','num:',nnn, 'index_name:',index_name, 'doc_type:',doc_type,'per_second:',nnn / (time() - t0)
             
             nnn += 1
             
