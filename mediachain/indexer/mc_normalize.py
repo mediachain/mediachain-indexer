@@ -936,6 +936,7 @@ def normalize_dpla(iter_json):
         hh = {'_id':jj_top['_id'],
               'img_data':jj_top['img_data'],  # Data URI of this version -- only for thumbnails.
               'artist_names':artist_names,
+              'source_name':'dpla',
               'provider_chain':[                              ## List of providers. Top most recent.
                   {'name':'dpla'},
                   {'name':jj['provider']['name']},
@@ -1091,7 +1092,8 @@ def normalize_mirflickr1mm(iter_json):
 
         hh = {'_id':jj_top['_id'],
               'img_data':jj_top['img_data'],  # Data URI of this version -- only for thumbnails.
-              'artist_names':['license'].get("Owner name"),
+              'artist_names':jj['license'].get("Owner name"),
+              'source_name':'mirflickr1mm',
               'provider_chain':[                              ## List of providers, most recent first.
                   {'name':'flickr'},
                   ],
@@ -1174,7 +1176,8 @@ def normalize_places(iter_json):
         hh = {'_id':jj_top['_id'],
               'img_data':jj_top['img_data'],  # Data URI of this version -- only for thumbnails.
               'artist_names':None,
-              'provider_chain':[{'name':'places'}],      ## List of providers, most recent first.
+              'source_name':'places205',
+              'provider_chain':[{'name':'places205'}],      ## List of providers, most recent first.
               'sightings_chain':[],                      ## List of sightings, most recent first.
               'date_source_version':None,                # Date this snapshot started
               'date_captured':None,
@@ -1255,7 +1258,110 @@ def test_normalizers(via_cli = False):
     print ('DONE_ALL')
 
 
+
+    
+def dump_normalized_schemas(dir_in = '/datasets/datasets/compactsplit/',
+                            fn_out = '/datasets/datasets/schemas_normalized.js',
+                            via_cli = False,
+                            ):
+    """
+    Dump normalized schemas. Note: DPLA has 1500+, and we're only showing the first few.
+    """
+
+    from os import mkdir, listdir, makedirs, walk
+    import json
+    from gzip import GzipFile
+    from os.path import join, exists, split
+    import sys
+
+    seen_providers = set()
+    
+    with open(fn_out, 'w') as f_out:
+
+        for name, (func, d2) in normalizer_names.iteritems():
+            
+            nm = split(d2)[-1]
+
+            fn = list(sorted(listdir(d2)))[0]
+            
+            fn = join(d2, fn)
+            
+            if 'entertainment' in fn:
+                continue
+
+            if 'archiv' in fn:
+                continue
+
+            if fn.endswith('gz'):
+                ff = GzipFile(fn, 'r')
+            else:
+                ff = open(fn)
+
+            def the_iter():
+                for line in ff:
+                    yield json.loads(line[line.index('\t') + 1:])
+                
+            for cc,hh in enumerate(func(the_iter)):
+                
+                if False:#'dpla' in fn:
+                    if len(seen_providers) == 20:
+                        break
+
+                    #if cc == 100000:
+                    #    break
+                    try:
+                        prov = hh['source_record']['_source']['dataProvider']
+                    except:
+                        prov = hh['source_record']['_source']['provider']
+
+
+                    if not seen_providers:
+                        common_all = set(hh['source_record']['_source'].keys())
+                        common_any = set(hh['source_record']['_source'].keys())
+                    else:
+                        common_all.intersection_update(hh['source_record']['_source'].keys())
+                        common_any.update(hh['source_record']['_source'].keys())
+
+                    #print ('SOURCE_KEYS',hh['source_record']['_source'].keys())
+
+
+                    if (type(prov) == list):
+                        prov = ' && '.join(prov)
+
+                    elif (type(prov) == dict) and ('name' in prov):
+                        prov = prov['name']
+
+                    nm = 'dpla' + ' -- ' + prov.encode('utf8')
+
+                    if prov in seen_providers:
+                        continue
+                    print ('DPLA_NEW_PROVIDER',cc,'seen_providers:',len(seen_providers),prov)
+                    seen_providers.add(prov)
+
+                f_out.write('// SCHEMA: ' + nm + ':\n\n')
+
+                del hh['img_data']
+
+                zz = hh
+                #zz = hh['source_record']
+
+                f_out.write(json.dumps(zz,indent=4) + '\n\n')
+
+                if True:#'dpla' not in fn:
+                    break
+
+    try:
+        print ('DPLA_COMMON_ALL',common_all)
+        print ('DPLA_COMMON_SOME',common_any.difference(common_all))
+    except:
+        pass
+
+    print 'DONE',fn_out
+                
+    
+
 functions=['test_normalizers',
+           'dump_normalized_schemas',
            ]
 
 def main():

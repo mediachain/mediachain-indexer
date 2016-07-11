@@ -21,6 +21,8 @@ Config structure in `mediachain.indexer.mc_config`:
 
 """
 
+LOW_LEVEL = True ## Temporary - For transitioning from old approach to new.
+
 
 cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
            {'MC_MODELS_JSON':('{"model_1":{"descriptors":{"name":"VectorsBaseline"},"neighbors":{"name":"ElasticSearchNN"},"rerank":{"name":"ReRankBasic"}}}',
@@ -54,7 +56,7 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
             'MC_TEST_DOC_TYPE':('mc_test_image', 'Document type, required for some neighbors models.'),
            },
            '5. Transactor Settings':
-           {'MC_TRANSACTOR_HOST':('facade.mediachain.io', ''),
+           {'MC_TRANSACTOR_HOST':('', ''),
             'MC_TRANSACTOR_PORT_INT':('10001', ''),
            },
        }
@@ -63,4 +65,3 @@ import mc_generic
 mc_generic.config_env(cfg, globals())
 
 
-LOW_LEVEL = True ## Temporary - For transitioning from old approach to new.

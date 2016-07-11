@@ -10,7 +10,7 @@ mediachain-indexer-eval     | Hyper-parameter optimization and evaluation of mod
 mediachain-indexer-web      | Search & dedupe REST API.
 mediachain-indexer-test     | Tests and sanity checks.
 
-## TOC
+## Contents
 
 - Setup:
     - [Core Setup](https://github.com/mediachain/mediachain-indexer#core-setup)

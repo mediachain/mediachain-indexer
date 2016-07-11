@@ -15,6 +15,14 @@ from asteval import Interpreter
 import numpy as np
 import math
 
+
+## Re-ranking equations that have names:
+
+ranking_basic_equations = {'noop':"item['_score']",
+                           'harmonic_mean_score_comments':"(item['_score'] * item['num_comments']) / (item['_score'] + item['num_comments'])",
+                           'boost_pexels':"item['_score'] * (item['_source'].get('source_name') == 'pexels' and 2 or 1)",
+                           }
+
 class ReRankingBasic():
     """
     Basic search results re-ranking model. Allows you to specify a simple custom re-ranking equation.
@@ -25,15 +33,23 @@ class ReRankingBasic():
     """
     
     def __init__(self,
-                 eq = "item['_score']",
+                 eq_name = None,
                  ):
         
+        if not eq_name:
+            eq_name = 'boost_pexels'
+        
+        if eq_name in ranking_basic_equations:
+            eq = ranking_basic_equations[eq_name]
+        else:
+            eq = eq_name
+                    
         self.eq = eq
         
         self.aeval = Interpreter()
-
+        
         ## Access all functions of these modules:
-
+        
         ## Turns out that asteval already imports all of `math`.
         
         for mod in []:
@@ -62,11 +78,15 @@ class ReRankingBasic():
 
         rrr = []
         
-        for score,item in sorted(rr, reverse = True):
-            item['_score'], item['_old_score'] = score, item['_score']
+        for c,(new_score,item) in enumerate(sorted(rr, reverse = True)):
+            item['_score'], item['_old_score'] = new_score, item['_score']
+
+            #if c <=5:
+            print ('RERANK', item['_old_score'], item['_score'],item['_source'].get('source_name'),item['_source'].get('title'))
+            
             rrr.append(item)
         
-        ## TODO: normalize scores?
+        ## TODO: normalize `_score`s?
             
         return rrr
 

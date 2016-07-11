@@ -70,7 +70,6 @@ class Application(tornado.web.Application):
                     (r'/score',handle_score,),
                     (r'/record_dupes',handle_record_dupes,),
                     (r'/record_relevance',handle_record_relevance,),
-                    (r'/autocomplete',handle_autocomplete,),
                     #(r'.*', handle_notfound,),
                     ]
         
@@ -199,6 +198,9 @@ class handle_ping(BaseHandler):
         
         self.write_json({'results':[rr]})
 
+from urllib import urlencode
+
+from mc_rerank import ReRankingBasic
 
 class handle_search(BaseHandler):
     
@@ -287,11 +289,26 @@ class handle_search(BaseHandler):
         
         q_text = data.get('q','')
         q_id = data.get('q_id','')
-        limit = intget(data.get('q'), 10)
+        limit = intget(data.get('limit'), 10)
+        offset = intget(data.get('offset'), 0)
         index_name = data.get('index_name', mc_config.MC_INDEX_NAME)
         doc_type = data.get('doc_type', mc_config.MC_DOC_TYPE)
         include_docs = data.get('include_docs', True)
         include_thumb = data.get('include_thumb', True)
+        rerank_eq = data.get('rerank_eq', None)
+
+        all_args = {'q':q_text,
+                    'q_id':q_id,
+                    'limit':limit,
+                    'offset':offset,
+                    'index_name':index_name,
+                    #'doc_type':doc_type,
+                    'include_docs':include_docs,
+                    'include_thumb':include_thumb,
+                    'rerank_eq':rerank_eq,
+                    }
+        
+        all_args = {x:y for x,y in all_args.iteritems() if y is not None}
         
         if not (q_text or q_id):
             #self.set_status(500)
@@ -338,7 +355,8 @@ class handle_search(BaseHandler):
                                           type = doc_type,
                                           source = {"query": {"constant_score":{"filter":{"term": terms}}}},
                                           )
-               
+                #print ('GOT',repr(rr.body)[:100])
+                
                 rr = json.loads(rr.body)
                 
                 rr = [x['_id'] for x in rr['hits']['hits']]
@@ -360,22 +378,28 @@ class handle_search(BaseHandler):
                                                },
                                },
                      }
+                    
+        query['from'] = offset
+        query['size'] = limit
 
         print ('QUERY',query)
-            
-        #query['from'] = 0,
-        #query['size'] = limit
+
+        all_args = all_args.copy()
+        all_args['offset'] += limit
+
+        next_page = '/?' + urlencode(all_args)
         
         rr = yield self.es.search(index = index_name,
                                   type = doc_type,
                                   source = query,
                                   )
-        #print ('RR',rr)
+        print ('GOT',repr(rr.body)[:100])
+        
         hh = json.loads(rr.body)
 
         rr = hh['hits']['hits']
-
-        #print ('QUERY GOT',rr)
+        
+        ## Include or don't include full docs:
         
         if not include_docs:
             
@@ -390,25 +414,40 @@ class handle_search(BaseHandler):
                 for x in rr:
                     if 'image_thumb' in x:
                         del x['image_thumb']
-                
-        # Remove terms from `dedupe_` models:
+
+        
+        ## Remove `dedupe_*` fields:
+        
         for xx in rr:
             xx['_source']  = {x:y
                               for x,y
                               in xx['_source'].iteritems()
                               if not x.startswith('dedupe_')
                               }
-                  
-        rr = {'results':rr,
-              'next_page':None,
-              'prev_page':None,
-              }
 
+        
+        ## Remove inline thumbnail data URIs:
         if not data.get('include_thumb'):
-            for x in rr['results']:
+            for x in rr:
                 if 'image_thumb' in x['_source']:
                     del x['_source']['image_thumb']
-                
+        
+        
+        ## Re-rank:
+        
+        rrm = ReRankingBasic(eq_name = rerank_eq)        
+        rr = rrm.rerank(rr)
+        
+        
+        ## Wrap in pagination:
+        
+        rr = {'results':rr,
+              'next_page':next_page,
+              }
+        
+               
+        ## Output:
+        
         self.write_json(rr,
                         pretty = data.get('pretty', True),
                         max_indent_depth = data.get('max_indent_depth', False),
