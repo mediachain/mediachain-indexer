@@ -1303,10 +1303,10 @@ def walk_json_shapes_types(hh, path = [], sort = True):
     
     ->
     
-    [('z', 'a', "<type 'str'>"),
-     ('z', 'b', 'url', "<type 'int'>"),
-     ('z', 'c', "<type 'list'>", 'url', "<type 'str'>"),
-     ('z', 'c', "<type 'list'>", 'url', "<type 'str'>")]
+    [('z', 'a', 'TYPE=UNICODE'),
+     ('z', 'b', 'url', 'TYPE=INT'),
+     ('z', 'c', 'TYPE=LIST', 'url', 'TYPE=UNICODE'),
+     ('z', 'c', 'TYPE=LIST', 'url', 'TYPE=UNICODE')]
     """
     
     path = path[:]
@@ -1354,6 +1354,8 @@ def test_normalizers(max_num = 100,
         from mc_datasets import iter_compactsplit
         from collections import Counter
 
+        all_example = {}
+        
         all_common_all = set()
         all_common_any = set()
         all_common_schema = {} #{path:[type, ...], ...}
@@ -1434,7 +1436,7 @@ def test_normalizers(max_num = 100,
                 print space_pad(k,max_k,ch=' '),v
 
                 #raw_input_enter()
-
+                
             print ('DONE',name, nn)
 
         print
