@@ -11,20 +11,21 @@ Future:
 """
 
 
+
 def walk_json_leaves(hh, path = []):
     """yields (path, value) tuples"""
-
+    
     path = path[:]
     for k,v in hh.iteritems():
-
+        
         if type(v) != dict:
             yield path + [k], v
-
+        
         if type(v) == dict:
             for xx in walk_json_leaves(v, path + [k]):
                 yield xx
 
-
+            
 def get_shallowest_matching(hh, kk):
     """
     Walk `hh` and return value of shallowest truthy leaf whose immediate-parent key matches string `kk`.
@@ -357,10 +358,19 @@ def normalize_getty(iter_json):
                  in jj['download_sizes']
                  ]
 
-        hh = {'_id':jj_top['_id'],
-              'img_data':jj_top['img_data'],                # Data URI of this version -- only for thumbnails.
+        xid = make_id(jj_top['_id'])
+        
+        hh = {'_id':xid,
+              'native_id':jj_top['_id'],
+              'mediachain_id':xid,                 ## TODO - use Mediachain "ref" IDs
+              'source':{'name':'getty',
+                        'url':None,
+                        },
+              'img_data':jj_top['img_data'],       # Data URI of this version -- only for thumbnails.
+              'url_shown_at':None,
+              'url_direct':None,
+              'url_direct_cache':{'url':make_cache_url(jj_top['_id'])},
               'artist_names':[jj['artist']],       # Simple way to access artist name(s).
-              'source_name':'getty',
               'title':[jj['title']],               # Title string(s)
               'attribution':[{                     ## Full attribution details, for when "artist" isn't quite the right description.
                   'role':'artist',                 # Contribution type.
@@ -399,13 +409,18 @@ def normalize_getty(iter_json):
                   'views':None,          #
                   'likes':None,          #
                   },
-              'sightings':[{}],          ## TODO - Sightings list.
-              'mediachain_record':None,  # Mediachain record.
               }
 
         yield hh
 
+import hashlib
 
+def make_id(_id):
+    return hashlib.md5(_id).hexdigest()
+
+def make_cache_url(_id):
+    xid = hashlib.md5(_id).hexdigest()
+    return '/cache/' + ('/'.join(xid[:3])) + '/' + xid + '.jpg'
 
 
 def normalize_pexels(iter_json):
@@ -457,10 +472,19 @@ def normalize_pexels(iter_json):
                   }
                  ]
 
-        hh = {'_id':jj_top['_id'],
-              'img_data':jj_top['img_data'],  # Data URI of this version -- only for thumbnails.
+        xid = make_id(jj_top['_id'])
+        
+        hh = {'_id':xid,
+              'native_id':jj_top['_id'],
+              'mediachain_id':xid,                             ## TODO - use Mediachain "ref" IDs
+              'source':{'name':'pexels',
+                        'url':'https://www.pexels.com/',
+                        },
+              'img_data':jj_top['img_data'],                   # Data URI of this version -- only for thumbnails.
               'artist_names':None,
-              'source_name':'pexels',                         #
+              'url_shown_at':{'url':jj['the_canon']},
+              'url_direct':None,
+              'url_direct_cache':{'url':make_cache_url(jj_top['_id'])},
               'date_source_version':None,                     # Date this snapshot started
               'date_captured':None,
               'date_created_original':None,                   # Actual creation date.
@@ -497,10 +521,6 @@ def normalize_pexels(iter_json):
                   'views':None,          #
                   'likes':None,          #
                   },
-              'sightings':[{             ## TODO - Sightings list.
-                  'url':jj['the_canon'],
-                  }],
-              'mediachain_record':None,  # Mediachain record.
               }
 
         yield hh
@@ -933,19 +953,23 @@ def normalize_dpla(iter_json):
         except:
             pass
 
-        hh = {'_id':jj_top['_id'],
+        xid = make_id(jj_top['_id'])
+        
+        hh = {'_id':xid,
+              'native_id':jj_top['_id'],
+              'mediachain_id':xid,                             ## TODO - use Mediachain "ref" IDs
+              'source':{'name':'dpla',
+                        'url':'https://dp.la/',
+                        },
               'img_data':jj_top['img_data'],  # Data URI of this version -- only for thumbnails.
               'artist_names':artist_names,
-              'source_name':'dpla',
-              'provider_chain':[                              ## List of providers. Top most recent.
+              'providers_list':[                              ## List of providers. Top most recent.
                   {'name':'dpla'},
                   {'name':jj['provider']['name']},
                   ],
-              'sightings_chain':[                             ## List of sightings, top most recent.
-                  {'url_page':jj['isShownAt'],
-                  'url_image':jj['object'],
-                  }
-                  ],
+              'url_shown_at':{'url':jj['isShownAt']},
+              'url_direct':{'url':jj['object']},
+              'url_direct_cache':{'url':make_cache_url(jj_top['_id'])},
               'date_source_version':None,                     # Date this snapshot started
               'date_captured':None,
               'date_created_original':get_shallowest_matching(jj, 'displayDate'), # Actual creation date.
@@ -979,7 +1003,6 @@ def normalize_dpla(iter_json):
                   'views':None,          #
                   'likes':None,          #
                   },
-              'mediachain_record':None,  # Mediachain record.
               }
 
         yield hh
@@ -1090,18 +1113,22 @@ def normalize_mirflickr1mm(iter_json):
                   }
                  ]
 
-        hh = {'_id':jj_top['_id'],
-              'img_data':jj_top['img_data'],  # Data URI of this version -- only for thumbnails.
+        xid = make_id(jj_top['_id'])
+        
+        hh = {'_id':xid,
+              'native_id':jj_top['_id'],
+              'mediachain_id':xid,                            ## TODO - use Mediachain "ref" IDs
+              'source':{'name':'mirflickr1mm',
+                        'url':None,
+                        },
+              'img_data':jj_top['img_data'],                  # Data URI of this version -- only for thumbnails.
               'artist_names':jj['license'].get("Owner name"),
-              'source_name':'mirflickr1mm',
-              'provider_chain':[                              ## List of providers, most recent first.
+              'providers_list':[                              ## List of providers, most recent first.
                   {'name':'flickr'},
-                  ],
-              'sightings_chain':[                             ## List of sightings, most recent first.
-                  {'url_page':jj['license'].get('Photo url'),
-                   'url_image':jj['license'].get('Web url'),
-                  }
-                  ],
+              ],
+              'url_shown_at':{'url':jj['license'].get('Photo url')},
+              'url_direct':{'url':jj['license'].get('Web url')},
+              'url_direct_cache':{'url':make_cache_url(jj_top['_id'])},
               'date_source_version':None,                     # Date this snapshot started
               'date_captured':get_shallowest_matching(jj, "-Date and Time"),
               'date_created_original':get_shallowest_matching(jj, "-Date and Time"),  # Actual creation date.
@@ -1134,7 +1161,6 @@ def normalize_mirflickr1mm(iter_json):
                   'views':None,          #
                   'likes':None,          #
                   },
-              'mediachain_record':None,  # Mediachain record.
               }
 
         yield hh
@@ -1173,12 +1199,20 @@ def normalize_places(iter_json):
 
         artists = []
 
-        hh = {'_id':jj_top['_id'],
-              'img_data':jj_top['img_data'],  # Data URI of this version -- only for thumbnails.
+        xid = make_id(jj_top['_id'])
+        
+        hh = {'_id':xid,
+              'native_id':jj_top['_id'],
+              'mediachain_id':xid,                       ## TODO - use Mediachain "ref" IDs
+              'source':{'name':'places205',
+                        'url':None,
+                        },
+              'img_data':jj_top['img_data'],             # Data URI of this version -- only for thumbnails.
               'artist_names':None,
-              'source_name':'places205',
-              'provider_chain':[{'name':'places205'}],      ## List of providers, most recent first.
-              'sightings_chain':[],                      ## List of sightings, most recent first.
+              'providers_list':[{'name':'places205'}],   ## List of providers, most recent first.
+              'url_shown_at':None,
+              'url_direct':None,
+              'url_direct_cache':{'url':make_cache_url(jj_top['_id'])},
               'date_source_version':None,                # Date this snapshot started
               'date_captured':None,
               'date_created_original':None,              # Actual creation date.
@@ -1207,7 +1241,6 @@ def normalize_places(iter_json):
                   'views':None,          #
                   'likes':None,          #
                   },
-              'mediachain_record':None,  # Mediachain record.
               }
 
         yield hh
@@ -1240,22 +1273,186 @@ def apply_normalizer(iter_json,
         yield x
 
 
-def test_normalizers(via_cli = False):
+def get_type_str(x):
+    s = str(type(x))
+    assert "<type '" in s,repr(s)
+    
+    r =  'TYPE=' + s.replace("<type '",'').replace("'>",'')
+
+    r = r.upper()
+    
+    if r == 'TYPE=STR':
+        return 'TYPE=UNICODE'
+    
+    if r == 'TYPE=NONETYPE':
+        return 'TYPE=NULL'
+    
+    return r
+
+def walk_json_shapes_types(hh, path = [], sort = True):
     """
+    hh = {'z':{'a': '123',
+               'b': {'url': 234},
+               'c': [{'url': '567'}, 
+                     {'url': '8910'},
+                    ],
+              }
+         }
+    
+    walk_json_shape_types(hh)
+    
+    ->
+    
+    [('z', 'a', "<type 'str'>"),
+     ('z', 'b', 'url', "<type 'int'>"),
+     ('z', 'c', "<type 'list'>", 'url', "<type 'str'>"),
+     ('z', 'c', "<type 'list'>", 'url', "<type 'str'>")]
+    """
+    
+    path = path[:]
+    
+    if type(hh) != dict:
+        yield tuple(path + [get_type_str(hh)])
+        return
+    
+    zz = hh.iteritems()
+    
+    if sort:
+        zz = sorted(zz)
+        
+    for k,v in zz:
+        
+        tv = type(v)
+        
+        if tv == dict:
+            for xx in walk_json_shapes_types(v, path + [k]):
+                yield xx
+
+        elif tv in [list]:
+            for xx in v:
+                for yy in walk_json_shapes_types(xx, path + [k, get_type_str(v)]):
+                    yield yy
+                
+        else:
+            yield tuple(path + [k] + [get_type_str(v)])
+
+
+def test_normalizers(max_num = 100,
+                     via_cli = False,
+                     ):
+    """
+    Finds:
+    1) Obvious exceptions.
+    2) Differences in shapes / types among paths to records on the SAME normalizer.
+    3) Differences in shapes / types among paths to records from ALL normalizers.
+    
+    Creates 4 schema templates:
     """
 
-    from mc_datasets import iter_compactsplit
+    with open('/datasets/datasets/schemas_all_paths.txt','w') as f_out:
 
-    for name, (func, fn) in normalizer_names.iteritems():
-        print ('START', name)
+        from mc_datasets import iter_compactsplit
+        from collections import Counter
 
-        nn = 0
-        for _ in func(lambda : iter_compactsplit(fn, max_num = 100)):
-            nn += 1
+        all_common_all = set()
+        all_common_any = set()
+        all_common_schema = {} #{path:[type, ...], ...}
+        all_counts = Counter()
 
-        print ('DONE',name, nn)
+        for c,(name, (func, fn)) in enumerate(normalizer_names.iteritems()):
+            print ('START', name)
 
-    print ('DONE_ALL')
+            this_common_all = set()
+            this_common_any = set()
+            this_common_schema = {} #{path:[type, ...], ...}
+
+            counts = Counter()
+
+            nn = 0
+            for cc,rr in enumerate(func(lambda : iter_compactsplit(fn, max_num = max_num))):
+                nn += 1
+
+                #print 'RR',c,cc,repr(rr)
+
+                type_paths = list(walk_json_shapes_types(rr))
+
+                paths = [tuple(x[:-1]) for x in type_paths]
+
+                #print 'paths',paths
+                #raw_input_enter()
+
+                if c == 0:
+                    all_common_all.update(paths)
+                if cc == 0:
+                    this_common_all.update(paths)
+
+                this_common_all.intersection_update(paths)
+                this_common_any.update(paths)
+                all_common_all.intersection_update(paths)
+                all_common_any.update(paths)
+
+                for ccc,type_path in enumerate(type_paths):
+
+                    #print (c,cc,ccc,'type_path',type_path)
+
+                    pth = tuple(type_path[:-1])
+                    leaf = type_path[-1]
+
+                    assert 'TYPE=' in leaf,type_path
+
+                    counts[pth] += 1
+                    all_counts[pth] += 1
+
+                    if pth not in all_common_schema:
+                        all_common_schema[pth] = []
+
+                    if leaf not in all_common_schema[pth]:
+                        all_common_schema[pth].append(leaf)
+
+                    if pth not in this_common_schema:
+                        this_common_schema[pth] = []
+
+                    if leaf not in this_common_schema[pth]:
+                        this_common_schema[pth].append(leaf)
+
+                #raw_input_enter()
+            print
+            print ('====COMMON_PATHS:',name)
+            for xx in sorted(this_common_all):
+                print space_pad(counts[xx],6),xx
+            print
+
+            print ('====DIFFS:',name)
+            for xx in sorted(this_common_any.difference(this_common_all)):
+                print space_pad(counts[xx],6),xx
+            print
+
+
+            print ('====COMMON_SCHEMA',name)
+            max_k = max([len(unicode(k)) for k,v in this_common_schema.items()])
+            for k,v in sorted(this_common_schema.items()):
+                print space_pad(k,max_k,ch=' '),v
+
+                #raw_input_enter()
+
+            print ('DONE',name, nn)
+
+        print
+        print '====ALL_COMMON_SCHEMA'
+        ii = [(' -> '.join(k),v) for k,v in all_common_schema.items()]
+        max_k = max([len(k) for k,v in ii]) + 1
+        f_out.write(space_pad('SCHEMA_PATH',max_k,ch=' ') + 'LEAF_TYPE(S)' + '\n')
+        for k,v in sorted(ii):
+            print space_pad(k,max_k,ch=' '),u', '.join(v)
+            f_out.write((space_pad(k,max_k,ch=' ') + unicode(u', '.join(v))).encode('utf8') + '\n')
+        print
+
+        #print '====ALL_DIFFS:'
+        #for xx in sorted(all_common_any.difference(all_common_all)):
+        #    print space_pad(all_counts[xx],6),xx
+        #print
+        
+        print ('DONE_ALL')
 
 
 
@@ -1359,13 +1556,13 @@ def dump_normalized_schemas(dir_in = '/datasets/datasets/compactsplit/',
     print 'DONE',fn_out
                 
     
+from mc_generic import setup_main, raw_input_enter, space_pad
 
 functions=['test_normalizers',
            'dump_normalized_schemas',
            ]
 
 def main():
-    from mc_generic import setup_main
 
     setup_main(functions,
                globals(),
