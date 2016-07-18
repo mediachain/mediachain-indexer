@@ -11,7 +11,7 @@ TODO: Much of this should be pushed up to `mediachain.client`.
 import mc_config
 import mc_ingest
 
-from mc_generic import setup_main
+from mc_generic import setup_main, consistent_json_dumper
 
 from os import mkdir, rename, unlink, listdir
 from os.path import exists, join, split, lexists
@@ -40,21 +40,6 @@ grpc_errors = (AbortionError, CancellationError, ExpirationError,
                LocalShutdownError, NetworkError, RemoteShutdownError, 
                RemoteError,)
 
-
-def consistent_json_dumper(h):
-    """
-    Consistent JSON dumps, for comparing dumps by hash.
-    """
-    import json
-    return json.dumps(h, separators=(',', ':'), sort_keys=True)
-
-
-def consistent_json_hash(h):
-    """
-    Consistent JSON hash.
-    """
-    import hashlib
-    return hashlib.md5(consistent_json_dumper(h)).hexdigest()
 
 
 def force_all_keys_unicode(h):

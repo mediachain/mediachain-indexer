@@ -13,3 +13,4 @@ pymongo==3.2.2
 base58==0.2.2
 mediachain-client==0.1.2
 asteval==0.9.7
+ujson==1.33

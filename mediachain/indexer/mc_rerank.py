@@ -14,13 +14,13 @@ from mc_generic import setup_main, group, raw_input_enter, pretty_print, intget,
 from asteval import Interpreter
 import numpy as np
 import math
-
+from time import time
 
 ## Re-ranking equations that have names:
 
 ranking_basic_equations = {'noop':"item['_score']",
                            'harmonic_mean_score_comments':"(item['_score'] * item['num_comments']) / (item['_score'] + item['num_comments'])",
-                           'boost_pexels':"item['_score'] * (item['_source'].get('source_name') == 'pexels' and 2 or 1)",
+                           'boost_pexels':"item['_score'] * (item['_source'].get('native_id','').startswith('pexels') and 2 or 1) * item['_source'].get('boosted', 0.1)",
                            }
 
 class ReRankingBasic():
@@ -66,7 +66,7 @@ class ReRankingBasic():
         """
         Re-rank items according to new score output by `self.eq`.
         """
-
+        t0 = time()
         self.aeval.symtable['items'] = items
 
         rr = []
@@ -81,13 +81,15 @@ class ReRankingBasic():
         for c,(new_score,item) in enumerate(sorted(rr, reverse = True)):
             item['_score'], item['_old_score'] = new_score, item['_score']
 
-            #if c <=5:
-            print ('RERANK', item['_old_score'], item['_score'],item['_source'].get('source_name'),item['_source'].get('title'))
+            #if c <= 20:
+            #    print ('RERANK', item['_old_score'], item['_source'].get('boosted'),item['_score'],item['_source'].get('native_id'),item['_source'].get('title'))
             
             rrr.append(item)
         
         ## TODO: normalize `_score`s?
-            
+
+        print ('RE-RANK TIME',time() - t0)
+        
         return rrr
 
 

@@ -12,6 +12,22 @@ import os
 from os import system, walk, rename
 from os.path import join, exists
 import requests
+import hashlib
+
+
+def consistent_json_dumper(h):
+    """
+    Consistent JSON dumps, for comparing dumps by hash.
+    """
+    return json.dumps(h, separators=(',', ':'), sort_keys=True)
+
+
+def consistent_json_hash(h):
+    """
+    Consistent JSON hash.
+    """
+    return hashlib.md5(consistent_json_dumper(h)).hexdigest()
+
 
 def tcache(fn,
            func,

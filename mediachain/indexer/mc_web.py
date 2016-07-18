@@ -48,7 +48,7 @@ from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.options import define, options
 
-from os import mkdir,rename,unlink,listdir
+from os import mkdir, listdir, makedirs, walk, rename, unlink
 from os.path import exists,join,split,realpath,splitext,dirname
 
 from mc_generic import setup_main, pretty_print, intget
@@ -66,6 +66,8 @@ class Application(tornado.web.Application):
         handlers = [(r'/',handle_front,),
                     (r'/ping',handle_ping,),
                     (r'/search',handle_search,),
+                    (r'/facets',handle_get_facet_info),
+                    (r'/get_embed_url',handle_get_embed_url,),
                     (r'/dupe_lookup',handle_dupe_lookup,),
                     (r'/score',handle_score,),
                     (r'/record_dupes',handle_record_dupes,),
@@ -202,6 +204,199 @@ from urllib import urlencode
 
 from mc_rerank import ReRankingBasic
 
+try:
+    from mc_crawlers import get_remote_search
+except:
+    get_remote_search = False
+
+
+def get_cache_url(_id,
+                  CACHE_HOST = 'http://54.209.175.109:6008/',
+                  ):
+    """
+    Temporary solution to high-res image caching on the Indexer, for use by front-end. Currently reuses crawler caches.
+    
+    twistd -n web -p 6008 --path /datasets/datasets/indexer_cache/
+    """
+    
+    import hashlib
+    
+    #print ('make_cache_url',_id)
+
+    #print ('get_cache_url()', _id)
+
+    if _id.startswith('pexels_'):
+
+        _id = _id.split('_')[-1]
+        
+        xid = hashlib.md5(_id).hexdigest()
+
+        fn = ('/'.join(xid[:4])) + '/' + xid + '.jpg'
+
+        #normalizer_names['pexels']['dir_cache']
+        
+        real_fn = '/datasets/datasets/pexels/images_1920_1280/' + fn
+
+        #assert exists(real_fn),real_fn
+
+        r = CACHE_HOST + 'pe/' + fn
+        
+        #print ('get_cache_url result:', r)
+        
+        return r
+
+    elif _id.startswith('getty_'):
+        
+        xid = _id.split('_')[-1]
+        
+        fn = ('/'.join(xid[:4])) + '/' + xid + '.jpg'
+
+        #ln -s /datasets2/datasets/getty_unpack/getty_all_images/ /datasets/datasets/indexer_cache/gg
+        
+        return CACHE_HOST + 'gg/' + fn
+        
+        base = '/datasets/datasets/indexer_cache/'
+        
+        for xdir in ['ga/',
+                     'ge/',
+                     'gr/',
+                     ]:
+            
+            xfn = base + xdir + fn
+            
+            if exists(xfn):
+
+                #print 'CACHE_FOUND',xfn
+                
+                return CACHE_HOST + xdir + fn
+            
+        #print '!! CACHE_FAILED',xfn
+        return None
+    
+    else:
+        return None
+        #assert False,repr(_id)
+
+
+class handle_get_embed_url(BaseHandler):
+    #disable XSRF checking for this URL:
+    def check_xsrf_cookie(self): 
+        pass
+
+    @tornado.gen.coroutine
+    def post(self):
+        
+        try:
+            from mc_crawlers import send_to_cdn
+        except:
+            self.write_json({'error':'IMPORT FAILED',
+                             'error_message':'from mc_crawlers import get_embed_url',
+                            })
+            return
+
+        d = self.request.body
+
+        #print ('BODY',d)
+        
+        ii = self.get_argument('image_url','')
+
+        if not ii:
+                    
+            try:
+                data = json.loads(d)
+            except:
+                self.set_status(500)
+                self.write_json({'error':'JSON_PARSE_ERROR',
+                                 'error_message':'Could not parse JSON request.',
+                                })
+                return
+
+            if not data.get('image_url'):
+                self.set_status(500)
+                self.write_json({'error':'MISSING ARGUMENT',
+                                 'error_message':'required: image_url',
+                                })
+                return
+        
+            ii = data['image_url']
+        
+        print ('handle_get_embed_url()',ii)
+        
+        try:
+            r = send_to_cdn(ii)
+        except:
+            raise
+            self.set_status(500)
+            self.write_json({'error':'INTERNAL_ERROR',
+                             'error_message':'Internal error.',
+                            })
+            return
+
+        print ('GOTXXX',r)
+        
+        self.write_json(r)
+
+
+class handle_get_facet_info(BaseHandler):
+    @tornado.gen.coroutine
+    def get(self):
+        self.write({'licenses':['Getty Embed','CC0']})
+
+from time import time
+
+QUERY_CACHE_DIR = '/datasets/datasets/cache_queries/'
+    
+def query_cache_lookup(key,
+                       max_age = 60 * 60, # 1 hour
+                       ):
+    """
+    Simple file-based cache.
+    """
+    dir_out_2 = QUERY_CACHE_DIR + ('/'.join(key[:4])) + '/'
+    
+    fn_out = dir_out_2 + key + '.json'
+    
+    if exists(fn_out):
+        try:
+            with open(fn_out) as f:
+                rh = json.loads(f.read())
+        except:
+            return False
+        
+        if time() - rh['time'] > max_age:
+            return False
+        
+        return rh['data']
+    
+    return False
+
+
+def query_cache_save(key, hh):
+    """
+    Simple file-based cache.
+    """
+    dir_out_2 = QUERY_CACHE_DIR + ('/'.join(key[:4])) + '/'
+    
+    fn_out = dir_out_2 + key + '.json'
+    
+    if not exists(dir_out_2):
+        makedirs(dir_out_2)
+
+    rh = {'data':hh,
+          'time':int(time()),
+          }
+        
+    with open(fn_out + '.temp', 'w') as f:
+        f.write(json.dumps(rh))
+    
+    rename(fn_out + '.temp',
+           fn_out,
+           )
+            
+       
+
+from mc_generic import consistent_json_hash
+
 class handle_search(BaseHandler):
     
     #disable XSRF checking for this URL:
@@ -289,26 +484,94 @@ class handle_search(BaseHandler):
         
         q_text = data.get('q','')
         q_id = data.get('q_id','')
-        limit = intget(data.get('limit'), 10)
-        offset = intget(data.get('offset'), 0)
+        offset = max(0, intget(data.get('offset'), 0))
+        limit = intget(data.get('limit'), 15)
         index_name = data.get('index_name', mc_config.MC_INDEX_NAME)
         doc_type = data.get('doc_type', mc_config.MC_DOC_TYPE)
         include_docs = data.get('include_docs', True)
         include_thumb = data.get('include_thumb', True)
         rerank_eq = data.get('rerank_eq', None)
+        filter_license = data.get('filter_license', None)
 
-        all_args = {'q':q_text,
-                    'q_id':q_id,
-                    'limit':limit,
-                    'offset':offset,
-                    'index_name':index_name,
-                    #'doc_type':doc_type,
-                    'include_docs':include_docs,
-                    'include_thumb':include_thumb,
-                    'rerank_eq':rerank_eq,
-                    }
+        include_thumb = False ## Disabled for now
+        full_limit = 200
         
-        all_args = {x:y for x,y in all_args.iteritems() if y is not None}
+        remote_ids = []
+        if q_text and (get_remote_search is not False):
+            t1 = time()
+            remote_ids = get_remote_search(q_text)
+            print ('REMOTE_IDS','time:',time()-t1,len(remote_ids))
+
+        #'CC0', 'Non-Commercial Use'
+        
+        ## Cache & token lookup:
+        
+        input_token = data.get('token', None)
+
+        the_token = input_token
+        
+        rr = False
+
+        
+        if the_token:
+            print 'AA'
+            rr = query_cache_lookup(the_token)
+
+            if rr is False:
+                self.set_status(500)
+                self.write_json({'error':'EXPIRED_TOKEN',
+                                 'error_message':the_token,
+                                 })
+                return                
+
+        else:
+            ## core args for looking up this query again:
+            query_args = {'q':q_text,
+                          'q_id':q_id,
+                          #'limit':limit,
+                          #'offset':offset,
+                          #'index_name':index_name,
+                          #'doc_type':doc_type,
+                          'include_docs':include_docs,
+                          'include_thumb':include_thumb,
+                          'rerank_eq':rerank_eq,
+                          'filter_license':filter_license,
+                          }
+            print ('QUERY_ARGS',query_args)
+
+            ## ignore those with default args:
+            for k,v in query_args.items():
+                if v is None:
+                    del query_args[k]
+            
+            the_token = consistent_json_hash(query_args)
+
+            print 'BB'
+            rr = query_cache_lookup(the_token)
+        
+        if rr is not False:
+            print ('CACHE_OR_TOKEN_HIT_QUERY','offset:',offset,'limit:',limit,'len(results)',len(rr['results']))
+            
+            results_count = len(rr['results'])
+            
+            rr['results'] = rr['results'][offset:offset + limit]
+                                    
+            if offset + limit > len(rr['results']):
+                rr['next_page'] = None
+            else:
+                rr['next_page'] = {'token':the_token, 'offset':offset + limit, 'limit':limit}
+
+            if offset == 0:
+                rr['prev_page'] = None
+            else:
+                rr['prev_page'] = {'token':the_token, 'offset':max(0, offset - limit), 'limit':limit}
+
+            self.write_json(rr,
+                            pretty = data.get('pretty', True),
+                            max_indent_depth = data.get('max_indent_depth', False),
+                            )
+            
+            return
         
         if not (q_text or q_id):
             #self.set_status(500)
@@ -316,20 +579,23 @@ class handle_search(BaseHandler):
             #                 'error_message':'Either `q` or `q_id` is required.',
             #                 })
             
-            ## Return all:
+            ## Match all, skip cache:
             
             rr = yield self.es.search(index = index_name,
                                       type = doc_type,
-                                      source = {"query": {"match_all": {}}}
+                                      source = {"query": {"match_all": {}}, "size":20}
                                       )
+            
             rr = json.loads(rr.body)
             rr = rr['hits']['hits']
             rr = {'results':rr,
                   'next_page':None,
                   'prev_page':None,
+                  'results_count':('{:,}'.format(full_limit)) + '+',
                   }
             self.write_json(rr)
             return
+
         
         if (q_text and q_id):
             self.set_status(500)
@@ -337,6 +603,7 @@ class handle_search(BaseHandler):
                              'error_message':'Simultaneous `q` and `q_id` not yet implemented.',
                              })
             return
+
         
         elif q_id:
             
@@ -368,7 +635,8 @@ class handle_search(BaseHandler):
 
                 print ('ID-BASED-SEARCH', q_id)
                 query = {"query":{ "ids": { "values": [ q_id ] } } }
-
+        
+        
         elif q_text:
 
             #text-based search:
@@ -378,26 +646,64 @@ class handle_search(BaseHandler):
                                                },
                                },
                      }
-                    
-        query['from'] = offset
-        query['size'] = limit
 
+        remote_hits = []
+        
+        #assert remote_ids,remote_ids
+        if remote_ids:
+            t1 = time()
+            rr = yield self.es.search(index = index_name,
+                                      type = doc_type,
+                                      source = {"query":{ "ids": { "values": remote_ids } } },
+                                      )
+        
+            print ('GOT','time:',time() - t1,repr(rr.body)[:100])
+        
+            hh = json.loads(rr.body)
+
+            remote_hits = hh['hits']['hits']
+
+            print ('GOT_REMOTE_HITS',len(remote_hits))
+            
+            for xx in remote_hits:
+                xx['_score'] = 10.0
+                xx['_source']['boosted'] = 1
+                
+            for xx in remote_hits:
+                assert xx['_source']['boosted'] == 1
+        
+        query['from'] = offset
+        query['size'] = full_limit
+        
         print ('QUERY',query)
 
-        all_args = all_args.copy()
-        all_args['offset'] += limit
-
-        next_page = '/?' + urlencode(all_args)
-        
+        t1 = time()
         rr = yield self.es.search(index = index_name,
                                   type = doc_type,
                                   source = query,
                                   )
-        print ('GOT',repr(rr.body)[:100])
+        
+        print ('GOT','time:',time() - t1, repr(rr.body)[:100])
         
         hh = json.loads(rr.body)
-
+        
         rr = hh['hits']['hits']
+
+        ## Prepend remote hits, filter ID dupes:
+        
+        rr = remote_hits + rr
+
+        done = set()
+        r2 = []
+        for xx in rr:
+            if xx['_id'] in [u'pexels_85601']:
+                continue
+            
+            if xx['_id'] in done:
+                continue
+            done.add(xx['_id'])
+            r2.append(xx)
+        rr = r2
         
         ## Include or don't include full docs:
         
@@ -408,13 +714,11 @@ class handle_search(BaseHandler):
                   in rr
                   ]
             
-        else:
-            
-            if not include_thumb:
-                for x in rr:
-                    if 'image_thumb' in x:
-                        del x['image_thumb']
-
+        if not include_thumb:
+            for x in rr:
+                if 'image_thumb' in x:
+                    del x['image_thumb']
+        
         
         ## Remove `dedupe_*` fields:
         
@@ -424,7 +728,6 @@ class handle_search(BaseHandler):
                               in xx['_source'].iteritems()
                               if not x.startswith('dedupe_')
                               }
-
         
         ## Remove inline thumbnail data URIs:
         if not data.get('include_thumb'):
@@ -433,21 +736,122 @@ class handle_search(BaseHandler):
                     del x['_source']['image_thumb']
         
         
+        ## Add in frontend image cached preview images:
+        ## Skip items without preview:
+        
+        r2 = []
+        for ii in rr:
+            
+            #print ('ZZ',ii['_source']['native_id'],ii['_source']['source'])
+            
+            url = get_cache_url(ii['_source']['native_id'])
+            
+            if not url:
+                print 'FILTER_SKIP',ii['_source']['native_id']
+                continue
+            
+            ii['_source']['url_direct_cache'] = {'url':url}
+            
+            r2.append(ii)
+        
+        rr = r2
+        
         ## Re-rank:
         
         rrm = ReRankingBasic(eq_name = rerank_eq)        
         rr = rrm.rerank(rr)
+
         
+        ## TEMPORARY - When the datasets are re-generated, this can be removed.
+        ##             Clears titles from pexels, adds licensing:
         
-        ## Wrap in pagination:
+        for ii in rr:
+            native_id = ii['_source']['native_id']
+            
+            if native_id.startswith('pexels'):
+                ii['_source']['title'] = None
+
+            ## add permalinks here:
+            
+            if 'getty_' in native_id:
+                ii['_source']['source']['url'] = 'http://www.gettyimages.com/detail/photo/permalink/' + native_id.replace('getty_','')
+            if False:#'pexels_' in native_id:
+                ii['_source']['source']['url'] = ii['url_shown_at']['url']
+                
+            ## license stuff:
+                
+            if 'pexels_' in native_id:
+                ii['_source']['license_name'] = "CC0"
+                ii['_source']['license_name_long'] = "Creative Commons Zero (CC0)"
+                ii['_source']['license_url'] = None
+                ii['_source']['license_attribution'] = ii.get('artist_names') and ', '.join(ii['artist_names']) or None
+                
+            if 'getty_' in native_id:
+                ii['_source']['license_name'] = "Getty Embed"
+                ii['_source']['license_name_long'] = "Getty Embed"
+                ii['_source']['license_url'] = "http://www.gettyimages.com/Corporate/LicenseAgreements.aspx#RF"
+                ii['_source']['license_attribution'] = ii.get('artist_names') and ', '.join(ii['artist_names']) or None
+
+        
+        ## Simple faceting, WIP:
+        
+        if filter_license:
+            r2 = []
+            for ii in rr:
+                
+                native_id = ii['_source']['native_id']
+                if filter_license == 'CC0':
+                    if 'pexels' in native_id:
+                        ii['license_name'] = "CC0"
+                        ii['license_name_long'] = "Creative Commons Zero (CC0)"
+                        ii['license_url'] = None
+                        r2.append(ii)
+                        
+                elif filter_license == 'Non-Commercial Use':
+                    if 'getty' in native_id:
+                        ii['license_name'] = "Getty Embed"
+                        ii['license_name_long'] = "Getty Embed"
+                        ii['license_url'] = "http://www.gettyimages.com/Corporate/LicenseAgreements.aspx#RF"
+                        
+                        r2.append(ii)
+                else:
+                    self.set_status(500)
+                    self.write_json({'error':'BAD_FILTER',
+                                     'error_message':'Invalid license filter: ' + filter_license,
+                                     })
+                    return
+
+            print ('FILTER',len(rr),'->',len(r2))
+            rr = r2
+            
+        ## Cache:
+
+        results_count = len(rr)
         
         rr = {'results':rr,
-              'next_page':next_page,
+              'results_count':(results_count >= full_limit * 0.8) and (('{:,}'.format(full_limit)) + '+') or ('{:,}'.format(results_count)),
               }
         
-               
-        ## Output:
+        query_cache_save(the_token, rr)
+
+        ## Trim:
         
+        rr['results'] = rr['results'][offset:offset + limit]
+
+        ## Wrap in pagination:
+        
+        if offset + limit > len(rr['results']):
+            rr['next_page'] = None
+        else:
+            rr['next_page'] = {'token':the_token, 'offset':offset + limit, 'limit':limit},
+
+        if offset == 0:
+            rr['prev_page'] = None
+        else:
+            rr['prev_page'] = {'token':the_token, 'offset':max(0, offset - limit), 'limit':limit},
+        
+        ## Output:
+                
         self.write_json(rr,
                         pretty = data.get('pretty', True),
                         max_indent_depth = data.get('max_indent_depth', False),

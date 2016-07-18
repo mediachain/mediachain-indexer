@@ -96,7 +96,7 @@ def ingest_bulk(iter_json = False,
                 search_after = False,
                 redo_thumbs = True,
                 ignore_thumbs = False,
-                use_aggressive = False,   ## For demo use only
+                use_aggressive = True,
                 refresh_after = True,
                 ):
     """
@@ -238,47 +238,60 @@ def ingest_bulk(iter_json = False,
         """
         Aggressive inserter that inserts & refreshes after every item.
         """
-
-        for hh in the_iter:
-
+        print 'USING: NON_PARALLEL_BULK'
+        
+        for c,hh in enumerate(the_iter):
+            
             #print 'NON_PARALLEL_BULK',repr(hh)[:100],'...'
             
             xaction = hh['_op_type']
             xindex = hh['_index']
             xtype = hh['_type']
             xid = hh['_id']
-
+            
             for k,v in hh.items():
                 if k.startswith('_'):
                     del hh[k]
             
             assert xaction == 'index',(xaction,)
             
-            print 'BODY',hh
-            
+            #print 'BODY',hh
+
+            ## TODO - re-add batching:
             res = es.index(index = xindex, doc_type = xtype, id = xid, body = hh)
             
-            print 'DONE-NON_PARALLEL_BULK',xaction,xid
+            #print 'DONE-NON_PARALLEL_BULK',xaction,xid
             
             yield True,res
-
-            try:
-                es.indices.refresh(index = xindex)
-            except:
-                print 'REFRESH_ERROR'
             
-            try:
-                import mc_models
-                mc_models.dedupe_reindex_all()
-            except:
-                print '!!! REINDEX_ERROR:'
-                import traceback, sys, os
-                for line in traceback.format_exception(*sys.exc_info()):
-                    print line,
-            
-            print 'REFRESHED'
+            if (c > 0) and (c % 1000 == 0):
+                t1 = time()
+                print ('REFRESH-NON_PARALLEL_BULK',c)
+                try:
+                    es.indices.refresh(index = xindex)
+                except:
+                    print 'REFRESH_ERROR'
+                print 'REFRESHED',time() - t1
+                
+                if False:
+                    try:
+                        import mc_models
+                        mc_models.dedupe_reindex_all()
+                    except:
+                        print '!!! REINDEX_ERROR:'
+                        import traceback, sys, os
+                        for line in traceback.format_exception(*sys.exc_info()):
+                            print line,
+                            
+        print ('REFRESH-NON_PARALLEL_BULK',c)
+        try:
+            es.indices.refresh(index = xindex)
+        except:
+            print 'REFRESH_ERROR'
+        print 'REFRESHED'
         
         print 'EXIT-LOOP_NON_PARALLEL_BULK'
+        
         
     if use_aggressive:
         use_inserter = non_parallel_bulk
@@ -469,7 +482,7 @@ def send_compactsplit_to_blockchain(path_glob = False,
     
     from mc_datasets import iter_compactsplit
     from mc_generic import set_console_title
-    from mc_normalizer import apply_normalizer, normalizer_names
+    from mc_normalize import apply_normalizer, normalizer_names
     
     from mc_simpleclient import SimpleClient
     

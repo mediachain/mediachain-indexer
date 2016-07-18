@@ -360,34 +360,43 @@ def normalize_getty(iter_json):
 
         xid = make_id(jj_top['_id'])
         
+        native_id = jj_top['_id']
+        
+        assert native_id.startswith('getty_'),repr(native_id)
+        
         hh = {'_id':xid,
-              'native_id':jj_top['_id'],
-              'mediachain_id':xid,                 ## TODO - use Mediachain "ref" IDs
+              'native_id':native_id,
+              'source_dataset':'getty',
               'source':{'name':'getty',
-                        'url':None,
+                        #'url':'http://www.gettyimages.com/',
+                        'url':'http://www.gettyimages.com/detail/photo/permalink/' + jj['id'], ## TODO - 'referral_destinations'
                         },
               'img_data':jj_top['img_data'],       # Data URI of this version -- only for thumbnails.
-              'url_shown_at':None,
+              'url_shown_at':{'url':'http://www.gettyimages.com/detail/photo/permalink/' + jj['id']},
               'url_direct':None,
-              'url_direct_cache':{'url':make_cache_url(jj_top['_id'])},
+              #'url_direct_cache':{'url':make_cache_url(jj_top['_id'])},
               'artist_names':[jj['artist']],       # Simple way to access artist name(s).
               'title':[jj['title']],               # Title string(s)
               'attribution':[{                     ## Full attribution details, for when "artist" isn't quite the right description.
                   'role':'artist',                 # Contribution type.
                   'details':None,                  # Contribution details.
-                  'name':None,                     # Entity name.
+                  'name':jj['artist'],             # Entity name.
                   }],
               'keywords':[x['text'] for x in jj['keywords'] if 'text' in x], # Keywords
               'orientation':jj['orientation'],                # Should photo be rotated?
-              'editorial_source_name':jj['editorial_source'], #
-              'editorial_source':{
-                  'name':jj['editorial_source'],              #
-                  },
+              #'editorial_source_name':jj['editorial_source'], #
+              #'editorial_source':{                           ## TODO BROKEN- mismatching types
+              #    'name':jj['editorial_source'],              #
+              #    },
               'date_created_original':None,                 # Actual creation date.
               'date_created_at_source':jj['date_created'],    # Item created at data source.
               'camera_exif':{},                    # Camera Exif data
+              'license_name':"Getty Embed",
+              'license_name_long':"Getty Embed",
+              'license_url':"http://www.gettyimages.com/Corporate/LicenseAgreements.aspx#RF",
               'licenses':[                         ## List of licenses:
-                  {'license_name':None,            # License name
+                  {'name':'CC0',            
+                   'name_long':'Getty Embed',            
                    'attribute_to':[],              # For this license, attribute to this person / organization / paper citation.
                    'details':[],                   # License details text
                    }],
@@ -414,13 +423,43 @@ def normalize_getty(iter_json):
         yield hh
 
 import hashlib
+from os.path import exists, join
 
 def make_id(_id):
     return hashlib.md5(_id).hexdigest()
 
 def make_cache_url(_id):
-    xid = hashlib.md5(_id).hexdigest()
-    return '/cache/' + ('/'.join(xid[:3])) + '/' + xid + '.jpg'
+    assert False,'MOVED TO mc_web.py'
+    
+    CACHE_HOST = 'http://54.209.175.109:6008'
+
+
+    #print ('make_cache_url',_id)
+
+    if _id.startswith('pexels_'):
+
+        _id = _id.split('_')[-1]
+        
+        xid = hashlib.md5(_id).hexdigest()
+
+        fn = ('/'.join(xid[:4])) + '/' + xid + '.jpg'
+
+        #normalizer_names['pexels']['dir_cache']
+        
+        real_fn = '/datasets/datasets/pexels/images_1920_1280/' + fn
+
+        #assert exists(real_fn),real_fn
+        
+        #if not exists(real_fn):
+        #    print 'SKIPPING',real_fn
+        #    return None
+        #else:
+        #    print 'FOUND',real_fn
+
+        return CACHE_HOST + '/' + fn
+    
+    else:
+        assert False,repr(_id)
 
 
 def normalize_pexels(iter_json):
@@ -462,7 +501,7 @@ def normalize_pexels(iter_json):
         jj = jj_top['source_record'] ## Ignore the minimal normalization we did initially. Look at source.
 
         mime = get_image_stats(jj_top['img_data'])['mime']
-
+        
         sizes = [{'width':1920,                   # pixel width
                   'height':1280,                  # pixel height
                   'dpi':None,                     # DPI - Use to estimate real-world width / height if needed?
@@ -471,31 +510,51 @@ def normalize_pexels(iter_json):
                   'uri_external':None,            # External URI.
                   }
                  ]
-
-        xid = make_id(jj_top['_id'])
         
+        xid = make_id(jj_top['_id'])
+
+        original_id = jj_top['_id']#.split('_')[-1]
+
+        #cache_url = make_cache_url(jj_top['_id'])
+        #if not cache_url:
+        #    continue
+
+        attribution = []
+        artist_names = None
+        
+        if jj['author_name']:
+            artist_names = [jj['author_name']]
+            attribution = [{'name':jj['author_name'],
+                            'role':'artist',
+                            'details':None,
+                            }]
         hh = {'_id':xid,
-              'native_id':jj_top['_id'],
-              'mediachain_id':xid,                             ## TODO - use Mediachain "ref" IDs
-              'source':{'name':'pexels',
-                        'url':'https://www.pexels.com/',
+              'native_source_id':jj_top['_id'],
+              'native_id':original_id,
+              'source_dataset':'pexels',
+              'source':{'name':jj['source_name'] or 'pexels',
+                        #'url':jj['source_url'] or 'https://www.pexels.com/',
+                        'url':jj['the_canon'],
                         },
               'img_data':jj_top['img_data'],                   # Data URI of this version -- only for thumbnails.
-              'artist_names':None,
+              'artist_names':artist_names,
+              'attribution':attribution,                               ## Artist / Entity names.
               'url_shown_at':{'url':jj['the_canon']},
               'url_direct':None,
-              'url_direct_cache':{'url':make_cache_url(jj_top['_id'])},
+              #'url_direct_cache':{'url':cache_url},
               'date_source_version':None,                     # Date this snapshot started
               'date_captured':None,
               'date_created_original':None,                   # Actual creation date.
               'date_created_at_source':None,                  # Item created at data source.
-              'title':' '.join(jj['the_kw']),                 # Title string(s)
-              'attribution':[],                               ## Artist / Entity names.
+              'title':[' '.join(jj['the_kw'])],               # Title string(s)
               'keywords':jj['the_kw'],                        # Keywords
               'orientation':None,                             # Should photo be rotated?
-              'editorial_source_name':None,                   #
-              'editorial_source':None,
+              #'editorial_source_name':None,                   #
+              #'editorial_source':None,
               'camera_exif':{},                               # Camera Exif data
+              'license_name':"CC0",
+              'license_name_long':"Creative Commons Zero (CC0)",
+              'license_url':None,
               'licenses':[                                    ## List of licenses:
                   ## TODO - Correct but hard-coded:
                   {'name':"CC0",                               # License name
@@ -911,7 +970,7 @@ def normalize_dpla(iter_json):
         },
         "description": "This map was prepared from data collected by the state-wide highway planning survey as one of a series of county maps showing the federal, state, and county highway systems in each county as of January 1, 1962. The map was published as part of a paper bound set of maps entitled \"North Carolina State Highway Commission Municipal, State, Primary and Interstate Highway Systems Maintenance Maps by Counties with Enlarged Municipal and Suburban Areas.\" Schools, churches, and other landmarks are noted; and rivers, creeks, and other topographical features are identified. A legend is in the right margin. A location map and a key to county road numbers appear as insets. Maps of Cherryville, High Shoals, Hardins, Mountain View, Duke Power Village, Dallas, Stanley, Bessemer City, and Belmont-Gastonia-Lowell-McAdenville-Mount Holly and vicinity are found in the margins of sheet one and on sheet two.; This map was formerly a part of a set of maps classified as M.C. 7.5.",
         "artist": "North Carolina State Highway Commission.; United States. Bureau of Public Roads.",
-        "shown_at_url": "http://dc.lib.unc.edu/u?/ncmaps,6766",
+        "shown_at_url": {'url':"http://dc.lib.unc.edu/u?/ncmaps,6766"},
         "dataset": "dpla",
         "licenses": [
             {
@@ -946,10 +1005,10 @@ def normalize_dpla(iter_json):
                  ]
 
         artists = None
-        artist_names = None
+        artist_names = []
         try:
             artists = [{'name':x} for x in jj['sourceResource']['creator']]
-            artist_names = ', '.join([x['name'] for x in artists])
+            artist_names.append([x['name'] for x in artists])
         except:
             pass
 
@@ -957,7 +1016,7 @@ def normalize_dpla(iter_json):
         
         hh = {'_id':xid,
               'native_id':jj_top['_id'],
-              'mediachain_id':xid,                             ## TODO - use Mediachain "ref" IDs
+              'source_dataset':'dpla',
               'source':{'name':'dpla',
                         'url':'https://dp.la/',
                         },
@@ -969,7 +1028,7 @@ def normalize_dpla(iter_json):
                   ],
               'url_shown_at':{'url':jj['isShownAt']},
               'url_direct':{'url':jj['object']},
-              'url_direct_cache':{'url':make_cache_url(jj_top['_id'])},
+              #'url_direct_cache':{'url':make_cache_url(jj_top['_id'])},
               'date_source_version':None,                     # Date this snapshot started
               'date_captured':None,
               'date_created_original':get_shallowest_matching(jj, 'displayDate'), # Actual creation date.
@@ -979,8 +1038,8 @@ def normalize_dpla(iter_json):
               'attribution':artists,                          ## Artist / Entity names.
               'keywords':[],                                  # Keywords
               'orientation':None,                             # Should photo be rotated?
-              'editorial_source_name':None, #
-              'editorial_source':None,
+              #'editorial_source_name':None, #
+              #'editorial_source':None,
               'camera_exif':{},                                # Camera Exif data
               'licenses':[                                    ## List of licenses:
                   {'details':get_shallowest_matching(jj, "rights"),  # Additional license details text
@@ -1113,37 +1172,41 @@ def normalize_mirflickr1mm(iter_json):
                   }
                  ]
 
+        artist_names = []
+        attribution = []
+        if jj['license'].get("Owner name"):
+            artist_names.append(jj['license'].get("Owner name"))
+            attribution.append({'name':jj['license'].get("Owner name"),
+                                'role':'artist',
+                                })
+        
         xid = make_id(jj_top['_id'])
         
         hh = {'_id':xid,
               'native_id':jj_top['_id'],
-              'mediachain_id':xid,                            ## TODO - use Mediachain "ref" IDs
+              'source_dataset':'mirflickr1mm',
               'source':{'name':'mirflickr1mm',
                         'url':None,
                         },
               'img_data':jj_top['img_data'],                  # Data URI of this version -- only for thumbnails.
-              'artist_names':jj['license'].get("Owner name"),
+              'artist_names':artist_names,
               'providers_list':[                              ## List of providers, most recent first.
                   {'name':'flickr'},
               ],
               'url_shown_at':{'url':jj['license'].get('Photo url')},
               'url_direct':{'url':jj['license'].get('Web url')},
-              'url_direct_cache':{'url':make_cache_url(jj_top['_id'])},
+              #'url_direct_cache':{'url':make_cache_url(jj_top['_id'])},
               'date_source_version':None,                     # Date this snapshot started
               'date_captured':get_shallowest_matching(jj, "-Date and Time"),
               'date_created_original':get_shallowest_matching(jj, "-Date and Time"),  # Actual creation date.
               'date_created_at_source':jj['license']['Date uploaded'],      # Item created at data source.
               'title':jj['license'].get("Picture title"),    # Title string(s)
               'description':None,                        # Description
-              'attribution':[                            ## Artist / Entity names.
-                  {'name':jj['license'].get("Owner name"),
-                   'role':'artist',
-                  }
-                  ],
+              'attribution':attribution,                       ## Artist / Entity names.
               'keywords':[],                                  # Keywords
               'orientation':None,                             # Should photo be rotated?
-              'editorial_source_name':None, #
-              'editorial_source':None,
+              #'editorial_source_name':None, #
+              #'editorial_source':None,
               'camera_exif':jj['exif'],                       # Camera Exif data
               'licenses':licenses,                            ## List of licenses:
               'sizes':sizes,
@@ -1203,7 +1266,7 @@ def normalize_places(iter_json):
         
         hh = {'_id':xid,
               'native_id':jj_top['_id'],
-              'mediachain_id':xid,                       ## TODO - use Mediachain "ref" IDs
+              'source_dataset':'places205',
               'source':{'name':'places205',
                         'url':None,
                         },
@@ -1212,7 +1275,7 @@ def normalize_places(iter_json):
               'providers_list':[{'name':'places205'}],   ## List of providers, most recent first.
               'url_shown_at':None,
               'url_direct':None,
-              'url_direct_cache':{'url':make_cache_url(jj_top['_id'])},
+              #'url_direct_cache':{'url':make_cache_url(jj_top['_id'])},
               'date_source_version':None,                # Date this snapshot started
               'date_captured':None,
               'date_created_original':None,              # Actual creation date.
@@ -1222,8 +1285,8 @@ def normalize_places(iter_json):
               'attribution':[],                          ## Artist / Entity names.
               'keywords':[],                                  # Keywords
               'orientation':None,                             # Should photo be rotated?
-              'editorial_source_name':None, #
-              'editorial_source':None,
+              #'editorial_source_name':None, #
+              #'editorial_source':None,
               'camera_exif':None,                             # Camera Exif data
               'licenses':[],                                  ## List of licenses:
               'sizes':sizes,
@@ -1248,13 +1311,34 @@ def normalize_places(iter_json):
 
 ## name, func, default archive location:
 
-normalizer_names = {'getty_archiv':(normalize_getty, '/datasets/datasets/compactsplit/getty_archiv'),
-                    'getty_rf':(normalize_getty, '/datasets/datasets/compactsplit/getty_rf'),
-                    'getty_entertainment':(normalize_getty, '/datasets/datasets/compactsplit/getty_entertainment'),
-                    'dpla':(normalize_dpla, '/datasets/datasets/compactsplit/dpla'),
-                    'mirflickr1mm':(normalize_mirflickr1mm, '/datasets/datasets/compactsplit/mirflickr1mm'),
-                    'pexels':(normalize_pexels, '/datasets/datasets/compactsplit/pexels'),
-                    'places':(normalize_places, '/datasets/datasets/compactsplit/places'),
+normalizer_names = {'getty_archiv':{'func':normalize_getty,
+                                    'dir_compactsplit':'/datasets/datasets/compactsplit/getty_archiv',
+                                    'dir_cache':'/datasets2/datasets/getty_unpack/getty_archiv/downloads/comp/',
+                                    },
+                    'getty_rf':{'func':normalize_getty,
+                                'dir_compactsplit':'/datasets/datasets/compactsplit/getty_rf',
+                                'dir_cache':'/datasets2/datasets/getty_unpack/getty_rf/downloads/comp/',
+                                },
+                    'getty_entertainment':{'func':normalize_getty,
+                                           'dir_compactsplit':'/datasets/datasets/compactsplit/getty_entertainment',
+                                           'dir_cache':'/datasets2/datasets/getty_unpack/getty_entertainment/downloads/comp/',
+                                           },
+                    'dpla':{'func':normalize_dpla,
+                            'dir_compactsplit':'/datasets/datasets/compactsplit/dpla',
+                            'dir_cache':'/datasets/datasets/dpla/images/',
+                            },
+                    'mirflickr1mm':{'func':normalize_mirflickr1mm,
+                                    'dir_compactsplit':'/datasets/datasets/compactsplit/mirflickr1mm',
+                                    'dir_cache':False,
+                                    },
+                    'pexels':{'func':normalize_pexels,
+                              'dir_compactsplit':'/datasets/datasets/compactsplit/pexels',
+                              'dir_cache':'/datasets/datasets/pexels/images_1920_1280/',
+                              },
+                    'places':{'func':normalize_places,
+                              'dir_compactsplit':'/datasets/datasets/compactsplit/places',
+                              'dir_cache':False,
+                              },
                     }
 
 
@@ -1267,7 +1351,7 @@ def apply_normalizer(iter_json,
 
     assert not hasattr(iter_json, 'next'), 'Should be function that returns iterator when called, to allow restarting.'
 
-    func, _ = normalizer_names[normalizer_name]
+    func = normalizer_names[normalizer_name]['func']
 
     for x in func(iter_json):
         yield x
@@ -1306,7 +1390,8 @@ def walk_json_shapes_types(hh, path = [], sort = True):
     [('z', 'a', 'TYPE=UNICODE'),
      ('z', 'b', 'url', 'TYPE=INT'),
      ('z', 'c', 'TYPE=LIST', 'url', 'TYPE=UNICODE'),
-     ('z', 'c', 'TYPE=LIST', 'url', 'TYPE=UNICODE')]
+     ('z', 'c', 'TYPE=LIST', 'url', 'TYPE=UNICODE'),
+    ]
     """
     
     path = path[:]
@@ -1336,19 +1421,25 @@ def walk_json_shapes_types(hh, path = [], sort = True):
         else:
             yield tuple(path + [k] + [get_type_str(v)])
 
-
+            
 def test_normalizers(max_num = 100,
+                     dump_schemas = True,
+                     exception_on_type_change = True,
+                     exception_on_byte_strings = False,
                      via_cli = False,
                      ):
     """
-    Finds:
-    1) Obvious exceptions.
-    2) Differences in shapes / types among paths to records on the SAME normalizer.
-    3) Differences in shapes / types among paths to records from ALL normalizers.
+    Tests for:
+        1) Differences in record tree shapes / types for all records from the SAME normalizer.
+        2) Differences in record tree shapes / types for all records from ALL normalizers.
     
-    Creates 4 schema templates:
+    Tests for, and raises exceptions on:
+        3) Exceptions thrown by the normalizer functions.
+        4) (exception_on_type_change) Presence of more than 1 type used for any node (excluding
+           null, and sometimes `[]` or `{}`).
+        5) (exception_on_byte_strings) Any non-unicode strings. TODO.
     """
-
+    
     with open('/datasets/datasets/schemas_all_paths.txt','w') as f_out:
 
         from mc_datasets import iter_compactsplit
@@ -1361,8 +1452,12 @@ def test_normalizers(max_num = 100,
         all_common_schema = {} #{path:[type, ...], ...}
         all_counts = Counter()
 
-        for c,(name, (func, fn)) in enumerate(normalizer_names.iteritems()):
+        for c,(name, nh) in enumerate(normalizer_names.iteritems()):
+
             print ('START', name)
+
+            func = nh['func']
+            fn = nh['dir_compactsplit']
 
             this_common_all = set()
             this_common_any = set()
@@ -1477,7 +1572,10 @@ def dump_normalized_schemas(dir_in = '/datasets/datasets/compactsplit/',
     
     with open(fn_out, 'w') as f_out:
 
-        for name, (func, d2) in normalizer_names.iteritems():
+        for name, nh in normalizer_names.iteritems():
+
+            func = nh['func']
+            d2 = nh['dir_compactsplit']
             
             nm = split(d2)[-1]
 
