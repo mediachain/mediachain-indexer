@@ -209,11 +209,11 @@ class SimpleClient(object):
     
     def __init__(self,
                  ## Hard Code for now:
-                 datastore_host = '107.23.23.184',
+                 datastore_host = 'facade.mediachain.io',
                  datastore_port = 10002,
-                 transactor_host = '107.23.23.184',
+                 transactor_host = 'facade.mediachain.io',
                  transactor_port = 10001,
-                 use_ipfs = False,
+                 use_ipfs = True,
                  #datastore_host = mc_config.MC_DATASTORE_HOST,
                  #datastore_port = mc_config.MC_DATASTORE_PORT_INT,
                  #transactor_host = mc_config.MC_TRANSACTOR_HOST,
@@ -243,7 +243,7 @@ class SimpleClient(object):
                                            )
         
         set_rpc_datastore_config({'host': datastore_host, 'port': datastore_port})
-        set_ipfs_config({'host': 'http://localhost:8000', 'port': 5001})
+        set_ipfs_config({'host': 'localhost', 'port': 5001})
         set_use_ipfs_for_raw_data(True)
     
     
