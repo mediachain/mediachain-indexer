@@ -340,7 +340,7 @@ def tail_blockchain(via_cli = False):
 
     cur = SimpleClient()
     
-    for art in cur.read_artefacts():
+    for art in cur.get_artefacts():
         print ('ART:',time(),art)
     
 
@@ -366,7 +366,7 @@ def receive_blockchain_into_indexer(last_block_ref = None,
     def the_gen():
         ## Convert from blockchain format to Indexer format:
         
-        for art in cur.read_artefacts(force_exit = via_cli): ## Force exit after loop is complete, if CLI.
+        for art in cur.get_artefacts(force_exit = via_cli): ## Force exit after loop is complete, if CLI.
             
             try:
                 print 'GOT',art.get('type')

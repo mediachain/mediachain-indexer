@@ -401,7 +401,7 @@ class SimpleClient(object):
                         else:
                             continue
                     
-                    yield art
+                    yield obj
                     
                     if (end_id is not False):
                         if obj['data']['_id'] == end_id:
