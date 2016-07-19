@@ -322,8 +322,8 @@ class SimpleClient(object):
                     fetch_images = False,
                     reverse = False,
                     timeout = 600,
-                    force_exit_on_grpc_error = True,
-                    object_type = False
+                    force_exit = True,
+                    object_type = False,
                     ):
         """
         Get Artefacts or Entities from the blockchain.
@@ -412,7 +412,7 @@ class SimpleClient(object):
                 
                 print ('!!!CAUGHT gRPC ERROR',e)
                 
-                if force_exit_on_grpc_error:
+                if force_exit:
                     print ('FORCING EXIT',)
                     from time import sleep
                     import traceback, sys, os
