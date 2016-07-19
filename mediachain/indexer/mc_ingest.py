@@ -405,14 +405,14 @@ def receive_blockchain_into_indexer(last_block_ref = None,
                 rh['latest_ref'] = base58.b58encode(raw_ref[u'@link'])
 
                 ## TODO - use different created date? Phase out `translatedAt`:
+                xx = None
                 if 'translated_at' in art['meta']:
                     xx = art['meta']['translated_at']
                 elif 'translatedAt' in art['meta']:
                     xx = art['meta']['translatedAt']
-                else:
-                    assert False,'translatedAt'
-                
-                rh['date_created'] = date_parser.parse(xx) 
+
+                if xx is not None:
+                    rh['date_created'] = date_parser.parse(xx)
 
                 rhc = rh.copy()
                 if 'img_data' in rhc:
