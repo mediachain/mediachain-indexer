@@ -353,7 +353,7 @@ def tail_blockchain(via_cli = False):
 
     cur = SimpleClient()
     
-    for art in cur.read_artefacts():
+    for art in cur.get_artefacts():
         print ('ART:',time(),art)
     
 
@@ -379,7 +379,7 @@ def receive_blockchain_into_indexer(last_block_ref = None,
     def the_gen():
         ## Convert from blockchain format to Indexer format:
         
-        for art in cur.read_artefacts(force_exit = via_cli): ## Force exit after loop is complete, if CLI.
+        for art in cur.get_artefacts(force_exit = via_cli): ## Force exit after loop is complete, if CLI.
             
             try:
                 print 'GOT',art.get('type')
@@ -418,14 +418,14 @@ def receive_blockchain_into_indexer(last_block_ref = None,
                 rh['latest_ref'] = base58.b58encode(raw_ref[u'@link'])
 
                 ## TODO - use different created date? Phase out `translatedAt`:
+                xx = None
                 if 'translated_at' in art['meta']:
                     xx = art['meta']['translated_at']
                 elif 'translatedAt' in art['meta']:
                     xx = art['meta']['translatedAt']
-                else:
-                    assert False,'translatedAt'
-                
-                rh['date_created'] = date_parser.parse(xx) 
+
+                if xx is not None:
+                    rh['date_created'] = date_parser.parse(xx)
 
                 rhc = rh.copy()
                 if 'img_data' in rhc:
