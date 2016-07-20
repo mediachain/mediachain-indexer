@@ -193,17 +193,11 @@ class SimpleClient(object):
     """
     
     def __init__(self,
-                 ## Hard Code for now:
-                 datastore_host = 'facade.mediachain.io',
-                 datastore_port = 10002,
-                 transactor_host = 'facade.mediachain.io',
-                 transactor_port = 10001,
-                 use_ipfs = True,
-                 #datastore_host = mc_config.MC_DATASTORE_HOST,
-                 #datastore_port = mc_config.MC_DATASTORE_PORT_INT,
-                 #transactor_host = mc_config.MC_TRANSACTOR_HOST,
-                 #transactor_port = mc_config.MC_TRANSACTOR_PORT_INT,
-                 #use_ipfs = mc_config.MC_USE_IPFS_INT,
+                 datastore_host = mc_config.MC_DATASTORE_HOST,
+                 datastore_port = mc_config.MC_DATASTORE_PORT_INT,
+                 transactor_host = mc_config.MC_TRANSACTOR_HOST,
+                 transactor_port = mc_config.MC_TRANSACTOR_PORT_INT,
+                 use_ipfs = mc_config.MC_USE_IPFS_INT,
                  ):
         """
         """
