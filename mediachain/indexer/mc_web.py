@@ -396,6 +396,7 @@ def query_cache_save(key, hh):
        
 
 from mc_generic import consistent_json_hash
+import hashlib
 
 class handle_search(BaseHandler):
     
@@ -463,8 +464,13 @@ class handle_search(BaseHandler):
         
         d = self.request.body
 
-        #print ('BODY',d)
-        
+        if d.startswith('{'):
+            print ('OLD PARAMETERS FORMAT',d[:20])
+            
+        else:
+            print ('NEW PARAMETERS FORMAT',)
+            d = self.get_argument('json','{}')            
+                
         try:
             data = json.loads(d)
         except:
@@ -484,6 +490,7 @@ class handle_search(BaseHandler):
         
         q_text = data.get('q','')
         q_id = data.get('q_id','')
+        q_id_file = None
         offset = max(0, intget(data.get('offset'), 0))
         limit = intget(data.get('limit'), 15)
         index_name = data.get('index_name', mc_config.MC_INDEX_NAME)
@@ -493,7 +500,24 @@ class handle_search(BaseHandler):
         rerank_eq = data.get('rerank_eq', None)
         filter_license = data.get('filter_license', None)
 
-        include_thumb = False ## Disabled for now
+        
+        ## TODO: need multiple image upload support?:
+        
+        try:
+            fileinfo = self.request.files['file'][0]
+            print ("FILE UPLOAD", fileinfo['filename'])
+            q_id_file = fileinfo['body']
+        except:
+            pass
+        
+        if q_id_file and q_id:
+            self.set_status(500)
+            self.write_json({'error':'PARAMS',
+                             'error_message':'Use either q_id or HTTP image upload, but not both.',
+                             })
+            return                
+        
+        include_thumb = False ## Always disabled, for now
         full_limit = 200
         
         remote_ids = []
@@ -502,7 +526,6 @@ class handle_search(BaseHandler):
             remote_ids = get_remote_search(q_text)
             print ('REMOTE_IDS','time:',time()-t1,len(remote_ids))
 
-        #'CC0', 'Non-Commercial Use'
         
         ## Cache & token lookup:
         
@@ -528,6 +551,7 @@ class handle_search(BaseHandler):
             ## core args for looking up this query again:
             query_args = {'q':q_text,
                           'q_id':q_id,
+                          'q_id_file_hash': q_id_file and hashlib.md5(q_id_file).hexdigest() or q_id_file,
                           #'limit':limit,
                           #'offset':offset,
                           #'index_name':index_name,
@@ -573,7 +597,7 @@ class handle_search(BaseHandler):
             
             return
         
-        if not (q_text or q_id):
+        if not (q_text or q_id or q_id_file):
             #self.set_status(500)
             #self.write_json({'error':'BAD_QUERY',
             #                 'error_message':'Either `q` or `q_id` is required.',
@@ -587,6 +611,7 @@ class handle_search(BaseHandler):
                                       )
             
             rr = json.loads(rr.body)
+            
             rr = rr['hits']['hits']
             rr = {'results':rr,
                   'next_page':None,
@@ -605,19 +630,25 @@ class handle_search(BaseHandler):
             return
 
         
-        elif q_id:
+        elif q_id or q_id_file:
             
-            if q_id.startswith(data_pat) or q_id.startswith(data_pat_2):
+            if q_id_file or (q_id.startswith(data_pat) or q_id.startswith(data_pat_2)):
                 
                 #Resolve ID(s) for query based on content.
                 #Note that this is similar to `/dupe_lookup` with `include_docs` = True:
                 
-                print ('CONTENT-BASED-SEARCH',q_id[:50])
+                print ('CONTENT-BASED-SEARCH',)
                 
                 model = mc_models.VECTORS_MODEL_NAMES['baseline']()
                 
-                terms = model.img_to_terms(q_id)
-                
+                if (q_id.startswith(data_pat) or q_id.startswith(data_pat_2)):
+                    terms = model.img_to_terms(img_data_uri = q_id)
+                else:
+                    assert q_id_file
+                    terms = model.img_to_terms(img_bytes = q_id_file)
+
+                print ('TERMS',repr(terms)[:100])
+                    
                 rr = yield self.es.search(index = index_name,
                                           type = doc_type,
                                           source = {"query": {"constant_score":{"filter":{"term": terms}}}},
@@ -713,11 +744,12 @@ class handle_search(BaseHandler):
                   for hit
                   in rr
                   ]
-            
+        
+        ## Remove inline thumbnail data URIs:
         if not include_thumb:
             for x in rr:
-                if 'image_thumb' in x:
-                    del x['image_thumb']
+                if 'image_thumb' in x['_source']:
+                    del x['_source']['image_thumb']
         
         
         ## Remove `dedupe_*` fields:
@@ -728,12 +760,6 @@ class handle_search(BaseHandler):
                               in xx['_source'].iteritems()
                               if not x.startswith('dedupe_')
                               }
-        
-        ## Remove inline thumbnail data URIs:
-        if not data.get('include_thumb'):
-            for x in rr:
-                if 'image_thumb' in x['_source']:
-                    del x['_source']['image_thumb']
         
         
         ## Add in frontend image cached preview images:
@@ -843,12 +869,12 @@ class handle_search(BaseHandler):
         if offset + limit > len(rr['results']):
             rr['next_page'] = None
         else:
-            rr['next_page'] = {'token':the_token, 'offset':offset + limit, 'limit':limit},
+            rr['next_page'] = {'token':the_token, 'offset':offset + limit, 'limit':limit}
 
         if offset == 0:
             rr['prev_page'] = None
         else:
-            rr['prev_page'] = {'token':the_token, 'offset':max(0, offset - limit), 'limit':limit},
+            rr['prev_page'] = {'token':the_token, 'offset':max(0, offset - limit), 'limit':limit}
         
         ## Output:
                 

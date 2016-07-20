@@ -176,7 +176,7 @@ def hpo_vector_models(the_gen = mc_datasets.iter_copydays,
             group_num = hh['group_num']
             
             try:
-                query = rep_model.img_to_es_query(img_fn = hh['fn'])
+                query = rep_model.img_to_es_query(img_fn = open(hh['fn']).read())
             except KeyboardInterrupt:
                 raise                         
             except:
@@ -388,7 +388,7 @@ def eval_demo(max_num = 500,
             
             group_num = hh['group_num']
             
-            query = rep_model.img_to_es_query(img_fn = hh['fn'])
+            query = rep_model.img_to_es_query(img_fn = open(hh['fn']).read())
 
             if mc_config.LOW_LEVEL:
                 rr = es.search(index = index_name,

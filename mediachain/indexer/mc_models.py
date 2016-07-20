@@ -82,13 +82,14 @@ class VectorsBaseline(object):
             self.hash_func = use_hash
             
     #was img_to_hsh()
-    def img_to_terms(self, img_data_uri = False, img_fn = False):
+    def img_to_terms(self, img_data_uri = False, img_bytes = False):
         if img_data_uri:
             if type(img_data_uri) is unicode:
                 img_data_uri = img_data_uri.encode('utf8')
             img = Image.open(StringIO(decode_image(img_data_uri)))
         else:
-            img = Image.open(img_fn)
+            assert img_bytes is not False
+            img = Image.open(StringIO(img_bytes))
         hsh = binascii.b2a_hex(np.packbits(self.hash_func(img, hash_size = self.hash_size).hash).tobytes())
         return {'dedupe_hsh': hsh}
 
@@ -141,13 +142,14 @@ class VectorsBaselineNG(object):
         self.patch_size = int(patch_size)
         self.max_patches = int(max_patches)
 
-    def img_to_hsh_bools(self, img_data_uri = False, img_fn = False):
+    def img_to_hsh_bools(self, img_data_uri = False, img_bytes = False):
         if img_data_uri:
             if type(img_data_uri) is unicode:
                 img_data_uri = img_data_uri.encode('utf8')
             img = Image.open(StringIO(decode_image(img_data_uri)))
         else:
-            img = Image.open(img_fn)
+            assert img_bytes is not False
+            img = Image.open(StringIO(img_bytes))
         hsh = self.hash_func(img, hash_size = self.hash_size).hash
         return hsh
 
@@ -176,9 +178,9 @@ class VectorsBaselineNG(object):
             query['dedupe_word_' + str(c)] = zz
         return query
     
-    def img_to_terms(self, img_data_uri = False, img_fn = False):
+    def img_to_terms(self, img_data_uri = False, img_bytes = False):
         #was img_to_query
-        hsh = self.img_to_hsh_bools(img_data_uri = img_data_uri, img_fn = img_fn)
+        hsh = self.img_to_hsh_bools(img_data_uri = img_data_uri, img_bytes = img_bytes)
         patches = self.hsh_to_patches(hsh)
         rr = self.patches_to_query(patches)
         return rr
