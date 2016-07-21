@@ -371,6 +371,8 @@ def normalize_getty(iter_json):
                         #'url':'http://www.gettyimages.com/',
                         'url':'http://www.gettyimages.com/detail/photo/permalink/' + jj['id'], ## TODO - 'referral_destinations'
                         },
+              'source_tags':['gettyimages.com'],   # For easy indexer faceting
+              'license_tags':['Non-Commercial Use'], # For easy indexer faceting
               'img_data':jj_top['img_data'],       # Data URI of this version -- only for thumbnails.
               'url_shown_at':{'url':'http://www.gettyimages.com/detail/photo/permalink/' + jj['id']},
               'url_direct':None,
@@ -528,6 +530,16 @@ def normalize_pexels(iter_json):
                             'role':'artist',
                             'details':None,
                             }]
+
+        source_tags = ['pexels.com']
+        
+        if jj['source_name']:
+            source_tags.append(jj['source_name'])
+        
+        source_tags = list(set([(x[len('https://'):] if x.startswith('https://') else x) for x in source_tags]))
+        source_tags = list(set([(x[len('http://'):] if x.startswith('http://') else x) for x in source_tags]))
+        source_tags = list(set([(x[len('www.'):] if x.startswith('www.') else x) for x in source_tags]))
+        
         hh = {'_id':xid,
               'native_source_id':jj_top['_id'],
               'native_id':original_id,
@@ -536,6 +548,8 @@ def normalize_pexels(iter_json):
                         #'url':jj['source_url'] or 'https://www.pexels.com/',
                         'url':jj['the_canon'],
                         },
+              'source_tags':source_tags,                       # For easy Indexer faceting
+              'license_tags':['CC0'],                          # For easy Indexer faceting
               'img_data':jj_top['img_data'],                   # Data URI of this version -- only for thumbnails.
               'artist_names':artist_names,
               'attribution':attribution,                               ## Artist / Entity names.
@@ -1013,6 +1027,23 @@ def normalize_dpla(iter_json):
             pass
 
         xid = make_id(jj_top['_id'])
+
+        source_tags = ['dp.la']
+        
+        try:
+            prov = hh['source_record']['_source']['dataProvider']
+        except:
+            prov = hh['source_record']['_source']['provider']
+            
+        if (type(prov) == list):
+            source_tags.extend(prov)
+
+        elif (type(prov) == dict) and ('name' in prov):
+            source_tags.extend(prov['name'])
+        
+        source_tags = list(set([(x[len('https://'):] if x.startswith('https://') else x) for x in source_tags]))
+        source_tags = list(set([(x[len('http://'):] if x.startswith('http://') else x) for x in source_tags]))
+        source_tags = list(set([(x[len('www.'):] if x.startswith('www.') else x) for x in source_tags]))
         
         hh = {'_id':xid,
               'native_id':jj_top['_id'],
@@ -1020,6 +1051,7 @@ def normalize_dpla(iter_json):
               'source':{'name':'dpla',
                         'url':'https://dp.la/',
                         },
+              'source_tags':source_tags,      # For easy indexer faceting
               'img_data':jj_top['img_data'],  # Data URI of this version -- only for thumbnails.
               'artist_names':artist_names,
               'providers_list':[                              ## List of providers. Top most recent.
@@ -1357,7 +1389,67 @@ def apply_normalizer(iter_json,
         yield x
 
 
+
+def apply_post_ingestion_normalizers(rr):
+    """
+    Post-ingestion normalizers that are applied last-moment at indexer query time.
     
+    TEMPORARY - 
+        Currently only temporary code lives here, as it is all already done in the pre-ingestion
+        normalizers. When the datasets are re-generated, the following functions can be removed.
+        Put here as a JIT transformation because regenerating datasets is slow.
+    
+    TODO - 
+        Do both pre-ingestion and post-ingestion normalization?
+    """
+    
+    for ii in rr:
+        try:
+            native_id = ii['_source']['native_id']
+        except:
+            ## Likely images that didn't go through the mc_normalizers path and don't have `native_id`s.
+            continue
+
+        if native_id.startswith('pexels'):
+            ii['_source']['title'] = None
+
+        ## add permalinks here:
+
+        if 'getty_' in native_id:
+            ii['_source']['source']['url'] = 'http://www.gettyimages.com/detail/photo/permalink/' + native_id.replace('getty_','')
+        if False:#'pexels_' in native_id:
+            ii['_source']['source']['url'] = ii['url_shown_at']['url']
+
+        ## license stuff:
+        
+        if 'pexels_' in native_id:
+            source_tags = ['pexels.com']
+        
+            if ii['_source'].get('source',{}).get('name'):
+                source_tags.append(ii['_source']['source']['name'])
+            
+            source_tags = list(set([(x[len('https://'):] if x.startswith('https://') else x) for x in source_tags]))
+            source_tags = list(set([(x[len('http://'):] if x.startswith('http://') else x) for x in source_tags]))
+            source_tags = list(set([(x[len('www.'):] if x.startswith('www.') else x) for x in source_tags]))
+            
+            ii['_source']['source_tags'] = source_tags
+            
+            ii['_source']['licese_tags'] = ['CC0']
+            ii['_source']['license_name'] = "CC0"
+            ii['_source']['license_name_long'] = "Creative Commons Zero (CC0)"
+            ii['_source']['license_url'] = None
+            ii['_source']['license_attribution'] = ii.get('artist_names') and ', '.join(ii['artist_names']) or None
+            
+        if 'getty_' in native_id:
+            ii['_source']['source_tags'] = ['gettyimages.com']
+            
+            ii['_source']['license_tags'] = ['Non-Commercial Use']
+            ii['_source']['license_name'] = "Getty Embed"
+            ii['_source']['license_name_long'] = "Getty Embed"
+            ii['_source']['license_url'] = "http://www.gettyimages.com/Corporate/LicenseAgreements.aspx#RF"
+            ii['_source']['license_attribution'] = ii.get('artist_names') and ', '.join(ii['artist_names']) or None
+
+
         
 def get_type_str(x):
     s = str(type(x))

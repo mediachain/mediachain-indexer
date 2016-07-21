@@ -54,6 +54,7 @@ from os.path import exists,join,split,realpath,splitext,dirname
 from mc_generic import setup_main, pretty_print, intget
 import mc_models
 import mc_config
+import mc_normalize
 
 data_pat = 'data:image/jpeg;base64,'
 data_pat_2 = 'data:image/png;base64,'
@@ -418,6 +419,8 @@ class handle_list_facets(BaseHandler):
     def get(self):
         """
         Return a list of filterable facets. Facets are filtered by "id".
+
+        Todo: Periodically or continously update these lists, based on ES database.
         """
         
         licenses = {"CC0":{"id":"CC0",
@@ -429,19 +432,45 @@ class handle_list_facets(BaseHandler):
                                           "url":"http://www.gettyimages.com/Corporate/LicenseAgreements.aspx#RF",
                                           },
                     }
+
+
+        ## Abbreviated list for now. See mc_normalizers.py for complete list:
         
-        sources = {"pexels":{"id":"pexels",
-                             "name":"Pexels",
-                             "url":None,
-                             },
-                   "getty":{"id":"getty",
-                            "name":"Getty Images",
-                            "url":None,
-                            },
-                   "dpla":{"id":"dpla",
-                           "name":"DPLA",
-                           "url":None,
-                           },
+        source_list = ['gettyimages.com',
+                       'pexels.com',
+                       'stock.tookapic.com',
+                       'unsplash.com',
+                       'pixabay.com',
+                       'kaboompics.com',
+                       'lifeofpix.com',
+                       'skitterphoto.com',
+                       'snapwiresnaps.tumblr.com',
+                       'freenaturestock.com',
+                       'negativespace.co',
+                       'jaymantri.com',
+                       'jeshoots.com',
+                       'splitshire.com',
+                       'stokpic.com',
+                       'gratisography.com',
+                       'picography.co',
+                       'startupstockphotos.com',
+                       'littlevisuals.co',
+                       'gratisography.com',
+                       'spacex.com',
+                       'creativevix.com',
+                       'photos.oliur.com',
+                       'photos.uncoated.uk',
+                       'tinyography.com',
+                       'splashofrain.com',
+                       'commons.wikimedia.org',
+                       'dp.la',
+                       ]
+        
+        sources = {x:{"id":x,
+                      "name":x,
+                      "url":None,
+                      }
+                   for x in source_list
                    }
 
         rr = {"licenses":licenses,
@@ -858,79 +887,34 @@ class handle_search(BaseHandler):
         rr = rrm.rerank(rr)
 
         
-        ## TEMPORARY - When the datasets are re-generated, this can be removed.
-        ##             Put here as a JIT transformation because regenerating datasets is slow.
-        ##             TODO, just-in-time schema transformations for the indexer?
-        ##             Clears titles from pexels, adds licensing:
-
-        for ii in rr:
-            try:
-                native_id = ii['_source']['native_id']
-            except:
-                ## Likely images that didn't go through the mc_normalizers path and don't have `native_id`s.
-                continue
-            
-            if native_id.startswith('pexels'):
-                ii['_source']['title'] = None
-
-            ## add permalinks here:
-            
-            if 'getty_' in native_id:
-                ii['_source']['source']['url'] = 'http://www.gettyimages.com/detail/photo/permalink/' + native_id.replace('getty_','')
-            if False:#'pexels_' in native_id:
-                ii['_source']['source']['url'] = ii['url_shown_at']['url']
-                
-            ## license stuff:
-                
-            if 'pexels_' in native_id:
-                ii['_source']['license_name'] = "CC0"
-                ii['_source']['license_name_long'] = "Creative Commons Zero (CC0)"
-                ii['_source']['license_url'] = None
-                ii['_source']['license_attribution'] = ii.get('artist_names') and ', '.join(ii['artist_names']) or None
-                
-            if 'getty_' in native_id:
-                ii['_source']['license_name'] = "Getty Embed"
-                ii['_source']['license_name_long'] = "Getty Embed"
-                ii['_source']['license_url'] = "http://www.gettyimages.com/Corporate/LicenseAgreements.aspx#RF"
-                ii['_source']['license_attribution'] = ii.get('artist_names') and ', '.join(ii['artist_names']) or None
+        ## Apply post-ingestion normalizers, if there are any:
+        
+        mc_normalize.apply_post_ingestion_normalizers(rr)
 
         
-        ## Simple faceting, WIP:
-        ## TODO: ES queries.
-
-        if filter_sources:
-            ## TODO
-            pass
+        ## Note: swapping these for ES queries shortly:
         
         if filter_licenses:
+            filter_licenses_s = set(filter_licenses)
             r2 = []
-            for ii in rr:
-                
-                native_id = ii['_source']['native_id']
-                if 'CC0' in filter_licenses:
-                    if 'pexels' in native_id:
-                        ii['license_name'] = "CC0"
-                        ii['license_name_long'] = "Creative Commons Zero (CC0)"
-                        ii['license_url'] = None
-                        r2.append(ii)
-                        
-                elif 'Non-Commercial Use' in filter_licenses:
-                    if 'getty' in native_id:
-                        ii['license_name'] = "Getty Embed"
-                        ii['license_name_long'] = "Getty Embed"
-                        ii['license_url'] = "http://www.gettyimages.com/Corporate/LicenseAgreements.aspx#RF"
-                        
-                        r2.append(ii)
-                else:
-                    self.set_status(500)
-                    self.write_json({'error':'BAD_FILTER',
-                                     'error_message':'Invalid license filter: ' + filter_license,
-                                     })
-                    return
+            for ii in rr:                
+                if filter_licenses_s.intersection(ii['_source'].get('license_tags',[])):
+                    r2.append(ii)
             
-            print ('FILTER',len(rr),'->',len(r2))
+            print ('FILTER_LICENSES',filter_licenses,len(rr),'->',len(r2))
             rr = r2
-
+        
+        if filter_sources:
+            filter_sources_s = set(filter_sources)
+            r2 = []
+            for ii in rr:                
+                if filter_sources_s.intersection(ii['_source'].get('source_tags',[])):
+                    r2.append(ii)
+            
+            print ('FILTER_SOURCES',filter_licenses,len(rr),'->',len(r2))
+            rr = r2
+        
+        
         ## Include or don't include full docs:
         
         if not include_docs:
