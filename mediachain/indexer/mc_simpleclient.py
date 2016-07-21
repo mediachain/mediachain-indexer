@@ -300,7 +300,7 @@ class SimpleClient(object):
                     artist_ids = False,
                     fetch_images = False,
                     reverse = False,
-                    timeout = 600,
+                    timeout = None,
                     force_exit = True,
                     object_type = False,
                     ):
@@ -371,7 +371,7 @@ class SimpleClient(object):
             
             try:
                 started = False
-                with self.transactor.canonical_stream() as stream:
+                with self.transactor.canonical_stream(timeout=timeout) as stream:
                     for obj in stream:
 
                         if (start_id is not False) and (not started):
