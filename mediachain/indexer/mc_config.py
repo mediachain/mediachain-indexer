@@ -50,7 +50,12 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
             'MC_IPFS_PORT_INT': ('5001', 'IPFS port.'),
             'MC_USE_IPFS_INT':(1, 'Use IPFS for image ingestion.'),
            },
-       '4. Settings for Automated Tests':
+       '4. REST API Settings':
+           {'MC_QUERY_CACHE_DIR':('cache_queries', 'Location of where to store query cache.'),
+            'MC_IMAGE_CACHE_DIR':('cache_images', 'Location of where to store cached images, for serving to frontend.'),
+            'MC_IMAGE_CACHE_HOST':('http://54.209.175.109:6008/', 'Image host, for serving cached images to frontend.'),
+            },
+       '5. Settings for Automated Tests':
            {'MC_TEST_WEB_HOST':('http://127.0.0.1:23456', ''),
             'MC_TEST_INDEX_NAME':('mc_test', ''),
             'MC_TEST_DOC_TYPE':('mc_test_image', 'Document type, required for some neighbors models.'),

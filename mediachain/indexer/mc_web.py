@@ -211,13 +211,19 @@ except:
 
 
 def get_cache_url(_id,
-                  CACHE_HOST = 'http://54.209.175.109:6008/',
+                  image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
+                  image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
                   ):
     """
     Temporary solution to high-res image caching on the Indexer, for use by front-end. Currently reuses crawler caches.
     
     twistd -n web -p 6008 --path /datasets/datasets/indexer_cache/
+    
+    TODO: Temporary, as we work the best way to pass high-res images.
     """
+    
+    if not image_cache_host.endswith('/'):
+        image_cache_host = image_cache_host + '/'
     
     import hashlib
     
@@ -238,8 +244,8 @@ def get_cache_url(_id,
         real_fn = '/datasets/datasets/pexels/images_1920_1280/' + fn
 
         #assert exists(real_fn),real_fn
-
-        r = CACHE_HOST + 'pe/' + fn
+                
+        r = image_cache_host + 'pe/' + fn
         
         #print ('get_cache_url result:', r)
         
@@ -253,7 +259,7 @@ def get_cache_url(_id,
 
         #ln -s /datasets2/datasets/getty_unpack/getty_all_images/ /datasets/datasets/indexer_cache/gg
         
-        return CACHE_HOST + 'gg/' + fn
+        return image_cache_host + 'gg/' + fn
         
         base = '/datasets/datasets/indexer_cache/'
         
@@ -268,7 +274,7 @@ def get_cache_url(_id,
 
                 #print 'CACHE_FOUND',xfn
                 
-                return CACHE_HOST + xdir + fn
+                return image_cache_host + xdir + fn
             
         #print '!! CACHE_FAILED',xfn
         return None
@@ -339,15 +345,18 @@ class handle_get_embed_url(BaseHandler):
 
 from time import time
 
-QUERY_CACHE_DIR = '/datasets/datasets/cache_queries/'
-    
+
+   
 def query_cache_lookup(key,
                        max_age = 60 * 60, # 1 hour
+                       query_cache_dir = mc_config.MC_QUERY_CACHE_DIR,
                        ):
     """
     Simple file-based cache.
     """
-    dir_out_2 = QUERY_CACHE_DIR + ('/'.join(key[:4])) + '/'
+    dir_out_2 = join(query_cache_dir,
+                     ('/'.join(key[:4])) + '/',
+                     )
     
     fn_out = dir_out_2 + key + '.json'
     
@@ -366,17 +375,27 @@ def query_cache_lookup(key,
     return False
 
 
-def query_cache_save(key, hh):
+def query_cache_save(key,
+                     hh,
+                     query_cache_dir = mc_config.MC_QUERY_CACHE_DIR,
+                     ):
     """
     Simple file-based cache.
     """
-    dir_out_2 = QUERY_CACHE_DIR + ('/'.join(key[:4])) + '/'
+
+    dir_out_2 = join(query_cache_dir,
+                     ('/'.join(key[:4])) + '/',
+                     )
     
     fn_out = dir_out_2 + key + '.json'
     
     if not exists(dir_out_2):
-        makedirs(dir_out_2)
-
+        try:
+            makedirs(dir_out_2)
+        except OSError, e:
+            if e.errno != 17: ## 17 == File Exists, caused by concurrent threads.
+                raise
+    
     rh = {'data':hh,
           'time':int(time()),
           }
@@ -828,7 +847,8 @@ class handle_search(BaseHandler):
             r2.append(ii)
         
         if image_cache_failed:
-            print ('!!!IMAGE_CACHE_FAILED',)
+            print ('!!!IMAGE_CACHE_FAILED', mc_config.MC_IMAGE_CACHE_DIR)
+            #raise
         
         rr = r2
         
