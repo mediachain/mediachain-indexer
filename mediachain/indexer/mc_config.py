@@ -54,13 +54,14 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
            {'MC_QUERY_CACHE_DIR':('cache_queries', 'Location of where to store query cache.'),
             'MC_IMAGE_CACHE_DIR':('cache_images', 'Location of where to store cached images, for serving to frontend.'),
             'MC_IMAGE_CACHE_HOST':('http://54.209.175.109:6008/', 'Image host, for serving cached images to frontend.'),
+            'MC_ALLOW_SKIP_QUERY_CACHE_INT':('1', 'Allow Indexer `skip_cache` arg.'),
             },
        '5. Settings for Automated Tests':
            {'MC_TEST_WEB_HOST':('http://127.0.0.1:23456', ''),
             'MC_TEST_INDEX_NAME':('mc_test', ''),
             'MC_TEST_DOC_TYPE':('mc_test_image', 'Document type, required for some neighbors models.'),
            },
-           '5. Transactor Settings':
+       '6. Transactor Settings':
            {'MC_TRANSACTOR_HOST':('facade.mediachain.io', 'Mediachain transactor RPC host.'),
             'MC_TRANSACTOR_PORT_INT':('10001', ''),
            },

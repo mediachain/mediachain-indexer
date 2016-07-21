@@ -351,10 +351,17 @@ from time import time
 def query_cache_lookup(key,
                        max_age = 60 * 60, # 1 hour
                        query_cache_dir = mc_config.MC_QUERY_CACHE_DIR,
+                       skip_query_cache = False,
+                       allow_skip_query_cache = mc_config.MC_ALLOW_SKIP_QUERY_CACHE_INT,
                        ):
     """
     Simple file-based cache.
     """
+
+    if skip_query_cache and allow_skip_query_cache:
+        print ('!!!SKIP_QUERY_CACHE',)
+        return False
+    
     dir_out_2 = join(query_cache_dir,
                      ('/'.join(key[:4])) + '/',
                      )
@@ -370,6 +377,8 @@ def query_cache_lookup(key,
         
         if time() - rh['time'] > max_age:
             return False
+
+        rh['data']['cache_hit'] = True
         
         return rh['data']
     
@@ -587,6 +596,7 @@ class handle_search(BaseHandler):
         rerank_eq = data.get('rerank_eq', None)
         filter_licenses = data.get('filter_license', None) or data.get('filter_licenses', None)
         filter_sources = data.get('filter_sources', None)
+        skip_query_cache = data.get('skip_query_cache', None)
         
         if isinstance(filter_licenses, basestring):
             filter_licenses = [filter_licenses]
@@ -631,8 +641,7 @@ class handle_search(BaseHandler):
 
         
         if the_token:
-            print 'AA'
-            rr = query_cache_lookup(the_token)
+            rr = query_cache_lookup(the_token, skip_query_cache = skip_query_cache)
 
             if rr is False:
                 self.set_status(500)
@@ -664,9 +673,8 @@ class handle_search(BaseHandler):
                     del query_args[k]
             
             the_token = consistent_json_hash(query_args)
-
-            print 'BB'
-            rr = query_cache_lookup(the_token)
+            
+            rr = query_cache_lookup(the_token, skip_query_cache = skip_query_cache)
         
         if rr is not False:
             print ('CACHE_OR_TOKEN_HIT_QUERY','offset:',offset,'limit:',limit,'len(results)',len(rr['results']))

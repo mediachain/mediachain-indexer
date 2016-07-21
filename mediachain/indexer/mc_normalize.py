@@ -1434,7 +1434,7 @@ def apply_post_ingestion_normalizers(rr):
             
             ii['_source']['source_tags'] = source_tags
             
-            ii['_source']['licese_tags'] = ['CC0']
+            ii['_source']['license_tags'] = ['CC0']
             ii['_source']['license_name'] = "CC0"
             ii['_source']['license_name_long'] = "Creative Commons Zero (CC0)"
             ii['_source']['license_url'] = None
