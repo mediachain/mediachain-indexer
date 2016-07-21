@@ -371,20 +371,20 @@ class SimpleClient(object):
             
             try:
                 started = False
-                
-                for obj in self.transactor.canonical_stream(timeout = timeout):
-                    
-                    if (start_id is not False) and (not started):
-                        if obj['data']['_id'] == start_id:
-                            started = True
-                        else:
-                            continue
-                    
-                    yield obj
-                    
-                    if (end_id is not False):
-                        if obj['data']['_id'] == end_id:
-                            break
+                with self.transactor.canonical_stream() as stream:
+                    for obj in stream:
+
+                        if (start_id is not False) and (not started):
+                            if obj['data']['_id'] == start_id:
+                                started = True
+                            else:
+                                continue
+
+                        yield obj
+
+                        if (end_id is not False):
+                            if obj['data']['_id'] == end_id:
+                                break
                     
             
             except grpc_errors as e:
