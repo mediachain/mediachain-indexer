@@ -1007,8 +1007,8 @@ def normalize_dpla(iter_json):
         artists = None
         artist_names = []
         try:
-            artists = [{'name':x} for x in jj['sourceResource']['creator']]
-            artist_names.append([x['name'] for x in artists])
+            artists = [{'name':x} for x in jj['sourceResource']['creator'] if len(x) > 1]
+            artist_names.append([x['name'] for x in artists if len(x['name']) > 1]) ## TODO, why so many single-letter names?
         except:
             pass
 
@@ -1357,6 +1357,8 @@ def apply_normalizer(iter_json,
         yield x
 
 
+    
+        
 def get_type_str(x):
     s = str(type(x))
     assert "<type '" in s,repr(s)
@@ -1373,7 +1375,8 @@ def get_type_str(x):
     
     return r
 
-def walk_json_shapes_types(hh, path = [], sort = True):
+
+def walk_json_shapes_types(hh, path = [], sort = True, leaves_as_types = True, include_falsy_leaves = True):
     """
     hh = {'z':{'a': '123',
                'b': {'url': 234},
@@ -1383,45 +1386,254 @@ def walk_json_shapes_types(hh, path = [], sort = True):
               }
          }
     
-    walk_json_shape_types(hh)
+    walk_json_shapes_types(hh)
     
-    ->
+    -> [('TYPE=DICT', 'z', 'TYPE=DICT', 'a', 'TYPE=UNICODE'),
+        ('TYPE=DICT', 'z', 'TYPE=DICT', 'b', 'TYPE=DICT', 'url', 'TYPE=INT'),
+        ('TYPE=DICT', 'z', 'TYPE=DICT', 'c', 'TYPE=LIST', 'TYPE=DICT', 'url', 'TYPE=UNICODE'),
+        ('TYPE=DICT', 'z', 'TYPE=DICT', 'c', 'TYPE=LIST', 'TYPE=DICT', 'url', 'TYPE=UNICODE')]
+
+    walk_json_shapes_types({1:{2:{3:4}}}, leaves_as_types = False)
+
+    -> [('TYPE=DICT', 1, 'TYPE=DICT', 2, 'TYPE=DICT', 3, 4)]
     
-    [('z', 'a', 'TYPE=UNICODE'),
-     ('z', 'b', 'url', 'TYPE=INT'),
-     ('z', 'c', 'TYPE=LIST', 'url', 'TYPE=UNICODE'),
-     ('z', 'c', 'TYPE=LIST', 'url', 'TYPE=UNICODE'),
-    ]
     """
-    
+        
     path = path[:]
     
-    if type(hh) != dict:
-        yield tuple(path + [get_type_str(hh)])
-        return
+    v = hh
     
-    zz = hh.iteritems()
+    if type(v) == dict:
+
+        if include_falsy_leaves:
+            if not v:
+                yield path + [get_type_str(v)]
+        
+        zz = v.iteritems()
     
-    if sort:
-        zz = sorted(zz)
+        if sort:
+            zz = sorted(zz)
         
-    for k,v in zz:
-        
-        tv = type(v)
-        
-        if tv == dict:
-            for xx in walk_json_shapes_types(v, path + [k]):
+        for kk, vv in zz:            
+            for xx in walk_json_shapes_types(vv,
+                                             path + [get_type_str(v)] + [kk],
+                                             leaves_as_types = leaves_as_types,
+                                             ):
                 yield xx
 
-        elif tv in [list]:
-            for xx in v:
-                for yy in walk_json_shapes_types(xx, path + [k, get_type_str(v)]):
-                    yield yy
+    elif hasattr(v, '__iter__'):
+        
+        if include_falsy_leaves:
+            if not v:
+                yield path + [get_type_str(v)]
                 
-        else:
-            yield tuple(path + [k] + [get_type_str(v)])
+        for xx in v:
+            for yy in walk_json_shapes_types(xx,
+                                             path + [get_type_str(v)],
+                                             leaves_as_types = leaves_as_types,
+                                             ):
+                yield yy
 
+    else:
+        yield tuple(path + [get_type_str(v) if leaves_as_types else v])
+
+
+
+def reproduce_json_from_shapes(path_list, verbose = False):
+    """
+    Stack-based rebuilding of flattened json shapes.
+    """
+
+    path_list = list(path_list)
+    
+    lookup = {('TYPE=DICT', 'ROOT'):[]}      ## {path:obj}
+
+    ## Flatten and add padding:
+    
+    path_list = [['TYPE=DICT'], ['TYPE=DICT', 'ROOT']] + path_list
+
+    done = set()
+    rr = []
+    for c,path in enumerate(path_list):
+        path = list(path)
+        if c > 1:
+            path = ['TYPE=DICT', 'ROOT'] + path
+
+        for x in xrange(1, len(path) + 1):
+            y = tuple(path[:x])
+            if y not in done:
+                rr.append(y)
+            done.add(y)
+    path_list = rr
+
+    if verbose:
+        print '===='
+        for x in path_list:
+            print x
+        print '===='
+
+    ## Main loop:
+        
+    for c,path in enumerate(path_list):
+
+        path = list(path)
+        
+        #print 'path',path
+        
+        ## CREATE OBJECTS:
+        
+        cur_node = path[-1]
+        
+        if tuple(path) not in lookup:
             
+            if cur_node == 'TYPE=TUPLE':
+                lookup[tuple(path)] = [] ## switch to tuple later
+
+            elif cur_node == 'TYPE=DICT':
+                lookup[tuple(path)] = {}
+
+            elif cur_node == 'TYPE=LIST':
+                lookup[tuple(path)] = []
+            else:
+                assert not (isinstance(cur_node, basestring) and cur_node.startswith('TYPE=')), cur_node
+                lookup[tuple(path)] = cur_node
+                assert cur_node != 'TYPE=DICT'
+
+        if len(path) > 2:
+            ## APPEND OBJECTS DEFINED VIA 1 LAYER:
+            
+            prev_node = path[-2]
+
+            if prev_node == 'TYPE=TUPLE':
+                lookup[tuple(path[:-1])].append(lookup[tuple(path)])
+                assert lookup[tuple(path)] != 'TYPE=DICT'
+                
+            elif prev_node == 'TYPE=LIST':
+                lookup[tuple(path[:-1])].append(lookup[tuple(path)])
+                assert lookup[tuple(path)] != 'TYPE=DICT'
+
+            elif prev_node == 'TYPE=DICT':
+                pass
+
+            else:
+                #probably partially-built dict
+                pass
+
+ 
+            ## APPEND OBJECTS DEFINED VIA 2 LAYERS:
+
+            prev_node_2 = path[-3]
+            
+            if prev_node_2 == 'TYPE=DICT':
+                #print 'ASSIGN',tuple(path[:-2]),'--',prev_node,'--',cur_node
+                lookup[tuple(path[:-2])][prev_node] = lookup[tuple(path)]
+        
+        #print '->this',lookup[tuple(path)]
+    
+    return lookup[('TYPE=DICT',)]['ROOT']
+
+    
+
+def dump_example_schemas(max_num = 1000,
+                         via_cli = False,
+                         ):
+
+    def special_repr(x):
+        x = repr(x)
+        if x == 'True':
+            x = 'true'
+        elif x == 'False':
+            x = 'false'
+        elif x == 'None':
+            x = 'null'
+        return x
+    
+    from random import choice
+    from mc_datasets import iter_compactsplit
+    from collections import Counter
+    import json
+    
+    all_common_examples = {}
+
+    longest_paths = {} ## {short:long}
+    
+    for c,(name, nh) in enumerate(normalizer_names.iteritems()):
+        
+        print ('START', name)
+        
+        func = nh['func']
+        fn = nh['dir_compactsplit']
+        
+        for cc,rr in enumerate(func(lambda : iter_compactsplit(fn, max_num = max_num))):
+            
+            #print 'RR',c,cc,repr(rr)
+            
+            type_paths = list(walk_json_shapes_types(rr, leaves_as_types = False))
+            
+            for ccc,type_path in enumerate(type_paths):
+                
+                #print (c,cc,ccc,'type_path',type_path)
+                
+                #type_path = [repr(x) for x in type_path]
+
+                #if 'artist_names' in repr(type_path):
+                #    print type_path
+                
+                pth = tuple(type_path[:-1])
+                leaf = type_path[-1]
+
+                if isinstance(leaf, basestring) and (len(leaf) > 100):
+                    leaf = leaf[:100] + '...'
+                
+                if pth not in all_common_examples:
+                    all_common_examples[pth] = Counter()
+                all_common_examples[pth][leaf] += 1
+
+                if len(all_common_examples[pth]) > 200:
+                    all_common_examples[pth] = Counter(dict(all_common_examples[pth].most_common(50)))
+
+                for x in xrange(1, len(pth) + 1):
+                    short = pth[:x]
+
+                    if len(longest_paths.get(short,[])) < len(pth):
+                        longest_paths[short] = pth
+
+
+    ## Now we've ignored short circuits caused by falsy types:
+
+    rt = []
+    ro = []
+    for path in sorted(longest_paths.values()):
+
+        #ex = choice(all_common_examples[path].most_common(5))[0]
+
+        zz = [special_repr(x) for x,y in all_common_examples[path].most_common(6)]
+
+        zz = [x for x in zz if x != 'null'][:5]
+
+        ex = 'EXAMPLES(' + (', '.join(zz)) + ')'
+
+        path_t = list(path) + [ex]
+
+        print 'EX',path_t
+
+        rt.append(path_t)
+
+        bb = [x for x,y in all_common_examples[path].most_common(5) if x is not None]
+
+        path_o = list(path) + [choice(bb) if bb else None]
+
+        ro.append(path_o)
+
+    with open('/datasets/datasets/schema_example_top_5.json','w') as ft:
+         ft.write(json.dumps(reproduce_json_from_shapes(rt), indent=4))
+         
+    with open('/datasets/datasets/schema_example_single.json','w') as fo:
+        fo.write(json.dumps(reproduce_json_from_shapes(ro), indent=4))
+
+    print json.dumps(reproduce_json_from_shapes(rr), indent=4)
+
+
 def test_normalizers(max_num = 100,
                      dump_schemas = True,
                      exception_on_type_change = True,
@@ -1441,17 +1653,17 @@ def test_normalizers(max_num = 100,
     """
     
     with open('/datasets/datasets/schemas_all_paths.txt','w') as f_out:
-
+        
         from mc_datasets import iter_compactsplit
         from collections import Counter
-
-        all_example = {}
+        
+        all_common_examples = {}
         
         all_common_all = set()
         all_common_any = set()
         all_common_schema = {} #{path:[type, ...], ...}
         all_counts = Counter()
-
+        
         for c,(name, nh) in enumerate(normalizer_names.iteritems()):
 
             print ('START', name)
@@ -1512,6 +1724,13 @@ def test_normalizers(max_num = 100,
                     if leaf not in this_common_schema[pth]:
                         this_common_schema[pth].append(leaf)
 
+                    if pth not in all_common_examples:
+                        all_common_examples[pth] = Counter()
+
+                    all_common_examples[pth][(repr(leaf), get_type_str(leaf))] += 1
+                    
+                    
+
                 #raw_input_enter()
             print
             print ('====COMMON_PATHS:',name)
@@ -1548,6 +1767,16 @@ def test_normalizers(max_num = 100,
         #for xx in sorted(all_common_any.difference(all_common_all)):
         #    print space_pad(all_counts[xx],6),xx
         #print
+        
+        print
+        print '====ALL_COMMON_EXAMPLES'        
+        ii = [(' -> '.join(k),v) for k,v in all_common_schema.items()]
+        max_k = max([len(k) for k,v in ii]) + 1
+        f_out.write(space_pad('SCHEMA_PATH',max_k,ch=' ') + 'LEAF_TYPE(S)' + '\n')
+        for k,v in sorted(ii):
+            print space_pad(k,max_k,ch=' '),u', '.join(v)
+            f_out.write((space_pad(k,max_k,ch=' ') + unicode(u', '.join(v))).encode('utf8') + '\n')
+        print
         
         print ('DONE_ALL')
 
@@ -1660,6 +1889,7 @@ from mc_generic import setup_main, raw_input_enter, space_pad
 
 functions=['test_normalizers',
            'dump_normalized_schemas',
+           'dump_example_schemas',
            ]
 
 def main():

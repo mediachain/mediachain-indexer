@@ -102,6 +102,20 @@ class VectorsBaseline(object):
                     *args,
                     **kw):
         return simple_check_match(*args, **kw)    
+
+
+def test_dedupe_resize():
+    """
+    Quick test of how reliably the dedupe models hash the original and resized images to the same size.
+
+    ('TERMS', "{'dedupe_hsh': '02106e2311c76230'}")
+    """
+    
+    model = VectorsBaseline()
+    
+    assert False,'TODO'
+    
+    
     
 from sklearn.feature_extraction.image import extract_patches_2d
 from math import sqrt
@@ -408,6 +422,7 @@ def dedupe_reindex(lookup_name = False,
                    doc_type = mc_config.MC_DOC_TYPE,
                    v1_mode = True,
                    via_cli = False,
+                   dump_example_images = '/datasets/datasets/example_images/',
                    ):
     """
     Regenerate duplicate lookup tables. Currently implements v1 - a simple, greedy, in-memory baseline.
@@ -493,8 +508,7 @@ def dedupe_reindex(lookup_name = False,
         
     vmodel = VECTORS_MODEL_NAMES[vectors_model_name](**vectors_model[vectors_model_name])
     
-    #print ('MODEL',vmodel)
-
+    print ('VECTORS_MODEL',vmodel)
     
     def do_commit(rrr):
         print ('COMMITTING BATCH...',vectors_model_name,len(rrr))
@@ -578,13 +592,18 @@ def dedupe_reindex(lookup_name = False,
                        '_id': hit['_id'],
                        'body': {'doc':doc_update},
                        })
+
+            if dump_example_images and (examples_written[0] < 5):
+                print 'DUMP_EXAMPLE_IMAGES'
+                examples_written[0] += 1
+
             
-            if c % 1000 == 0:
+            if c % 10 == 0:
                 print ('YES_THUMB_PRESENT',vectors_model_name,)#hit['_source'])
         else:
             
-            if c % 1000 == 0:
-                print ('NO_THUMB_PRESENT',vectors_model_name,)#hit['_source'])
+            if c % 10 == 0:
+                assert False,('NO_THUMB_PRESENT',vectors_model_name,)#hit['_source'])
                 
         #print ('ADD',c) #rr
         
@@ -770,6 +789,7 @@ functions=['dedupe_train',
            'dedupe_reindex',
            'dedupe_reindex_all',
            'typeahead_generate',
+           'test_dedupe_resize',
            ]
 
 def main():    

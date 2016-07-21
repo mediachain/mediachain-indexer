@@ -577,9 +577,7 @@ class handle_search(BaseHandler):
             print ('CACHE_OR_TOKEN_HIT_QUERY','offset:',offset,'limit:',limit,'len(results)',len(rr['results']))
             
             results_count = len(rr['results'])
-            
-            rr['results'] = rr['results'][offset:offset + limit]
-                                    
+                                                
             if offset + limit > len(rr['results']):
                 rr['next_page'] = None
             else:
@@ -589,6 +587,8 @@ class handle_search(BaseHandler):
                 rr['prev_page'] = None
             else:
                 rr['prev_page'] = {'token':the_token, 'offset':max(0, offset - limit), 'limit':limit}
+
+            rr['results'] = rr['results'][offset:offset + limit]
 
             self.write_json(rr,
                             pretty = data.get('pretty', True),
@@ -642,13 +642,16 @@ class handle_search(BaseHandler):
                 model = mc_models.VECTORS_MODEL_NAMES['baseline']()
                 
                 if (q_id.startswith(data_pat) or q_id.startswith(data_pat_2)):
+                    print ('GOT_DATA_URI')
                     terms = model.img_to_terms(img_data_uri = q_id)
                 else:
+                    print ('GOT_RAW_BYTES')
                     assert q_id_file
                     terms = model.img_to_terms(img_bytes = q_id_file)
-
+                
                 print ('TERMS',repr(terms)[:100])
-                    
+                
+                
                 rr = yield self.es.search(index = index_name,
                                           type = doc_type,
                                           source = {"query": {"constant_score":{"filter":{"term": terms}}}},
@@ -736,24 +739,15 @@ class handle_search(BaseHandler):
             r2.append(xx)
         rr = r2
         
-        ## Include or don't include full docs:
-        
-        if not include_docs:
-            
-            rr = [{'_id':hit['_id']}
-                  for hit
-                  in rr
-                  ]
-        
         ## Remove inline thumbnail data URIs:
         if not include_thumb:
             for x in rr:
                 if 'image_thumb' in x['_source']:
                     del x['_source']['image_thumb']
-        
-        
+
+
         ## Remove `dedupe_*` fields:
-        
+
         for xx in rr:
             xx['_source']  = {x:y
                               for x,y
@@ -849,7 +843,17 @@ class handle_search(BaseHandler):
 
             print ('FILTER',len(rr),'->',len(r2))
             rr = r2
+
+        ## Include or don't include full docs:
+        
+        if not include_docs:
             
+            rr = [{'_id':hit['_id']}
+                  for hit
+                  in rr
+                  ]
+
+
         ## Cache:
 
         results_count = len(rr)
@@ -859,10 +863,6 @@ class handle_search(BaseHandler):
               }
         
         query_cache_save(the_token, rr)
-
-        ## Trim:
-        
-        rr['results'] = rr['results'][offset:offset + limit]
 
         ## Wrap in pagination:
         
@@ -875,6 +875,10 @@ class handle_search(BaseHandler):
             rr['prev_page'] = None
         else:
             rr['prev_page'] = {'token':the_token, 'offset':max(0, offset - limit), 'limit':limit}
+
+        ## Trim:
+        
+        rr['results'] = rr['results'][offset:offset + limit]
         
         ## Output:
                 
