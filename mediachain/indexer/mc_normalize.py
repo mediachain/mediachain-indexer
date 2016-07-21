@@ -1407,7 +1407,7 @@ def walk_json_shapes_types(hh, path = [], sort = True, leaves_as_types = True, i
 
         if include_falsy_leaves:
             if not v:
-                yield path + [get_type_str(v)]
+                yield path + [get_type_str(v) if leaves_as_types else v]
         
         zz = v.iteritems()
     
@@ -1425,7 +1425,7 @@ def walk_json_shapes_types(hh, path = [], sort = True, leaves_as_types = True, i
         
         if include_falsy_leaves:
             if not v:
-                yield path + [get_type_str(v)]
+                yield path + [get_type_str(v) if leaves_as_types else v]
                 
         for xx in v:
             for yy in walk_json_shapes_types(xx,
@@ -1460,10 +1460,13 @@ def reproduce_json_from_shapes(path_list, verbose = False):
             path = ['TYPE=DICT', 'ROOT'] + path
 
         for x in xrange(1, len(path) + 1):
+
+            path = [(tuple(z) if type(z) == list else z) for z in path]
+            
             y = tuple(path[:x])
-            if y not in done:
+            if repr(y) not in done:
                 rr.append(y)
-            done.add(y)
+            done.add(repr(y))
     path_list = rr
 
     if verbose:
@@ -1534,9 +1537,21 @@ def reproduce_json_from_shapes(path_list, verbose = False):
 
     
 
-def dump_example_schemas(max_num = 1000,
+def dump_example_schemas(top_num = 50,
+                         max_num = 10000,
+                         max_leaf_string_length = 200,
                          via_cli = False,
                          ):
+    """
+    Create schema reports, including example schemas, from all compactsplit formatted datasets.
+    
+    Args:
+        top_num:                 Show top `top_num` examples for each field.
+        max_num:                 Number of documents to sample from each dataset. 0 for all documents.
+        max_leaf_string_length:  Cut field value strings that are longer than this length, for reading
+                                 brevity. 0 to ignore.
+    """
+    
 
     def special_repr(x):
         x = repr(x)
@@ -1552,6 +1567,7 @@ def dump_example_schemas(max_num = 1000,
     from mc_datasets import iter_compactsplit
     from collections import Counter
     import json
+    from ast import literal_eval
     
     all_common_examples = {}
 
@@ -1582,13 +1598,16 @@ def dump_example_schemas(max_num = 1000,
                 pth = tuple(type_path[:-1])
                 leaf = type_path[-1]
 
-                if isinstance(leaf, basestring) and (len(leaf) > 100):
-                    leaf = leaf[:100] + '...'
-                
+                if max_leaf_string_length:
+                    if isinstance(leaf, basestring) and (len(leaf) > max_leaf_string_length):
+                        leaf = leaf[:max_leaf_string_length] + '...[CUT]'
+
+                leaf = repr(leaf) ## reversed later with literal_eval
+                    
                 if pth not in all_common_examples:
                     all_common_examples[pth] = Counter()
                 all_common_examples[pth][leaf] += 1
-
+                
                 if len(all_common_examples[pth]) > 200:
                     all_common_examples[pth] = Counter(dict(all_common_examples[pth].most_common(50)))
 
@@ -1600,34 +1619,36 @@ def dump_example_schemas(max_num = 1000,
 
 
     ## Now we've ignored short circuits caused by falsy types:
-
+    
     rt = []
     ro = []
     for path in sorted(longest_paths.values()):
 
-        #ex = choice(all_common_examples[path].most_common(5))[0]
+        ## Show the top `top_num` examples, ignoring `null` unless it's the only option:
+        
+        zz = [special_repr(literal_eval(x)) for x,y in all_common_examples[path].most_common(top_num + 1)]
 
-        zz = [special_repr(x) for x,y in all_common_examples[path].most_common(6)]
-
-        zz = [x for x in zz if x != 'null'][:5]
+        zz = [x for x in zz if x != 'null'][:top_num]
 
         ex = 'EXAMPLES(' + (', '.join(zz)) + ')'
 
         path_t = list(path) + [ex]
-
+        
         print 'EX',path_t
-
+        
         rt.append(path_t)
 
-        bb = [x for x,y in all_common_examples[path].most_common(5) if x is not None]
+        ## for top-1, choose randomly one of the top 5: 
+        
+        bb = [literal_eval(x) for x,y in all_common_examples[path].most_common(5) if x is not None]
 
         path_o = list(path) + [choice(bb) if bb else None]
 
         ro.append(path_o)
 
-    with open('/datasets/datasets/schema_example_top_5.json','w') as ft:
+    with open('/datasets/datasets/schema_example_top_%d.json' % top_num,'w') as ft:
          ft.write(json.dumps(reproduce_json_from_shapes(rt), indent=4))
-         
+                  
     with open('/datasets/datasets/schema_example_single.json','w') as fo:
         fo.write(json.dumps(reproduce_json_from_shapes(ro), indent=4))
 

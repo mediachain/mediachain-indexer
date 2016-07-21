@@ -66,7 +66,7 @@ class Application(tornado.web.Application):
         handlers = [(r'/',handle_front,),
                     (r'/ping',handle_ping,),
                     (r'/search',handle_search,),
-                    (r'/facets',handle_get_facet_info),
+                    (r'/list_facets',handle_list_facets),
                     (r'/get_embed_url',handle_get_embed_url,),
                     (r'/dupe_lookup',handle_dupe_lookup,),
                     (r'/score',handle_score,),
@@ -337,11 +337,6 @@ class handle_get_embed_url(BaseHandler):
         self.write_json(r)
 
 
-class handle_get_facet_info(BaseHandler):
-    @tornado.gen.coroutine
-    def get(self):
-        self.write({'licenses':['Getty Embed','CC0']})
-
 from time import time
 
 QUERY_CACHE_DIR = '/datasets/datasets/cache_queries/'
@@ -392,8 +387,50 @@ def query_cache_save(key, hh):
     rename(fn_out + '.temp',
            fn_out,
            )
-            
-       
+
+
+class handle_list_facets(BaseHandler):
+    
+    #disable XSRF checking for this URL:
+    def check_xsrf_cookie(self): 
+        pass
+    
+    @tornado.gen.coroutine
+    def get(self):
+        """
+        Return a list of filterable facets. Facets are filtered by "id".
+        """
+        
+        licenses = {"CC0":{"id":"CC0",
+                           "name":"Creative Commons Zero (CC0)",
+                           "url":None,
+                           },
+                    "Non-Commercial Use":{"id":"Non-Commercial Use",
+                                          "name":"Getty Embed",
+                                          "url":"http://www.gettyimages.com/Corporate/LicenseAgreements.aspx#RF",
+                                          },
+                    }
+        
+        sources = {"pexels":{"id":"pexels",
+                             "name":"Pexels",
+                             "url":None,
+                             },
+                   "getty":{"id":"getty",
+                            "name":"Getty Images",
+                            "url":None,
+                            },
+                   "dpla":{"id":"dpla",
+                           "name":"DPLA",
+                           "url":None,
+                           },
+                   }
+
+        rr = {"licenses":licenses,
+              "sources":sources,
+              }
+        
+        self.write_json(rr)
+
 
 from mc_generic import consistent_json_hash
 import hashlib
@@ -424,7 +461,9 @@ class handle_search(BaseHandler):
             pretty:           Pretty-print JSON output.
             max_indent_depth: Maximum depth at which to indent for pretty-printed JSON output.
 
-
+            filter_licenses:  List of allowable licenses. Empty list to allow all licenses. See `/list_facets`.
+            filter_sources:   List of allowable sources. Empty list to allow all sources. See `/list_facets`.
+        
         Returns:
             List of image IDs, possibly with relevancy scores.
         
@@ -498,8 +537,15 @@ class handle_search(BaseHandler):
         include_docs = data.get('include_docs', True)
         include_thumb = data.get('include_thumb', True)
         rerank_eq = data.get('rerank_eq', None)
-        filter_license = data.get('filter_license', None)
-
+        filter_licenses = data.get('filter_license', None) or data.get('filter_licenses', None)
+        filter_sources = data.get('filter_sources', None)
+        
+        if isinstance(filter_licenses, basestring):
+            filter_licenses = [filter_licenses]
+        
+        if isinstance(filter_sources, basestring):
+            filter_sources = [filter_sources]
+        
         
         ## TODO: need multiple image upload support?:
         
@@ -559,7 +605,8 @@ class handle_search(BaseHandler):
                           'include_docs':include_docs,
                           'include_thumb':include_thumb,
                           'rerank_eq':rerank_eq,
-                          'filter_license':filter_license,
+                          'filter_licenses':filter_licenses,
+                          'filter_sources':filter_sources,
                           }
             print ('QUERY_ARGS',query_args)
 
@@ -758,21 +805,30 @@ class handle_search(BaseHandler):
         
         ## Add in frontend image cached preview images:
         ## Skip items without preview:
+        ## TODO: rework `get_cache_url()` and ensure `native_id`s for all records.
         
+        image_cache_failed = False
         r2 = []
         for ii in rr:
-            
-            #print ('ZZ',ii['_source']['native_id'],ii['_source']['source'])
-            
-            url = get_cache_url(ii['_source']['native_id'])
-            
-            if not url:
-                print 'FILTER_SKIP',ii['_source']['native_id']
-                continue
-            
-            ii['_source']['url_direct_cache'] = {'url':url}
+
+            try:
+                #print ('ZZ',ii['_source']['native_id'],ii['_source']['source'])
+
+                url = get_cache_url(ii['_source']['native_id'])
+
+                if not url:
+                    print 'FILTER_SKIP',ii['_source']['native_id']
+                    continue
+
+                ii['_source']['url_direct_cache'] = {'url':url}
+            except:
+                image_cache_failed = True
+                ii['_source']['url_direct_cache'] = None
             
             r2.append(ii)
+        
+        if image_cache_failed:
+            print ('!!!IMAGE_CACHE_FAILED',)
         
         rr = r2
         
@@ -783,10 +839,16 @@ class handle_search(BaseHandler):
 
         
         ## TEMPORARY - When the datasets are re-generated, this can be removed.
+        ##             Put here as a JIT transformation because regenerating datasets is slow.
+        ##             TODO, just-in-time schema transformations for the indexer?
         ##             Clears titles from pexels, adds licensing:
-        
+
         for ii in rr:
-            native_id = ii['_source']['native_id']
+            try:
+                native_id = ii['_source']['native_id']
+            except:
+                ## Likely images that didn't go through the mc_normalizers path and don't have `native_id`s.
+                continue
             
             if native_id.startswith('pexels'):
                 ii['_source']['title'] = None
@@ -814,20 +876,25 @@ class handle_search(BaseHandler):
 
         
         ## Simple faceting, WIP:
+        ## TODO: ES queries.
+
+        if filter_sources:
+            ## TODO
+            pass
         
-        if filter_license:
+        if filter_licenses:
             r2 = []
             for ii in rr:
                 
                 native_id = ii['_source']['native_id']
-                if filter_license == 'CC0':
+                if 'CC0' in filter_licenses:
                     if 'pexels' in native_id:
                         ii['license_name'] = "CC0"
                         ii['license_name_long'] = "Creative Commons Zero (CC0)"
                         ii['license_url'] = None
                         r2.append(ii)
                         
-                elif filter_license == 'Non-Commercial Use':
+                elif 'Non-Commercial Use' in filter_licenses:
                     if 'getty' in native_id:
                         ii['license_name'] = "Getty Embed"
                         ii['license_name_long'] = "Getty Embed"
@@ -840,7 +907,7 @@ class handle_search(BaseHandler):
                                      'error_message':'Invalid license filter: ' + filter_license,
                                      })
                     return
-
+            
             print ('FILTER',len(rr),'->',len(r2))
             rr = r2
 
@@ -859,7 +926,9 @@ class handle_search(BaseHandler):
         results_count = len(rr)
         
         rr = {'results':rr,
-              'results_count':(results_count >= full_limit * 0.8) and (('{:,}'.format(full_limit)) + '+') or ('{:,}'.format(results_count)),
+              'results_count':(results_count >= full_limit * 0.8) and \
+                               (('{:,}'.format(full_limit)) + '+') or \
+                               ('{:,}'.format(results_count)),
               }
         
         query_cache_save(the_token, rr)
