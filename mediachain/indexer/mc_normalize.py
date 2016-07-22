@@ -1044,6 +1044,10 @@ def normalize_dpla(iter_json):
         source_tags = list(set([(x[len('https://'):] if x.startswith('https://') else x) for x in source_tags]))
         source_tags = list(set([(x[len('http://'):] if x.startswith('http://') else x) for x in source_tags]))
         source_tags = list(set([(x[len('www.'):] if x.startswith('www.') else x) for x in source_tags]))
+
+        the_title = get_shallowest_matching(jj, 'title')
+        if isinstance(the_title, basestring):
+            the_title = [the_title]
         
         hh = {'_id':xid,
               'native_id':jj_top['_id'],
@@ -1065,7 +1069,7 @@ def normalize_dpla(iter_json):
               'date_captured':None,
               'date_created_original':get_shallowest_matching(jj, 'displayDate'), # Actual creation date.
               'date_created_at_source':None,                  # Item created at data source.
-              'title':get_shallowest_matching(jj, 'title'),    # Title string(s)
+              'title':the_title,    # Title string(s)
               'description':get_shallowest_matching(jj, 'description'), # Description
               'attribution':artists,                          ## Artist / Entity names.
               'keywords':[],                                  # Keywords
@@ -1232,7 +1236,7 @@ def normalize_mirflickr1mm(iter_json):
               'date_captured':get_shallowest_matching(jj, "-Date and Time"),
               'date_created_original':get_shallowest_matching(jj, "-Date and Time"),  # Actual creation date.
               'date_created_at_source':jj['license']['Date uploaded'],      # Item created at data source.
-              'title':jj['license'].get("Picture title"),    # Title string(s)
+              'title':[jj['license'].get("Picture title")],    # Title string(s)
               'description':None,                        # Description
               'attribution':attribution,                       ## Artist / Entity names.
               'keywords':[],                                  # Keywords

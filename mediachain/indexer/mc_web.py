@@ -681,7 +681,7 @@ class handle_search(BaseHandler):
             
             results_count = len(rr['results'])
                                                 
-            if offset + limit > len(rr['results']):
+            if offset + limit >= len(rr['results']):
                 rr['next_page'] = None
             else:
                 rr['next_page'] = {'token':the_token, 'offset':offset + limit, 'limit':limit}
@@ -714,6 +714,14 @@ class handle_search(BaseHandler):
                                       )
             
             rr = json.loads(rr.body)
+
+            if 'error' in hh:
+                self.set_status(500)
+                self.write_json({'error':'ELASTICSEARCH_ERROR',
+                                 'error_message':repr(hh)[:1000],
+                                 })
+                return
+
             
             rr = rr['hits']['hits']
             rr = {'results':rr,
@@ -762,6 +770,14 @@ class handle_search(BaseHandler):
                 #print ('GOT',repr(rr.body)[:100])
                 
                 rr = json.loads(rr.body)
+
+                if 'error' in hh:
+                    self.set_status(500)
+                    self.write_json({'error':'ELASTICSEARCH_ERROR',
+                                     'error_message':repr(hh)[:1000],
+                                     })
+                    return
+
                 
                 rr = [x['_id'] for x in rr['hits']['hits']]
                 
@@ -798,6 +814,14 @@ class handle_search(BaseHandler):
         
             hh = json.loads(rr.body)
 
+            if 'error' in hh:
+                self.set_status(500)
+                self.write_json({'error':'ELASTICSEARCH_ERROR',
+                                 'error_message':repr(hh)[:1000],
+                                 })
+                return
+
+
             remote_hits = hh['hits']['hits']
 
             print ('GOT_REMOTE_HITS',len(remote_hits))
@@ -823,6 +847,13 @@ class handle_search(BaseHandler):
         print ('GOT','time:',time() - t1, repr(rr.body)[:100])
         
         hh = json.loads(rr.body)
+
+        if 'error' in hh:
+            self.set_status(500)
+            self.write_json({'error':'ELASTICSEARCH_ERROR',
+                             'error_message':repr(hh)[:1000],
+                             })
+            return
         
         rr = hh['hits']['hits']
 
@@ -947,7 +978,7 @@ class handle_search(BaseHandler):
 
         ## Wrap in pagination:
         
-        if offset + limit > len(rr['results']):
+        if offset + limit >= len(rr['results']):
             rr['next_page'] = None
         else:
             rr['next_page'] = {'token':the_token, 'offset':offset + limit, 'limit':limit}
