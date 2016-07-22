@@ -80,7 +80,7 @@ def print_json_by_subtree_size(h):
 
 
 from mc_ingest import decode_image
-import Image
+from PIL import Image
 from cStringIO import StringIO
 
 def get_image_stats(s):
