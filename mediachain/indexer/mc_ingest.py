@@ -388,25 +388,31 @@ def receive_blockchain_into_indexer(last_block_ref = None,
                     continue
 
                 meta = art['meta']['data']
-
+                
                 rh = {}
                 
                 ## Copy these keys in from meta. Use tuples to rename keys. Keys can be repeated:
+
+                if False:
+                    for kk in [u'caption', u'date_created', u'title', u'artist',
+                               u'keywords', u'collection_name', u'editorial_source',
+                               '_id',
+                               ('_id','getty_id'),
+                               ('thumbnail_base64','image_thumb'),
+                               ]:
+
+                        if type(kk) == tuple:
+                            rh[kk[1]] = meta.get(kk[0], None)
+                        elif kk == u'keywords':
+                            rh[kk] = ' '.join(meta.get(kk, []))
+                        else:
+                            rh[kk] = meta.get(kk, None)
+                else:
+                    ## TODO - Is simply copying everything over, without changes or checks, what we want to do?:
+                    
+                    rh = meta
+                    
                 
-                for kk in [u'caption', u'date_created', u'title', u'artist',
-                           u'keywords', u'collection_name', u'editorial_source',
-                           '_id',
-                           ('_id','getty_id'),
-                           ('thumbnail_base64','image_thumb'),
-                           ]:
-
-                    if type(kk) == tuple:
-                        rh[kk[1]] = meta.get(kk[0], None)
-                    elif kk == u'keywords':
-                        rh[kk] = ' '.join(meta.get(kk, []))
-                    else:
-                        rh[kk] = meta.get(kk, None)
-
                 #TODO: Phase out `rawRef`:
                 if 'raw_ref' in art['meta']:
                     raw_ref = art['meta']['raw_ref']
@@ -440,12 +446,10 @@ def receive_blockchain_into_indexer(last_block_ref = None,
                 import traceback, sys, os
                 for line in traceback.format_exception(*sys.exc_info()):
                     print line,
-                #print 'PRESS ENTER...'
-                #raw_input()
+                exit(-1)
                 
         print 'END ITER'
-
-
+    
     ## Do the ingestion:
     
     nn = ingest_bulk(iter_json = the_gen(),
