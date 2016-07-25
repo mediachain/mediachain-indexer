@@ -205,7 +205,8 @@ def ingest_bulk(iter_json = False,
                         hh['image_thumb'] = shrink_and_encode_image(decode_image(hh['image_thumb']))
 
                     else:
-                        assert False,'CANT_GENERATE_THUMBNAILS'
+                        print 'CANT_GENERATE_THUMBNAIL'
+                        #assert False,'CANT_GENERATE_THUMBNAIL'
 
                 elif 'image_thumb' not in hh:
                     # Generate thumbs from raw data:
@@ -214,7 +215,8 @@ def ingest_bulk(iter_json = False,
                         hh['image_thumb'] = shrink_and_encode_image(decode_image(hh['img_data']))
 
                     else:
-                        assert False,'CANT_GENERATE_THUMBNAILS'
+                        print 'CANT_GENERATE_THUMBNAIL'
+                        #assert False,'CANT_GENERATE_THUMBNAIL'
 
                 if 'img_data' in hh:
                     del hh['img_data']
@@ -440,6 +442,7 @@ def receive_blockchain_into_indexer(last_block_ref = None,
                 
                 yield rh
             except:
+                raise
                 print ('!!!ARTEFACT PARSING ERROR:',)
                 print repr(art)
                 print 'TRACEBACK:'
