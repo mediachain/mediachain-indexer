@@ -55,6 +55,10 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
             'MC_IMAGE_CACHE_DIR':('cache_images', 'Location of where to store cached images, for serving to frontend.'),
             'MC_IMAGE_CACHE_HOST':('http://54.209.175.109:6008/', 'Image host, for serving cached images to frontend.'),
             'MC_ALLOW_SKIP_QUERY_CACHE_INT':('1', 'Allow Indexer `skip_cache` arg.'),
+            'MC_FILTER_INCOMPLETE_INT':('0', ["Temporary - ",
+                                              "Set to \"1\" filter out image results for which we don't have a high-res image. ",
+                                              "Currently, we set to \"1\" if the Indexer is being used with the Frontend.",
+                                              ]),
             },
        '5. Settings for Automated Tests':
            {'MC_TEST_WEB_HOST':('http://127.0.0.1:23456', ''),

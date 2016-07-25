@@ -401,11 +401,11 @@ def receive_blockchain_into_indexer(last_block_ref = None,
                            ]:
 
                     if type(kk) == tuple:
-                        rh[kk[1]] = meta[kk[0]]
+                        rh[kk[1]] = meta.get(kk[0], None)
                     elif kk == u'keywords':
-                        rh[kk] = ' '.join(meta[kk])
+                        rh[kk] = ' '.join(meta.get(kk, []))
                     else:
-                        rh[kk] = meta[kk]
+                        rh[kk] = meta.get(kk, None)
 
                 #TODO: Phase out `rawRef`:
                 if 'raw_ref' in art['meta']:
@@ -440,9 +440,9 @@ def receive_blockchain_into_indexer(last_block_ref = None,
                 import traceback, sys, os
                 for line in traceback.format_exception(*sys.exc_info()):
                     print line,
-                print 'PRESS ENTER...'
-                raw_input()
-        
+                #print 'PRESS ENTER...'
+                #raw_input()
+                
         print 'END ITER'
 
 

@@ -97,8 +97,8 @@ def convert_to_compactsplit(the_iter = False,
     
     if not the_iter:
         
-        assert via_cli,('REQUIRED: the_iter',)
-
+        assert False('REQUIRED ARG: the_iter',)
+        
         dir_out = 'getty_small_compactsplit'
         
         the_iter = iter_json_getty(getty_path = getty_path,

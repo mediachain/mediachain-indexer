@@ -95,6 +95,84 @@ def get_image_stats(s):
     h['height'] = img.size[1]
     return h
 
+def normalize_eyeem(iter_json):
+    """
+    // SCHEMA: eyeem:
+    
+    {'og:url': 'https://www.eyeem.com/p/3879', 'description': ['illuminated', 'indoors', 'night', 'reflection', 'lighting equipment', 'window', 'glass - material', 'light - natural phenomenon', 'transparent', 'defocused', 'water', 'dark,'], 'og:description': 'Photo by @BassamLahhoud', 'og:title': 'Description', 'twitter:title': 'Description', 'og:image': 'https://cdn.eyeem.com/thumb/3c5a37cc43079c4fc20c861771c2e58a1023815c.jpg/640/480'}
+    """
+
+    assert not hasattr(iter_json, 'next'), 'Should be function that returns iterator when called, to allow restarting.'
+
+    for jj_top in iter_json():
+        
+        jj = jj_top
+        
+        assert jj['og:url'].startswith('https://www.eyeem.com/p/'),repr(jj)
+        
+        #native_id = 'eyeem_' + jj['og:url'].replace('https://www.eyeem.com/p/','')
+        
+        native_id = jj['_id']
+        
+        xid = make_id(native_id)
+        
+        artist_name = jj['og:description'].replace('Photo by @', '')
+        
+        assert native_id.startswith('eyeem_'),repr(native_id)
+        
+        mime = get_image_stats(jj_top['img_data'])['mime']
+        
+        sizes = [{'width':1920,                   # pixel width
+                  'height':1280,                  # pixel height
+                  'dpi':None,                     # DPI - Use to estimate real-world width / height if needed?
+                  'bytes':None,                   # bytes size of this version
+                  'content_type':mime,            # Image mime-type
+                  'uri_external':None,            # External URI.
+                  }
+                 ]
+        
+        hh = {'_id':xid,
+              'native_id':native_id,
+              'source_dataset':'eyeem',
+              'source':{'name':'eyeem',
+                        'url':jj['og:url']
+                        },
+              'source_tags':['eyeem.com'],   # For easy indexer faceting
+              'license_tags':['Non-Commercial Use'], # For easy indexer faceting
+              'img_data':jj_top['img_data'],       # Data URI of this version -- only for thumbnails.
+              'url_shown_at':{'url':jj['og:url']},
+              'url_direct':jj['og:image'],
+              'artist_names':[artist_name],       # Simple way to access artist name(s).
+              'title':[jj['og:title']],               # Title string(s)
+              'sizes':sizes,
+              'attribution':[{                     ## Full attribution details, for when "artist" isn't quite the right description.
+                  'role':'artist',                 # Contribution type.
+                  'details':None,                  # Contribution details.
+                  'name':artist_name,             # Entity name.
+                  }],
+              'keywords':jj['description'],
+              'license_name':"EyeEm License",
+              'license_name_long':"EyeEm License",
+              'license_url':"https://www.eyeem.com/market/licensing#find-your-license",
+              'licenses':[                         ## List of licenses:
+                  {'name':'EyeEm License',            
+                   'name_long':'EyeEm ',            
+                   'attribute_to':[],              # For this license, attribute to this person / organization / paper citation.
+                   'details':[],                   # License details text
+                   }],
+              
+              }
+
+        #h2 = hh.copy()
+        #del h2['img_data']
+        #print 'INSERTING',h2
+        #raw_input_enter()
+        
+        yield hh
+
+    
+
+
 def normalize_getty(iter_json):
     """
     // SCHEMA: getty:
@@ -1347,7 +1425,11 @@ def normalize_places(iter_json):
 
 ## name, func, default archive location:
 
-normalizer_names = {'getty_archiv':{'func':normalize_getty,
+normalizer_names = {'eyeem':{'func':normalize_eyeem,
+                             'dir_compactsplit':'/datasets/datasets/compactsplit/eyeem',
+                             'dir_cache':'/datasets/datasets/eyeem/images/',
+                             },
+                    'getty_archiv':{'func':normalize_getty,
                                     'dir_compactsplit':'/datasets/datasets/compactsplit/getty_archiv',
                                     'dir_cache':'/datasets2/datasets/getty_unpack/getty_archiv/downloads/comp/',
                                     },
@@ -1452,6 +1534,24 @@ def apply_post_ingestion_normalizers(rr):
             ii['_source']['license_name_long'] = "Getty Embed"
             ii['_source']['license_url'] = "http://www.gettyimages.com/Corporate/LicenseAgreements.aspx#RF"
             ii['_source']['license_attribution'] = ii.get('artist_names') and ', '.join(ii['artist_names']) or None
+            
+        if 'eyeem_' in native_id:
+
+            ## TODO - fake sizes, remove when re-ingestion is complete:
+            
+            if 'sizes' not in ii['_source']:
+                
+                sizes = [{'width':1920,                   # fake width
+                          'height':1280,                  # fake height
+                          'dpi':None,                     # DPI - Use to estimate real-world width / height if needed?
+                          'bytes':None,                   # bytes size of this version
+                          'content_type':'image/jpeg',    # Image mime-type
+                          'uri_external':None,            # External URI.
+                          }
+                         ]
+
+                ii['_source']['sizes'] = sizes
+
 
 
         

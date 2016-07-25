@@ -210,80 +210,10 @@ try:
 except:
     get_remote_search = False
 
-
-def get_cache_url(_id,
-                  image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
-                  image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
-                  ):
-    """
-    Temporary solution to high-res image caching on the Indexer, for use by front-end. Currently reuses crawler caches.
-    
-    twistd -n web -p 6008 --path /datasets/datasets/indexer_cache/
-    
-    TODO: Temporary, as we work the best way to pass high-res images.
-    """
-    
-    if not image_cache_host.endswith('/'):
-        image_cache_host = image_cache_host + '/'
-    
-    import hashlib
-    
-    #print ('make_cache_url',_id)
-
-    #print ('get_cache_url()', _id)
-
-    if _id.startswith('pexels_'):
-
-        _id = _id.split('_')[-1]
-        
-        xid = hashlib.md5(_id).hexdigest()
-
-        fn = ('/'.join(xid[:4])) + '/' + xid + '.jpg'
-
-        #normalizer_names['pexels']['dir_cache']
-        
-        real_fn = '/datasets/datasets/pexels/images_1920_1280/' + fn
-
-        #assert exists(real_fn),real_fn
-                
-        r = image_cache_host + 'pe/' + fn
-        
-        #print ('get_cache_url result:', r)
-        
-        return r
-
-    elif _id.startswith('getty_'):
-        
-        xid = _id.split('_')[-1]
-        
-        fn = ('/'.join(xid[:4])) + '/' + xid + '.jpg'
-
-        #ln -s /datasets2/datasets/getty_unpack/getty_all_images/ /datasets/datasets/indexer_cache/gg
-        
-        return image_cache_host + 'gg/' + fn
-        
-        base = '/datasets/datasets/indexer_cache/'
-        
-        for xdir in ['ga/',
-                     'ge/',
-                     'gr/',
-                     ]:
-            
-            xfn = base + xdir + fn
-            
-            if exists(xfn):
-
-                #print 'CACHE_FOUND',xfn
-                
-                return image_cache_host + xdir + fn
-            
-        #print '!! CACHE_FAILED',xfn
-        return None
-    
-    else:
-        return None
-        #assert False,repr(_id)
-
+try:
+    from mc_crawlers import get_image_cache_url
+except:
+    get_image_cache_url = False
 
 class handle_get_embed_url(BaseHandler):
     #disable XSRF checking for this URL:
@@ -597,6 +527,10 @@ class handle_search(BaseHandler):
         filter_licenses = data.get('filter_license', None) or data.get('filter_licenses', None)
         filter_sources = data.get('filter_sources', None)
         skip_query_cache = data.get('skip_query_cache', None)
+        filter_incomplete = data.get('filter_incomplete', None)
+        
+        if filter_incomplete is None:
+            filter_incomplete = mc_config.MC_FILTER_INCOMPLETE_INT and True or False
         
         if isinstance(filter_licenses, basestring):
             filter_licenses = [filter_licenses]
@@ -664,6 +598,7 @@ class handle_search(BaseHandler):
                           'rerank_eq':rerank_eq,
                           'filter_licenses':filter_licenses,
                           'filter_sources':filter_sources,
+                          'filter_incomplete':filter_incomplete,
                           }
             print ('QUERY_ARGS',query_args)
 
@@ -892,30 +827,41 @@ class handle_search(BaseHandler):
         
         ## Add in frontend image cached preview images:
         ## Skip items without preview:
-        ## TODO: rework `get_cache_url()` and ensure `native_id`s for all records.
-        
+        ## TODO: rework `get_image_cache_url()` and ensure `native_id`s for all records.
+
         image_cache_failed = False
-        r2 = []
-        for ii in rr:
 
-            try:
-                #print ('ZZ',ii['_source']['native_id'],ii['_source']['source'])
+        if get_image_cache_url is not False:
 
-                url = get_cache_url(ii['_source']['native_id'])
 
-                if not url:
-                    print 'FILTER_SKIP',ii['_source']['native_id']
-                    continue
+            r2 = []
+            for ii in rr:
 
-                ii['_source']['url_direct_cache'] = {'url':url}
-            except:
-                image_cache_failed = True
-                ii['_source']['url_direct_cache'] = None
-            
-            r2.append(ii)
+                try:
+                    url = get_image_cache_url(ii['_source']['native_id'],
+                                              image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
+                                              image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
+                                              )
+
+                    if (not url) and (filter_incomplete):
+
+                        ## Filter incomplete records that would break things on the frontend:
+
+                        print 'FILTER_SKIP',ii['_source']['native_id']
+                        continue
+
+                    ii['_source']['url_direct_cache'] = {'url':url}
+                except:
+                    image_cache_failed = True
+                    ii['_source']['url_direct_cache'] = None
+
+                r2.append(ii)
+
+        else:
+            image_cache_failed = True
         
         if image_cache_failed:
-            print ('!!!IMAGE_CACHE_FAILED', mc_config.MC_IMAGE_CACHE_DIR)
+            print ('!!!IMAGE_CACHE_FAILED', get_image_cache_url, mc_config.MC_IMAGE_CACHE_DIR)
             #raise
         
         rr = r2
@@ -950,7 +896,7 @@ class handle_search(BaseHandler):
                 if filter_sources_s.intersection(ii['_source'].get('source_tags',[])):
                     r2.append(ii)
             
-            print ('FILTER_SOURCES',filter_licenses,len(rr),'->',len(r2))
+            print ('FILTER_SOURCES',filter_sources,len(rr),'->',len(r2))
             rr = r2
         
         
