@@ -188,13 +188,27 @@ def ingest_bulk(iter_json = False,
             
             assert '_id' in hh,hh.keys()
 
-            if thumbs_elsewhere:
+            ## -- START TEMPORARY FOR DEMO:
+            ignore_thumbs_elsewhere = False
+            if hh.get('source_dataset') == 'getty':
+                ignore_thumbs_elsewhere = True
+            else:
+                print '???',repr(hh.get('source_dataset'))
+            ## -- END TEMPORARY FOR DEMO
+            
+                
+            if thumbs_elsewhere and not ignore_thumbs_elsewhere:
+
+                ## Temporarily ignoring image thumbnails. Will switch from storing these in ES, to using the
+                ## shared file-based image cache.
                 
                 if 'img_data' in hh:
                     del hh['img_data']
                 
                 if 'image_thumb' in hh:
                     del hh['image_thumb']
+                
+                print 'THUMBS_ELSEWHERE'
             
             elif (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
                 ## One-off ignoring of thumbnail generation via `NO_IMAGE`.

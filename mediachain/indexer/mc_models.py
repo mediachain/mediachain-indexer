@@ -422,7 +422,6 @@ def dedupe_reindex(lookup_name = False,
                    doc_type = mc_config.MC_DOC_TYPE,
                    v1_mode = True,
                    via_cli = False,
-                   dump_example_images = '/datasets/datasets/example_images/',
                    ):
     """
     Regenerate duplicate lookup tables. Currently implements v1 - a simple, greedy, in-memory baseline.
@@ -592,18 +591,14 @@ def dedupe_reindex(lookup_name = False,
                        '_id': hit['_id'],
                        'body': {'doc':doc_update},
                        })
-
-            if dump_example_images and (examples_written[0] < 5):
-                print 'DUMP_EXAMPLE_IMAGES'
-                examples_written[0] += 1
-
             
-            if c % 10 == 0:
-                print ('YES_THUMB_PRESENT',vectors_model_name,)#hit['_source'])
+            if c % 50 == 0:
+                print ('YES_THUMB_PRESENT', vectors_model_name, hit['_source'].get('source_dataset'))
         else:
             
-            if c % 10 == 0:
-                assert False,('NO_THUMB_PRESENT',vectors_model_name,)#hit['_source'])
+            if c % 50 == 0:
+                print ('NO_THUMB_PRESENT', vectors_model_name, hit['_source'].get('source_dataset'))
+                #assert False,'NO_THUMB_PRESENT'
                 
         #print ('ADD',c) #rr
         

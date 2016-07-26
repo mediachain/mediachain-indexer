@@ -921,7 +921,7 @@ class handle_search(BaseHandler):
               }
         
         query_cache_save(the_token, rr)
-
+        
         ## Wrap in pagination:
         
         if offset + limit >= len(rr['results']):
