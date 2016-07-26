@@ -120,13 +120,13 @@ def normalize_eyeem(iter_json):
         
         assert native_id.startswith('eyeem_'),repr(native_id)
         
-        mime = get_image_stats(jj_top['img_data'])['mime']
+        ims = get_image_stats(jj_top['img_data'])
         
-        sizes = [{'width':1920,                   # pixel width
-                  'height':1280,                  # pixel height
+        sizes = [{'width':ims['width'],           # pixel width
+                  'height':ims['height'],         # pixel height
                   'dpi':None,                     # DPI - Use to estimate real-world width / height if needed?
                   'bytes':None,                   # bytes size of this version
-                  'content_type':mime,            # Image mime-type
+                  'content_type':ims['mime'],     # Image mime-type
                   'uri_external':None,            # External URI.
                   }
                  ]
@@ -1122,7 +1122,7 @@ def normalize_dpla(iter_json):
         source_tags = list(set([(x[len('https://'):] if x.startswith('https://') else x) for x in source_tags]))
         source_tags = list(set([(x[len('http://'):] if x.startswith('http://') else x) for x in source_tags]))
         source_tags = list(set([(x[len('www.'):] if x.startswith('www.') else x) for x in source_tags]))
-
+        
         the_title = get_shallowest_matching(jj, 'title')
         if isinstance(the_title, basestring):
             the_title = [the_title]
@@ -1538,6 +1538,8 @@ def apply_post_ingestion_normalizers(rr):
         if 'eyeem_' in native_id:
 
             ## TODO - fake sizes, remove when re-ingestion is complete:
+
+            assert 'sizes' in ii['_source'],repr(ii['_source'])
             
             if 'sizes' not in ii['_source']:
                 

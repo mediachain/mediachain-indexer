@@ -287,7 +287,7 @@ def query_cache_lookup(key,
     """
     Simple file-based cache.
     """
-
+    
     if skip_query_cache and allow_skip_query_cache:
         print ('!!!SKIP_QUERY_CACHE',)
         return False
@@ -322,7 +322,7 @@ def query_cache_save(key,
     """
     Simple file-based cache.
     """
-
+    
     dir_out_2 = join(query_cache_dir,
                      ('/'.join(key[:4])) + '/',
                      )

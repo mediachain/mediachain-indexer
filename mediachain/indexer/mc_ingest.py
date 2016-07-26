@@ -98,6 +98,7 @@ def ingest_bulk(iter_json = False,
                 ignore_thumbs = False,
                 use_aggressive = True,
                 refresh_after = True,
+                thumbs_elsewhere = True,
                 ):
     """
     Ingest Getty dumps from JSON files.
@@ -116,6 +117,8 @@ def ingest_bulk(iter_json = False,
         
         auto_reindex_inactive:   Auto-reindex after `auto_reindex_inactive` seconds of inactivity.
         auto_reindex_max:        Auto-reindex at least every `auto_reindex_max` seconds, regardless of ingestion activity.
+
+        thumbs_elsewhere: Don't store thumbs in ES database. TODO: store thumbs via new shared disk cache system.
     
     Returns:
         Number of inserted records.
@@ -184,8 +187,16 @@ def ingest_bulk(iter_json = False,
             hh.update(xdoc)
             
             assert '_id' in hh,hh.keys()
+
+            if thumbs_elsewhere:
+                
+                if 'img_data' in hh:
+                    del hh['img_data']
+                
+                if 'image_thumb' in hh:
+                    del hh['image_thumb']
             
-            if (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
+            elif (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
                 ## One-off ignoring of thumbnail generation via `NO_IMAGE`.
                                 
                 if 'img_data' in hh:

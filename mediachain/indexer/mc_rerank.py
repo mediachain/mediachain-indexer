@@ -15,6 +15,7 @@ from asteval import Interpreter
 import numpy as np
 import math
 from time import time
+from collections import Counter
 
 ## Re-ranking equations that have names:
 
@@ -29,12 +30,20 @@ class ReRankingBasic():
     
     NOTE: See here for the restrictions / features of asteval: https://newville.github.io/asteval/basics.html
     
-    Equation `eq` can use any features provided by asteval, in addition to numpy via `np`.
+    Equation `eq_name` can use any features provided by asteval, in addition to numpy via `np`.
+
+    Args:
+        first_pass_eq_name:  (Optional) Equation run for first-pass, which can view the whole dataset.
+        eq_name:             Second-pass equation, which operates on the dataset per-item.
+
     """
     
     def __init__(self,
+                 first_pass_eq_name = None,
                  eq_name = None,
                  ):
+
+        self.first_pass_eq_name = first_pass_eq_name
         
         if not eq_name:
             eq_name = 'boost_pexels'
@@ -69,6 +78,21 @@ class ReRankingBasic():
         t0 = time()
         self.aeval.symtable['items'] = items
 
+        ## First_pass:
+        
+        ## setup some storage containers, to help pass data to the 2nd pass:
+        
+        self.aeval.symtable['buf'] = []
+        self.aeval.symtable['hh'] = {}
+        self.aeval.symtable['cnt'] = Counter()
+        
+        self.aeval.symtable['items'] = items
+        
+        if self.first_pass_eq_name:
+            self.aeval(self.first_pass_eq_name)
+        
+        ## Second pass:
+        
         rr = []
         
         for item in items:
@@ -88,6 +112,13 @@ class ReRankingBasic():
         
         ## TODO: normalize `_score`s?
 
+        ## Delete temporary vars:
+        
+        del self.aeval.symtable['buf']
+        del self.aeval.symtable['hh']
+        del self.aeval.symtable['cnt']
+        del self.aeval.symtable['items']
+        
         print ('RE-RANK TIME',time() - t0)
         
         return rrr

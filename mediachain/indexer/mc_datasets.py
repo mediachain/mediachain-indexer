@@ -252,6 +252,8 @@ def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit',
     """
     Iterate records from files of the format created by `convert_getty_to_compact`.
 
+    Will read from `-tempfile` inputs only if they're directly pointed to.
+    
     Args:
         fn_in_glob:   Input file(s) to read from. Wildcards allowed.
     """
@@ -259,6 +261,10 @@ def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit',
     from os.path import expanduser, isfile
     from glob import glob
     from ujson import loads
+
+    allow_tempfile = False
+    if '-tempfile' in fn_in_glob:
+        allow_tempfile = True
     
     fn_in_glob = expanduser(fn_in_glob)
     
@@ -276,11 +282,17 @@ def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit',
             fns = walk_files(fn_in)
         
         for fn in fns:
+
+            if not allow_tempfile:
+                if '-tempfile' in fn:
+                    continue
             
-            if '-tempfile' in fn:
-                continue
+            if allow_tempfile:
+                ctx = open
+            else:
+                ctx = GzipFile
             
-            with GzipFile(fn) as f:
+            with ctx(fn) as f:
                 for line in f:
                     if nn % 100 == 0:
                         print ('iter_compactsplit', nn, max_num)
