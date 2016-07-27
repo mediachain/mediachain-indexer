@@ -476,8 +476,6 @@ class handle_search(BaseHandler):
           "results": [
             {
               "_id": "f6c135226adb11a7233cab4357af35f6",
-              "_index": "getty_test",
-              "_old_score": 10,
               "_score": 20,
               "_source": {
                 "artist_name": "Krista Mangulsone",
