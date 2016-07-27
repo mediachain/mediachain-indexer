@@ -361,7 +361,7 @@ class SimpleClient(object):
                                      object_id = oid,
                                      fetch_images = fetch_images,
                                      )
-                yield obj
+                yield oid, obj
         
         else:
 
@@ -372,7 +372,7 @@ class SimpleClient(object):
             try:
                 started = False
                 with self.transactor.canonical_stream(timeout=timeout) as stream:
-                    for obj in stream:
+                    for ref, obj in stream:
 
                         if (start_id is not False) and (not started):
                             if obj['data']['_id'] == start_id:
@@ -380,7 +380,7 @@ class SimpleClient(object):
                             else:
                                 continue
 
-                        yield obj
+                        yield ref, obj
 
                         if (end_id is not False):
                             if obj['data']['_id'] == end_id:
