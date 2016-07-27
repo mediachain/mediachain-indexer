@@ -436,7 +436,7 @@ class handle_search(BaseHandler):
         @apiGroup Search
         @apiVersion 0.1.0
         @apiDescription
-        Must be sent as HTTP form parameter:
+        JSON string must be sent as HTTP form parameter:
         ```
         curl "http://api.mediachainlabs.com/search" --form 'json={"q":"crowd", "limit":5}'
         ```
