@@ -435,6 +435,11 @@ class handle_search(BaseHandler):
         @apiName PostSearch
         @apiGroup Search
         @apiVersion 0.1.0
+        @apiDescription
+        Must be sent as HTTP form parameter:
+        ```
+        curl "http://api.mediachainlabs.com/search" --form 'json={"q":"crowd", "limit":5}'
+        ```
 
         @apiParam {String} q       Query text
         @apiParam {Number} [limit] Maximum number of results to return.
