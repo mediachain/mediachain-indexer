@@ -431,15 +431,41 @@ class handle_search(BaseHandler):
     @tornado.gen.coroutine
     def post(self):
         """
-        @api {post} /search Search for images
+        @api {get} /type Query autocomplete
+        @apiName GetType
+        @apiGroup Autocomplete
+        @apiVersion 0.1.0
+
+        @apiParam {String} q  Query text.
+        @apiParam {Number} [n]  Maximum number of results.
+
+        @apiParamExample Example:
+                         curl "http://api.mediachainlabs.com/type?q=ca&n=3"
+
+        @apiSuccess {String} phrase Suggested phrase.
+        @apiSuccess {Number} score Relevancy score for suggestion.
+        @apiSuccessExample Example data on success:
+        [
+          {
+            "phrase": "cat",
+            "score": 999948
+          },
+          {
+            "phrase": "car",
+            "score": 999947
+          },
+          {
+            "phrase": "cats",
+            "score": 999945
+          }
+        ]
+        """
+
+        """
+        @api {post} /search Image text search
         @apiName PostSearch
         @apiGroup Search
         @apiVersion 0.1.0
-        @apiDescription
-        JSON string must be sent as HTTP form parameter:
-        ```
-        curl "http://api.mediachainlabs.com/search" --form 'json={"q":"crowd", "limit":5}'
-        ```
 
         @apiParam {String} [q]     Query text. (`token` required if omitted)
         @apiParam {String} [q_id]  ID of image record.
@@ -452,25 +478,27 @@ class handle_search(BaseHandler):
         @apiSuccess {Object}    [next_page] Parameters to query next page.
         @apiSuccess {Number}    next_page.limit
         @apiSuccess {Number}    next_page.offset
-        @apiSuccess {String}    next_page.token Unique token representing this query.
+        @apiSuccess {String}    next_page.token Unique token representing the query.
         @apiSuccess {Object}    [prev_page] Parameters to query previous page.
         @apiSuccess {Number}    prev_page.limit
         @apiSuccess {Number}    prev_page.offset
-        @apiSuccess {String}    prev_page.token Unique token representing this query.
+        @apiSuccess {String}    prev_page.token Unique token representing the query.
         @apiSuccess {Object[]}  results Array of image results.
         @apiSuccess {String}    results._id Unique id of image record.
         @apiSuccess {Number}    results._score  Relevancy of image to query.
         @apiSuccess {Object}    results._source Metadata for image.
         @apiSuccess {String}    [results._source.artist_name] Attribution for creator.
-        @apiSuccess {String[]}  results._source.keywords Keywords describing image.
         @apiSuccess {String}    results._source.date_created Date of creation.
+        @apiSuccess {String[]}  results._source.keywords Keywords describing image.
+        @apiSuccess {String}    results._source.title Image title.
+        @apiSuccess {Object}    results._source.license Image license.
+        @apiSuccess {Object}    results._source.license.name License name.
+        @apiSuccess {Object}    results._source.license.url License url.
         @apiSuccess {Object}    results._source.origin
         @apiSuccess {String}    results._source.origin.name Name of origin.
         @apiSuccess {String}    results._source.origin.url Permalink for image at origin.
         @apiSuccess {String}    results._source.image_url Hi-res image url.
-        @apiSuccess {Object}  results._source.license Image license.
-        @apiSuccess {Object}  results._source.license.name License name.
-        @apiSuccess {Object}  results._source.license.url License url.
+        @apiSuccess {String}    results_count Number of results matching query.
 
         @apiSuccessExample Exampe data on success:
         {
@@ -491,19 +519,9 @@ class handle_search(BaseHandler):
                   "love",
                   "friends",
                   "garden",
-                  "animal",
-                  "kiss",
-                  "dog",
-                  "cute",
-                  "pets",
-                  "relax",
-                  "cat",
-                  "lying",
-                  "friendship",
-                  "puppy",
-                  "outdoor",
-                  "feline"
+                  "animal"
                 ],
+                "title": "Walking away",
                 "license": {
                     "name": "CC0",
                     "name_long": "Creative Commons Zero (CC0)",
@@ -513,9 +531,7 @@ class handle_search(BaseHandler):
                   "name": "unsplash.com",
                   "url": "https://www.unsplash.com/photo/orange-tabby-cat-beside-fawn-short-coated-puppy-24104/"
                 },
-                "image_url": {
-                  "url": "http://54.209.175.109:6008/pe/8/a/2/5/8a25a2a9c738ebd76043481a457b62a0.jpg"
-                }
+                "image_url": "http://54.209.175.109:6008/pe/8/a/2/5/8a25a2a9c738ebd76043481a457b62a0.jpg"
               }
             }
           ],
