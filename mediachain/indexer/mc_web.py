@@ -441,8 +441,10 @@ class handle_search(BaseHandler):
         curl "http://api.mediachainlabs.com/search" --form 'json={"q":"crowd", "limit":5}'
         ```
 
-        @apiParam {String} q       Query text
+        @apiParam {String} [q]     Query text. (`token` required if omitted)
+        @apiParam {String} [q_id]  ID of image record.
         @apiParam {Number} [limit] Maximum number of results to return.
+        @apiParam {String} [token] Token representing page. (Required if `q` omitted)
 
         @apiParamExample {json} Request-Example:
                          {"q":"crowd", "limit":5}
