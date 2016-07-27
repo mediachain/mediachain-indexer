@@ -406,7 +406,7 @@ def receive_blockchain_into_indexer(last_block_ref = None,
     def the_gen():
         ## Convert from blockchain format to Indexer format:
         
-        for art in cur.get_artefacts(force_exit = via_cli): ## Force exit after loop is complete, if CLI.
+        for ref, art in cur.get_artefacts(force_exit = via_cli): ## Force exit after loop is complete, if CLI.
             
             try:
                 print 'GOT',art.get('type')
@@ -449,6 +449,7 @@ def receive_blockchain_into_indexer(last_block_ref = None,
                     assert False,('RAW_REF',repr(art)[:500])
                 
                 rh['latest_ref'] = base58.b58encode(raw_ref[u'@link'])
+                rh['canonical_ref'] = ref
 
                 ## TODO - use different created date? Phase out `translatedAt`:
                 xx = None
