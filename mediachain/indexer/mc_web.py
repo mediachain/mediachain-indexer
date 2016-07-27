@@ -5,7 +5,7 @@
 Prototype REST Indexer interface for search / dedupe.
 
 The following apply to all REST API functions in this package:
-    
+
     Media Identifiers:
 
        Media works can be identified by strings in any of the following formats:
@@ -456,38 +456,65 @@ class handle_search(BaseHandler):
         @apiSuccess {Object}    results._source Metadata for image.
         @apiSuccess {String}    [results._source.artist_name] Attribution for creator.
         @apiSuccess {String[]}  results._source.keywords Keywords describing image.
-        @apiSuccess {Object[]}  results._source.sizes Available image sizes.
-        @apiSuccess {Number}    results._source.sizes.width Pixel width.
-        @apiSuccess {Number}    results._source.sizes.height Pixel height.
-        @apiSuccess {String}    results._source.sizes.url Url of image.
         @apiSuccess {String}    results._source.date_created Date of creation.
         @apiSuccess {Object}    results._source.origin
         @apiSuccess {String}    results._source.origin.name Name of origin.
         @apiSuccess {String}    results._source.origin.url Permalink for image at origin.
         @apiSuccess {String}    results._source.image_url Hi-res image url.
+        @apiSuccess {Object}  results._source.license Image license.
+        @apiSuccess {Object}  results._source.license.name License name.
+        @apiSuccess {Object}  results._source.license.url License url.
 
         @apiSuccessExample Exampe data on success:
         {
-            "next_page": null,
-            "prev_page": null,
-            "results": [
-                {
-                    "_id": "getty_531746924",
-                    "_index": "getty_test",
-                    "_score": 0.08742375,
-                    "_source": {
-                        "artist": "Tristan Fewings",
-                        "caption": "CANNES:  A policeman watches the crowd in front of the Palais des Festival",
-                        "collection_name": "Getty Images Entertainment",
-                        "date_created": "2016-05-16T00:00:00-07:00",
-                        "dedupe_hsh": "d665691fe66393d81c078ae1ff1467cf18f78070900e23ff87c98704cc007c00",
-                        "editorial_source": "Getty Images Europe",
-                        "keywords": "People Vertical Crowd Watching France Police Force Cannes",
-                        "title": "'Loving' - Red Carpet Arrivals - The 69th Annual Cannes Film Festival"
-                    },
-                    "_type": "image"
+          "next_page": {
+            "limit": 20,
+            "offset": 20,
+            "token": "6175f4c9c667cc4b7da6ac64685600bc"
+          },
+          "prev_page": null,
+          "results": [
+            {
+              "_id": "f6c135226adb11a7233cab4357af35f6",
+              "_index": "getty_test",
+              "_old_score": 10,
+              "_score": 20,
+              "_source": {
+                "artist_name": "Krista Mangulsone",
+                "date_created": null,
+                "keywords": [
+                  "love",
+                  "friends",
+                  "garden",
+                  "animal",
+                  "kiss",
+                  "dog",
+                  "cute",
+                  "pets",
+                  "relax",
+                  "cat",
+                  "lying",
+                  "friendship",
+                  "puppy",
+                  "outdoor",
+                  "feline"
+                ],
+                "license": {
+                    "name": "CC0",
+                    "name_long": "Creative Commons Zero (CC0)",
+                    "license_url": null
+                },
+                "origin": {
+                  "name": "unsplash.com",
+                  "url": "https://www.unsplash.com/photo/orange-tabby-cat-beside-fawn-short-coated-puppy-24104/"
+                },
+                "image_url": {
+                  "url": "http://54.209.175.109:6008/pe/8/a/2/5/8a25a2a9c738ebd76043481a457b62a0.jpg"
                 }
-            ]
+              }
+            }
+          ],
+          "results_count": "200+"
         }
         """
 
