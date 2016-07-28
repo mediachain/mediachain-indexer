@@ -175,15 +175,15 @@ class Application(tornado.web.Application):
     def __init__(self,
                  ):
         
-        handlers = [(r'/api/',handle_front,),
-                    (r'/api/ping',handle_ping,),
-                    (r'/api/search',handle_search,),
-                    (r'/api/list_facets',handle_list_facets),
-                    (r'/api/get_embed_url',handle_get_embed_url,),
-                    (r'/api/dupe_lookup',handle_dupe_lookup,),
-                    (r'/api/score',handle_score,),
-                    (r'/api/record_dupes',handle_record_dupes,),
-                    (r'/api/record_relevance',handle_record_relevance,),
+        handlers = [(r'/',handle_front,),
+                    (r'/ping',handle_ping,),
+                    (r'/search',handle_search,),
+                    (r'/list_facets',handle_list_facets),
+                    (r'/get_embed_url',handle_get_embed_url,),
+                    (r'/dupe_lookup',handle_dupe_lookup,),
+                    (r'/score',handle_score,),
+                    (r'/record_dupes',handle_record_dupes,),
+                    (r'/record_relevance',handle_record_relevance,),
                     #(r'.*', handle_notfound,),
                     ]
         
