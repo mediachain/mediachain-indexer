@@ -1570,10 +1570,7 @@ def apply_post_ingestion_normalizers(rr,
             ii['_source']['title'] = ' '.join(ii['_source']['title']) if (ii['_source']['title'] and ii['_source']['title'][0]) else None
 
             if ii['_source']['licenses']:
-                
-                print 'LICENSES',ii['_source']['source_dataset'],ii['_source']['licenses']
-                #raw_input()
-                
+                                
                 ii['_source']['license'] = ii['_source']['licenses'][0]
                 ii['_source']['license']['url'] = ii['_source'].get('license_url')
 

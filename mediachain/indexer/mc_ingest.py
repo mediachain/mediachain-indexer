@@ -101,6 +101,90 @@ def decode_image(s):
     return rr
 
 
+def get_image_cache_url(_id,
+                        image_cache_host,
+                        image_cache_dir,
+                        ):
+    """
+    Replaced by ``.
+
+    Temporary solution to high-res image caching on the Indexer, for use by front-end. Currently reuses crawler caches.
+    
+    twistd -n web -p 6008 --path /datasets/datasets/indexer_cache/
+    
+    TODO: Temporary, as we work the best way to pass high-res images.
+    """
+    
+    if not image_cache_host.endswith('/'):
+        image_cache_host = image_cache_host + '/'
+    
+    import hashlib
+    
+    #print ('make_cache_url',_id)
+
+    #print ('get_cache_url()', _id)
+
+    if _id.startswith('pexels_'):
+        
+        _id = _id.split('_')[-1]
+        
+        xid = hashlib.md5(_id).hexdigest()
+
+        fn = ('/'.join(xid[:4])) + '/' + xid + '.jpg'
+
+        #normalizer_names['pexels']['dir_cache']
+        
+        real_fn = '/datasets/datasets/pexels/images_1920_1280/' + fn
+
+        #assert exists(real_fn),real_fn
+                
+        r = image_cache_host + 'images/pe/' + fn
+        
+        #print ('get_cache_url result:', r)
+        
+        return r
+
+    elif _id.startswith('getty_'):
+        
+        xid = _id.split('_')[-1]
+        
+        fn = ('/'.join(xid[:4])) + '/' + xid + '.jpg'
+
+        #ln -s /datasets2/datasets/getty_unpack/getty_all_images/ /datasets/datasets/indexer_cache/gg
+        
+        return image_cache_host + 'images/gg/' + fn
+        
+        base = '/datasets/datasets/indexer_cache/images/'
+        
+        for xdir in ['ga/',
+                     'ge/',
+                     'gr/',
+                     ]:
+            
+            xfn = base + xdir + fn
+            
+            if exists(xfn):
+
+                #print 'CACHE_FOUND',xfn
+                
+                return image_cache_host + xdir + fn
+            
+        #print '!! CACHE_FAILED',xfn
+        return None
+    
+    elif _id.startswith('eyeem_'):
+        
+        xid = hashlib.md5(_id.split('_')[-1]).hexdigest()
+        
+        fn = ('/'.join(xid[:4])) + '/' + xid + '.jpg'
+        
+        return image_cache_host + 'images/ey/' + fn
+    
+    else:
+        return None
+        #assert False,repr(_id)
+
+
 def lookup_cached_image(_id,
                         do_sizes = ['1024x1024','256x256'], #'original', 
                         return_as_urls = True,

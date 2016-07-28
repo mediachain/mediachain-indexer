@@ -289,7 +289,6 @@ class BaseHandler(tornado.web.RequestHandler):
               }
 
         self.write_json(rr)
-    
 
 
 class handle_front(BaseHandler):
@@ -321,10 +320,6 @@ try:
 except:
     get_remote_search = False
 
-try:
-    from mc_crawlers import get_image_cache_url
-except:
-    get_image_cache_url = False
 
 class handle_get_embed_url(BaseHandler):
     #disable XSRF checking for this URL:
@@ -944,7 +939,7 @@ class handle_search(BaseHandler):
         ## Skip items without preview:
         ## TODO: rework `get_image_cache_url()` and ensure `native_id`s for all records.
 
-        from mc_ingest import lookup_cached_image
+        from mc_ingest import lookup_cached_image, get_image_cache_url
         
         image_cache_failed = False
 

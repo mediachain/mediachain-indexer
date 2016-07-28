@@ -52,8 +52,8 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
            },
        '4. REST API Settings':
            {'MC_QUERY_CACHE_DIR':('/datasets/datasets/query_cache/', 'Location of where to store query cache.'),
-            'MC_IMAGE_CACHE_DIR':('/datasets/datasets/indexer_cache/', 'Location of where to store cached images, for serving to frontend.'),
-            'MC_IMAGE_CACHE_HOST':('http://indexer.mediachain.io:6008/', 'Image host, for serving cached images to frontend.'),
+            'MC_IMAGE_CACHE_DIR':('/datasets/datasets/indexer_cache/images/', 'Location of where to store cached images, for serving to frontend.'),
+            'MC_IMAGE_CACHE_HOST':('http://api.mediachain.io/', 'Image host, for serving cached images to frontend.'),
             'MC_ALLOW_SKIP_QUERY_CACHE_INT':('1', 'Allow Indexer `skip_cache` arg.'),
             'MC_FILTER_INCOMPLETE_INT':('0', ["Temporary - ",
                                               "Set to \"1\" filter out image results for which we don't have a high-res image. ",
