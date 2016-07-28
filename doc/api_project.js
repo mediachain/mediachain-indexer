@@ -1,1 +1,0 @@
-define({  "name": "Mediachain",  "version": "0.1.0",  "description": "API specification for Mediachain Image Search",  "sampleUrl": false,  "apidoc": "0.2.0",  "generator": {    "name": "apidoc",    "time": "2016-07-28T22:54:56.152Z",    "url": "http://apidocjs.com",    "version": "0.16.1"  }});
