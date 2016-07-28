@@ -37,11 +37,12 @@ TODO:
 @apiGroup Autocomplete
 @apiVersion 0.1.0
 
+@apiHeader {String} access-token Your access token.
 @apiParam {String} q  Query text.
 @apiParam {Number} [n]  Maximum number of results.
 
 @apiParamExample Example:
-                 curl "http://api.mediachainlabs.com/type?q=ca&n=3"
+                 curl "http://api.mediachainlabs.com/type?q=ca&n=3" -H 'access-token: 075a3e36a0a52dcbc568c05788e8a713'
 
 @apiSuccess {String} phrase Suggested phrase.
 @apiSuccess {Number} score Relevancy score for suggestion.
@@ -68,13 +69,14 @@ TODO:
 @apiGroup Search
 @apiVersion 0.1.0
 
+@apiHeader {String} access-token Your access token.
 @apiParam {String} [q]     Query text. (`token` required if omitted)
 @apiParam {String} [q_id]  ID of image record.
 @apiParam {Number} [limit] Maximum number of results to return.
 @apiParam {String} [token] Token representing page. (Required if `q` omitted)
 
 @apiParamExample {json} Request-Example:
-                 curl "http://api.mediachainlabs.com/search" -d '{"q":"coastline", "limit": 20}'
+                 curl "http://api.mediachainlabs.com/search" -d '{"q":"coastline", "limit": 20}' -H 'access-token: 075a3e36a0a52dcbc568c05788e8a713'
 
 @apiSuccess {Object}    [next_page] Parameters to query next page.
 @apiSuccess {Number}    next_page.limit
