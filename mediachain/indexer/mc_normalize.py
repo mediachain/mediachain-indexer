@@ -1568,13 +1568,24 @@ def apply_post_ingestion_normalizers(rr,
             ii['_source']['date_created'] = ii['_source'].get('date_created_original') or ii['_source'].get('date_created_at_source') or None
 
             ii['_source']['title'] = ' '.join(ii['_source']['title']) if (ii['_source']['title'] and ii['_source']['title'][0]) else None
-            
+
             if ii['_source']['licenses']:
+                
+                print 'LICENSES',ii['_source']['source_dataset'],ii['_source']['licenses']
+                #raw_input()
+                
                 ii['_source']['license'] = ii['_source']['licenses'][0]
-                ii['_source']['license']['license_url'] = ii['_source'].get('license_url')
+                ii['_source']['license']['url'] = ii['_source'].get('license_url')
+
+                if ii['_source']['license'].get('name') == 'CC0':
+                    ii['_source']['license']['url'] = 'https://creativecommons.org/publicdomain/zero/1.0/'
+                    
+                if ii['_source']['license'].get('name_long') == 'Getty Embed':
+                    ii['_source']['license']['url'] = 'http://www.gettyimages.com/company/terms'
+                
             else:
                 ii['_source']['license'] = None
-
+            
             if ii['_source'].get('url_shown_at',{}).get('url'):
                 ii['_source']['origin'] = {'url': ii['_source']['url_shown_at']['url']}
                 ii['_source']['origin']['name'] = urlparse.urlsplit(ii['_source']['url_shown_at']['url']).netloc
@@ -1582,6 +1593,15 @@ def apply_post_ingestion_normalizers(rr,
                 ii['_source']['origin'] = None
             
             ii['_source']['image_url'] = ii['_source']['url_direct_cache']['url']
+            
+            ## Delete superseded:
+            
+            for kk in ['artist_names', 'date_created_original', 'date_created_at_source', 'licenses',
+                       'url_shown_at', 'url_direct_cache',
+                       ]:
+                if kk in ii['_source']:
+                    del ii['_source'][kk]
+
 
         
 def get_type_str(x):

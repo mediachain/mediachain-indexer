@@ -60,7 +60,7 @@ data_pat = 'data:image/jpeg;base64,'
 data_pat_2 = 'data:image/png;base64,'
 
 
-def shrink_and_encode_image(s, size = (250, 250), to_base64 = True):
+def shrink_and_encode_image(s, size = (1024, 1024), to_base64 = True):
     """
     Resize image to small size & base64 encode it.
     """
