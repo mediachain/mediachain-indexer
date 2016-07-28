@@ -24,7 +24,8 @@ from time import sleep,time
 import json
 import os
 from os.path import exists, join
-from os import mkdir, listdir, walk, unlink
+from os import mkdir, listdir, makedirs, walk, rename, unlink
+
 from Queue import Queue
 from threading import current_thread,Thread
 
@@ -50,6 +51,7 @@ import numpy as np
 import imagehash
 import itertools
 
+import hashlib
 
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import parallel_bulk, scan
@@ -58,7 +60,7 @@ data_pat = 'data:image/jpeg;base64,'
 data_pat_2 = 'data:image/png;base64,'
 
 
-def shrink_and_encode_image(s, size = (250, 250)):
+def shrink_and_encode_image(s, size = (250, 250), to_base64 = True):
     """
     Resize image to small size & base64 encode it.
     """
@@ -71,8 +73,12 @@ def shrink_and_encode_image(s, size = (250, 250)):
         img.convert('RGB').save(f2, "JPEG")
         f2.seek(0)
         s = f2.read()
+
+    if to_base64:        
+        return data_pat + base64.b64encode(s)
     
-    return data_pat + base64.b64encode(s)
+    else:
+        return s
 
 
 def decode_image(s):
@@ -85,8 +91,187 @@ def decode_image(s):
         
     else:
         assert False,('BAD_DATA_URL',s[:15])
+
+    try:
+        rr = base64.b64decode(ss)
+    except:
+        ## Temporary workaround for broken encoder:
+        rr = base64.urlsafe_b64decode(ss)
+
+    return rr
+
+
+def lookup_cached_image(_id,
+                        do_sizes = ['1024x1024','256x256'], #'original', 
+                        return_as_urls = True,
+                        image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
+                        image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
+                        ):
+    """
+    See also: `cache_image()`
+    """
+    
+    if '_' in _id:
+        ## TODO: either md5 of native_id or not:
+        _id = hashlib.md5(_id).hexdigest()
+    
+    if not image_cache_dir.endswith('/'):
+        image_cache_dir = image_cache_dir + '/'
+    
+    if not image_cache_host.endswith('/'):
+        image_cache_host = image_cache_host + '/'
         
-    return base64.b64decode(ss)
+    rh = {}
+    
+    for size in do_sizes:
+        
+        dr1 = image_cache_dir + 'hh_' + size + '/'
+        
+        dr2 = dr1 + _id[:3] + '/'
+        
+        fn_cache = dr2 + _id + '.jpg'
+        
+        ## TODO: handle cache misses here?
+        
+        if return_as_urls:
+            rh[size] = image_cache_host + 'hh_' + size + '/' + _id[:3] + '/' + _id + '.jpg'
+        
+        else:
+            
+            rh[size] = fn_cache
+
+    print ('lookup_cached_image',rh)
+    
+    return rh
+
+
+def cache_image(_id,
+                image_base64 = False,
+                image_bytes = False,
+                do_sizes = ['1024x1024','256x256'], #'original', 
+                return_as_urls = True,
+                image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
+                image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
+                ):
+    """
+    Cache an image for later use by other stages of the pipeline.
+    
+    Uses plain files for now, because that's what works the best for HTTP serving of image files to the Frontend.
+    
+    Args:
+       _id:            Note - Assumed to be already cryptographically hashed, for even distribution.
+       image_base64:   Base64 encoded image content.
+       image_bytes:    Image content bytes.
+       do_sizes:       Output resized versions with these sizes.
+       return_as_urls: Return as URLs, otherwise return filenames.
+    
+    Process:
+       1) Check if hash of image file for this `_id` has changed.
+       2) Store (_id -> content_hash) and (_id -> image_content)
+    
+    Components using this cache:
+       - Ingestion via Indexer.
+       - Content-based vector calculation.
+       - HTTP server for cached images for Frontend.
+    
+    Open questions:
+       - Expiration? Intentionally delaying a decision on this for now.
+
+    See also: `lookup_cached_image()`
+    """
+
+    if '_' in _id:
+        ## TODO: either md5 of native_id or not:
+        _id = hashlib.md5(_id).hexdigest()
+    
+    assert (image_base64 is not False) or (image_bytes is not False)
+    assert not ((image_base64 is not False) and (image_bytes is not False))
+    
+    if not image_cache_dir.endswith('/'):
+        image_cache_dir = image_cache_dir + '/'
+    
+    if not image_cache_host.endswith('/'):
+        image_cache_host = image_cache_host + '/'
+    
+    rh = {}
+    
+    for size in do_sizes:
+        
+        ## Check if file is cached, and has not changed for this ID:
+        
+        dr1 = image_cache_dir + 'hh_' + size + '/'
+        
+        dr1_b = image_cache_dir + 'hh_hash/'
+        
+        dr2 = dr1 + _id[:3] + '/'
+                
+        fn_h = dr1_b + _id + '.hash'
+        
+        fn_cache = dr2 + _id + '.jpg'
+        
+        url = image_cache_host + 'hh_' + size + '/' + _id[:3] + '/' + _id + '.jpg'
+        
+        hsh = hashlib.md5(image_base64).hexdigest()
+
+        current_cached = False
+        if exists(fn_h):
+            with open(fn_h) as f:
+                r_hsh = f.read()
+            if r_hsh == hsh:
+                current_cached = True
+        
+        ## Store image content, return URLs or file paths:
+        
+        if not current_cached:
+            
+            if not exists(dr1):
+                mkdir(dr1)
+
+            if not exists(dr1_b):
+                mkdir(dr1_b)
+            
+            if not exists(dr2):
+                mkdir(dr2)
+            
+            if image_base64 is not False:
+                if image_bytes is False:
+                    #image_base64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+                    image_bytes = decode_image(image_base64)
+            else:
+                assert image_bytes is not False
+            
+            if size != 'original':
+                iw, ih = size.split('x')
+                iw, ih = int(iw), int(ih)
+            
+            try:
+                bytes_out = shrink_and_encode_image(image_bytes,
+                                                    size = (iw, ih),
+                                                    to_base64 = False,
+                                                    )
+            except:
+                print ('BAD_IMAGE_FILE',len(image_bytes),image_bytes[:100])
+                continue
+                        
+            with open(fn_cache, 'w') as f:
+                f.write(bytes_out)
+            
+            with open(fn_h + '.temp', 'w') as f:
+                f.write(hsh)
+
+            rename(fn_h + '.temp',
+                   fn_h,
+                   )
+        
+        if return_as_urls:
+            rh[size] = url
+
+        else:
+            rh[size] = fn_cache
+
+    print ('cache_image',rh)
+    
+    return rh
 
 
 def ingest_bulk(iter_json = False,
@@ -188,6 +373,21 @@ def ingest_bulk(iter_json = False,
             
             assert '_id' in hh,hh.keys()
 
+            ## Cache multiple sizes of image, requires `_id` field:
+
+            if ('thumbnail_base64' in hh):
+
+                fns = cache_image(_id = hh['_id'],
+                                  image_base64 = hh['thumbnail_base64'],
+                                  do_sizes = ['1024x1024','256x256'],
+                                  return_as_urls = False,
+                                  )
+
+                print ('CACHED_IMAGE',fns)
+            else:
+                assert False
+
+            
             ## -- START TEMPORARY FOR DEMO:
             ignore_thumbs_elsewhere = False
             if hh.get('source_dataset') == 'getty':
@@ -464,6 +664,8 @@ def receive_blockchain_into_indexer(last_block_ref = None,
                 rhc = rh.copy()
                 if 'img_data' in rhc:
                     del rhc['img_data']
+                if 'thumbnail_base64' in rhc:
+                    del rhc['thumbnail_base64']
                 print 'INSERT',rhc
                 
                 yield rh

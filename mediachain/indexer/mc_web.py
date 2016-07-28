@@ -761,10 +761,10 @@ class handle_search(BaseHandler):
             
             rr = json.loads(rr.body)
 
-            if 'error' in hh:
+            if 'error' in rr:
                 self.set_status(500)
                 self.write_json({'error':'ELASTICSEARCH_ERROR',
-                                 'error_message':repr(hh)[:1000],
+                                 'error_message':repr(rr)[:1000],
                                  })
                 return
 
@@ -817,10 +817,10 @@ class handle_search(BaseHandler):
                 
                 rr = json.loads(rr.body)
 
-                if 'error' in hh:
+                if 'error' in rr:
                     self.set_status(500)
                     self.write_json({'error':'ELASTICSEARCH_ERROR',
-                                     'error_message':repr(hh)[:1000],
+                                     'error_message':repr(rr)[:1000],
                                      })
                     return
 
@@ -924,6 +924,8 @@ class handle_search(BaseHandler):
             for x in rr:
                 if 'image_thumb' in x['_source']:
                     del x['_source']['image_thumb']
+                if 'thumbnail_base64' in x['_source']:
+                    del x['_source']['thumbnail_base64']
 
 
         ## Remove `dedupe_*` fields:
@@ -940,33 +942,53 @@ class handle_search(BaseHandler):
         ## Skip items without preview:
         ## TODO: rework `get_image_cache_url()` and ensure `native_id`s for all records.
 
+        from mc_ingest import lookup_cached_image
+        
         image_cache_failed = False
 
         if get_image_cache_url is not False:
 
-
             r2 = []
             for ii in rr:
+                
+                
+                if 'thumbnail_base64' in ii['_source']:
+                    
+                    ## From inline thumbnail, to replace `get_image_cache_url()` method below:
+                    
+                    urls = lookup_cached_image(_id = ii['_id'],
+                                               do_sizes = ['1024x1024',],
+                                               )
+                    
+                    ii['_source']['url_direct_cache'] = {'url':urls['1024x1024']}
 
-                try:
-                    url = get_image_cache_url(ii['_source']['native_id'],
-                                              image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
-                                              image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
-                                              )
+                    r2.append(ii)
 
-                    if (not url) and (filter_incomplete):
+                    continue
+                
+                else:
+                    
+                    ## Cache lookup via native_id, replaced by `lookup_cached_image()` method above:
 
-                        ## Filter incomplete records that would break things on the frontend:
+                    try:
+                        url = get_image_cache_url(ii['_source']['native_id'],
+                                                  image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
+                                                  image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
+                                                  )
 
-                        print 'FILTER_SKIP',ii['_source']['native_id']
-                        continue
+                        if (not url) and (filter_incomplete):
 
-                    ii['_source']['url_direct_cache'] = {'url':url}
-                except:
-                    image_cache_failed = True
-                    ii['_source']['url_direct_cache'] = None
+                            ## Filter incomplete records that would break things on the frontend:
 
-                r2.append(ii)
+                            print 'FILTER_SKIP',ii['_source']['native_id']
+                            continue
+
+                        ii['_source']['url_direct_cache'] = {'url':url}
+                    except:
+                        image_cache_failed = True
+                        ii['_source']['url_direct_cache'] = None
+
+                    r2.append(ii)
 
         else:
             image_cache_failed = True
@@ -1019,10 +1041,9 @@ class handle_search(BaseHandler):
                   for hit
                   in rr
                   ]
-
-
+        
         ## Cache:
-
+        
         results_count = len(rr)
         
         rr = {'results':rr,
@@ -1039,12 +1060,12 @@ class handle_search(BaseHandler):
             rr['next_page'] = None
         else:
             rr['next_page'] = {'token':the_token, 'offset':offset + limit, 'limit':limit}
-
+        
         if offset == 0:
             rr['prev_page'] = None
         else:
             rr['prev_page'] = {'token':the_token, 'offset':max(0, offset - limit), 'limit':limit}
-
+        
         ## Trim:
         
         rr['results'] = rr['results'][offset:offset + limit]
@@ -1055,7 +1076,7 @@ class handle_search(BaseHandler):
                         pretty = data.get('pretty', True),
                         max_indent_depth = data.get('max_indent_depth', False),
                         )
-
+        
 
 class handle_dupe_lookup(BaseHandler):
     
