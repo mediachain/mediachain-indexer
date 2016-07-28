@@ -639,6 +639,7 @@ class handle_search(BaseHandler):
         filter_sources = data.get('filter_sources', None)
         skip_query_cache = data.get('skip_query_cache', None)
         filter_incomplete = data.get('filter_incomplete', None)
+        schema_variant = data.get('schema_variant', 'old')
         
         if filter_incomplete is None:
             filter_incomplete = mc_config.MC_FILTER_INCOMPLETE_INT and True or False
@@ -710,6 +711,7 @@ class handle_search(BaseHandler):
                           'filter_licenses':filter_licenses,
                           'filter_sources':filter_sources,
                           'filter_incomplete':filter_incomplete,
+                          'schema_variant':schema_variant,
                           }
             print ('QUERY_ARGS',query_args)
 
@@ -1007,7 +1009,7 @@ class handle_search(BaseHandler):
         
         ## Apply post-ingestion normalizers, if there are any:
         
-        mc_normalize.apply_post_ingestion_normalizers(rr)
+        mc_normalize.apply_post_ingestion_normalizers(rr, schema_variant = schema_variant)
 
         
         ## Note: swapping these for ES queries shortly:

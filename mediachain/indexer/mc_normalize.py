@@ -10,7 +10,7 @@ Future:
 
 """
 
-
+import urlparse
 
 def walk_json_leaves(hh, path = []):
     """yields (path, value) tuples"""
@@ -1476,7 +1476,9 @@ def apply_normalizer(iter_json,
 
 
 
-def apply_post_ingestion_normalizers(rr):
+def apply_post_ingestion_normalizers(rr,
+                                     schema_variant = 'old',
+                                     ):
     """
     Post-ingestion normalizers that are applied last-moment at indexer query time.
     
@@ -1503,6 +1505,7 @@ def apply_post_ingestion_normalizers(rr):
 
         if 'getty_' in native_id:
             ii['_source']['source']['url'] = 'http://www.gettyimages.com/detail/photo/permalink/' + native_id.replace('getty_','')
+            
         if False:#'pexels_' in native_id:
             ii['_source']['source']['url'] = ii['url_shown_at']['url']
 
@@ -1555,6 +1558,30 @@ def apply_post_ingestion_normalizers(rr):
                 ii['_source']['sizes'] = sizes
 
 
+
+        if schema_variant == 'new':
+            ## New Schema Format
+            ## See: https://rawgit.com/mediachain/mediachain-indexer/master/doc/index.html
+            
+            ii['_source']['artist_name'] = ', '.join(ii['_source']['artist_names']) if ii['_source']['artist_names'] else None
+            
+            ii['_source']['date_created'] = ii['_source'].get('date_created_original') or ii['_source'].get('date_created_at_source') or None
+
+            ii['_source']['title'] = ' '.join(ii['_source']['title']) if (ii['_source']['title'] and ii['_source']['title'][0]) else None
+            
+            if ii['_source']['licenses']:
+                ii['_source']['license'] = ii['_source']['licenses'][0]
+                ii['_source']['license']['license_url'] = ii['_source'].get('license_url')
+            else:
+                ii['_source']['license'] = None
+
+            if ii['_source'].get('url_shown_at',{}).get('url'):
+                ii['_source']['origin'] = {'url': ii['_source']['url_shown_at']['url']}
+                ii['_source']['origin']['name'] = urlparse.urlsplit(ii['_source']['url_shown_at']['url']).netloc
+            else:
+                ii['_source']['origin'] = None
+            
+            ii['_source']['image_url'] = ii['_source']['url_direct_cache']['url']
 
         
 def get_type_str(x):
