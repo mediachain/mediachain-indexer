@@ -74,7 +74,7 @@ TODO:
 @apiParam {String} [token] Token representing page. (Required if `q` omitted)
 
 @apiParamExample {json} Request-Example:
-                 {"q":"crowd", "limit":5}
+                 curl "http://api.mediachainlabs.com/search" -d '{"q":"coastline", "limit": 20}'
 
 @apiSuccess {Object}    [next_page] Parameters to query next page.
 @apiSuccess {Number}    next_page.limit
