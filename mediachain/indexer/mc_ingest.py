@@ -583,10 +583,11 @@ def ingest_bulk(iter_json = False,
                 ## Mediachain metadata formatted 'thumbnail':
                 
                 from mediachain.reader.api import open_binary_asset
+                from cStringIO import StringIO
                 
                 def get_asset():
                     with open_binary_asset(hh['thumbnail']) as f:
-                        return f.read()
+                        return StringIO(f.read())
                 
                 if do_lazy:
                     cache_image(_id = hh['_id'],
@@ -600,7 +601,7 @@ def ingest_bulk(iter_json = False,
                     
                     print ('NON-LAZY_IMAGE_RETRIEVAL',)
                     cache_image(_id = hh['_id'],
-                                image_bytes = get_asset(),
+                                image_bytes = get_asset().read(),
                                 do_sizes = ['1024x1024','256x256'],
                                 return_as_urls = False,
                                 )
