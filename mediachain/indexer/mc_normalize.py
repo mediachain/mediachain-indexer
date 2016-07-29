@@ -93,6 +93,7 @@ def get_image_stats(s):
     h['mime'] = Image.MIME[img.format]
     h['width'] = img.size[0]
     h['height'] = img.size[1]
+    h['aspect_ratio'] = img.size[0] / float(img.size[1]) ## TODO: Round this off, for consistency across serializers?
     return h
 
 def normalize_eyeem(iter_json):
@@ -132,6 +133,7 @@ def normalize_eyeem(iter_json):
                  ]
         
         hh = {'_id':xid,
+              'aspect_ratio':ims['aspect_ratio'],
               'native_id':native_id,
               'source_dataset':'eyeem',
               'source':{'name':'eyeem',
@@ -580,13 +582,13 @@ def normalize_pexels(iter_json):
 
         jj = jj_top['source_record'] ## Ignore the minimal normalization we did initially. Look at source.
 
-        mime = get_image_stats(jj_top['img_data'])['mime']
+        ims = get_image_stats(jj_top['img_data'])
         
         sizes = [{'width':1920,                   # pixel width
                   'height':1280,                  # pixel height
                   'dpi':None,                     # DPI - Use to estimate real-world width / height if needed?
                   'bytes':None,                   # bytes size of this version
-                  'content_type':mime,            # Image mime-type
+                  'content_type':ims['mime'],     # Image mime-type
                   'uri_external':None,            # External URI.
                   }
                  ]
@@ -619,6 +621,7 @@ def normalize_pexels(iter_json):
         source_tags = list(set([(x[len('www.'):] if x.startswith('www.') else x) for x in source_tags]))
         
         hh = {'_id':xid,
+              'aspect_ratio':ims['aspect_ratio'],
               'native_source_id':jj_top['_id'],
               'native_id':original_id,
               'source_dataset':'pexels',
@@ -1128,6 +1131,7 @@ def normalize_dpla(iter_json):
             the_title = [the_title]
         
         hh = {'_id':xid,
+              'aspect_ratio':st['aspect_ratio'],
               'native_id':jj_top['_id'],
               'source_dataset':'dpla',
               'source':{'name':'dpla',
@@ -1297,6 +1301,7 @@ def normalize_mirflickr1mm(iter_json):
         xid = make_id(jj_top['_id'])
         
         hh = {'_id':xid,
+              'aspect_ratio':st['aspect_ratio'],
               'native_id':jj_top['_id'],
               'source_dataset':'mirflickr1mm',
               'source':{'name':'mirflickr1mm',
@@ -1379,6 +1384,7 @@ def normalize_places(iter_json):
         xid = make_id(jj_top['_id'])
         
         hh = {'_id':xid,
+              'aspect_ratio':st['aspect_ratio'],
               'native_id':jj_top['_id'],
               'source_dataset':'places205',
               'source':{'name':'places205',
@@ -1423,6 +1429,7 @@ def normalize_places(iter_json):
         yield hh
 
 
+        
 ## name, func, default archive location:
 
 normalizer_names = {'eyeem':{'func':normalize_eyeem,

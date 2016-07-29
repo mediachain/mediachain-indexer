@@ -565,7 +565,6 @@ def ingest_bulk(iter_json = False,
             hh.update(xdoc)
             
             assert '_id' in hh,hh.keys()
-
             
             do_lazy = False ## TODO: temporarily disabling lazy image retrieval, for datasets ingested without `image_hash_sha256`.
             
@@ -581,40 +580,36 @@ def ingest_bulk(iter_json = False,
                         return StringIO(f.read())
 
                 if 'img_data' in hh:
-                    cache_image(_id = hh['_id'],
-                                image_bytes = decode_image(hh['img_data']),
-                                do_sizes = ['1024x1024','256x256'],
-                                return_as_urls = False,
-                                )
+                    fns = cache_image(_id = hh['_id'],
+                                      image_bytes = decode_image(hh['img_data']),
+                                      do_sizes = ['1024x1024','256x256'],
+                                      return_as_urls = False,
+                                      )
                     
                 elif do_lazy:
-                    cache_image(_id = hh['_id'],
-                                image_hash_sha256 = hh['image_hash_sha256'],
-                                image_func = lambda: get_asset(),
-                                do_sizes = ['1024x1024','256x256'],
-                                return_as_urls = False,
-                                )
+                    fns = cache_image(_id = hh['_id'],
+                                      image_hash_sha256 = hh['image_hash_sha256'],
+                                      image_func = lambda: get_asset(),
+                                      do_sizes = ['1024x1024','256x256'],
+                                      return_as_urls = False,
+                                      )
                     
                 else:
                     
                     print ('NON-LAZY_IMAGE_RETRIEVAL',)
-                    cache_image(_id = hh['_id'],
-                                image_bytes = get_asset().read(),
-                                do_sizes = ['1024x1024','256x256'],
-                                return_as_urls = False,
-                                )
+                    fns = cache_image(_id = hh['_id'],
+                                      image_bytes = get_asset().read(),
+                                      do_sizes = ['1024x1024','256x256'],
+                                      return_as_urls = False,
+                                      )
                     
-                        
-            elif 'img_data' in hh:
-                
-                ## Base64 encoded image string:
-                
-                cache_image(_id = hh['_id'],
-                            image_bytes = decode_image(hh['img_data']),
-                            do_sizes = ['1024x1024','256x256'],
-                            return_as_urls = False,
-                            )
-
+                ## Add aspect ratio for all images:
+                    
+                with open(fns['256x256']) as f:
+                    img = Image.open(f)
+                    hh['aspect_ratio'] = img.size[0] / float(img.size[1])
+                    
+            
             elif (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
                 
                 ## One-off ignoring of thumbnail generation via `NO_IMAGE`:
@@ -624,6 +619,11 @@ def ingest_bulk(iter_json = False,
                 
                 if 'image_thumb' in hh:
                     del hh['image_thumb']
+
+                ## Add aspect ratio for all images:
+                
+                if 'aspect_ratio' not in hh:
+                    hh['aspect_ratio'] = None
             
             else:
                 assert False, ('No thumbnail detected, and "NO_IMAGE" not used.',hh.keys())
