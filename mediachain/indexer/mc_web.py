@@ -643,6 +643,7 @@ class handle_search(BaseHandler):
                                       type = doc_type,
                                       source = {"query": {"match_all": {}}, "size":20}
                                       )
+
             
             rr = json.loads(rr.body)
 
@@ -830,53 +831,48 @@ class handle_search(BaseHandler):
         from mc_ingest import lookup_cached_image, get_image_cache_url
         
         image_cache_failed = False
+        
+        r2 = []
+        for ii in rr:
 
-        if get_image_cache_url is not False:
 
-            r2 = []
-            for ii in rr:
-                
-                
-                if 'thumbnail_base64' in ii['_source']:
-                    
-                    ## From inline thumbnail, to replace `get_image_cache_url()` method below:
-                    
-                    urls = lookup_cached_image(_id = ii['_id'],
-                                               do_sizes = ['1024x1024',],
-                                               )
-                    
-                    ii['_source']['url_direct_cache'] = {'url':urls['1024x1024']}
+            if True:
 
-                    r2.append(ii)
+                ## From inline thumbnail, to replace `get_image_cache_url()` method below:
 
-                    continue
-                
-                else:
-                    
-                    ## Cache lookup via native_id, replaced by `lookup_cached_image()` method above:
+                urls = lookup_cached_image(_id = ii['_id'],
+                                           do_sizes = ['1024x1024',],
+                                           )
 
-                    try:
-                        url = get_image_cache_url(ii['_source']['native_id'],
-                                                  image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
-                                                  image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
-                                                  )
+                ii['_source']['url_direct_cache'] = {'url':urls['1024x1024']}
 
-                        if (not url) and (filter_incomplete):
+                r2.append(ii)
 
-                            ## Filter incomplete records that would break things on the frontend:
+                continue
 
-                            print 'FILTER_SKIP',ii['_source']['native_id']
-                            continue
+            else:
 
-                        ii['_source']['url_direct_cache'] = {'url':url}
-                    except:
-                        image_cache_failed = True
-                        ii['_source']['url_direct_cache'] = None
+                ## Cache lookup via native_id, replaced by `lookup_cached_image()` method above:
 
-                    r2.append(ii)
+                try:
+                    url = get_image_cache_url(ii['_source']['native_id'],
+                                              image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
+                                              image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
+                                              )
 
-        else:
-            image_cache_failed = True
+                    if (not url) and (filter_incomplete):
+
+                        ## Filter incomplete records that would break things on the frontend:
+
+                        print 'FILTER_SKIP',ii['_source']['native_id']
+                        continue
+
+                    ii['_source']['url_direct_cache'] = {'url':url}
+                except:
+                    image_cache_failed = True
+                    ii['_source']['url_direct_cache'] = None
+
+                r2.append(ii)
         
         if image_cache_failed:
             print ('!!!IMAGE_CACHE_FAILED', get_image_cache_url, mc_config.MC_IMAGE_CACHE_DIR)

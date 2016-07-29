@@ -66,6 +66,8 @@ def shrink_and_encode_image(s, size = (1024, 1024), to_base64 = True):
     """
     
     img = Image.open(StringIO(s))
+
+    print ('shrink_and_encode_image',img.size,'->',size)
     
     if (img.size[0] > size[0]) or (img.size[1] > size[1]):
         f2 = StringIO()
@@ -407,7 +409,7 @@ def cache_image(_id,
            fn_h,
            )
     
-    print ('cache_image',rh)
+    #print ('cache_image',rh)
     
     return rh
 
@@ -567,29 +569,25 @@ def ingest_bulk(iter_json = False,
             
             do_lazy = False ## TODO: temporarily disabling lazy image retrieval, for datasets ingested without `image_hash_sha256`.
             
-            
-            if (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
-                
-                ## One-off ignoring of thumbnail generation via `NO_IMAGE`:
-                                
-                if 'img_data' in hh:
-                    del hh['img_data']
-                
-                if 'image_thumb' in hh:
-                    del hh['image_thumb']
-            
-            elif ('thumbnail' in hh) and (('image_hash_sha256' in hh) or (do_lazy == False)):
+            if (('thumbnail' in hh) and (('image_hash_sha256' in hh) or (do_lazy is False))) or ('img_data' in hh):
                 
                 ## Mediachain metadata formatted 'thumbnail':
                 
-                from mediachain.reader.api import open_binary_asset
                 from cStringIO import StringIO
                 
                 def get_asset():
+                    from mediachain.reader.api import open_binary_asset
                     with open_binary_asset(hh['thumbnail']) as f:
                         return StringIO(f.read())
-                
-                if do_lazy:
+
+                if 'img_data' in hh:
+                    cache_image(_id = hh['_id'],
+                                image_bytes = decode_image(hh['img_data']),
+                                do_sizes = ['1024x1024','256x256'],
+                                return_as_urls = False,
+                                )
+                    
+                elif do_lazy:
                     cache_image(_id = hh['_id'],
                                 image_hash_sha256 = hh['image_hash_sha256'],
                                 image_func = lambda: get_asset(),
@@ -616,10 +614,25 @@ def ingest_bulk(iter_json = False,
                             do_sizes = ['1024x1024','256x256'],
                             return_as_urls = False,
                             )
+
+            elif (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
+                
+                ## One-off ignoring of thumbnail generation via `NO_IMAGE`:
+                                
+                if 'img_data' in hh:
+                    del hh['img_data']
+                
+                if 'image_thumb' in hh:
+                    del hh['image_thumb']
+            
             else:
-                assert False, 'No thumbnail detected, and "NO_IMAGE" not used.'
+                assert False, ('No thumbnail detected, and "NO_IMAGE" not used.',hh.keys())
+
             
-            
+            ## TODO: get dedupe to read from cache, because we're not saving `img_data` anymore?
+            if 'img_data' in hh:
+                del hh['img_data']
+
             chh = hh.copy()
             if 'image_thumb' in chh:
                 del chh['image_thumb']
