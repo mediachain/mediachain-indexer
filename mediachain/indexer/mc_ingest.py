@@ -188,11 +188,23 @@ def get_image_cache_url(_id,
 def lookup_cached_image(_id,
                         do_sizes = ['1024x1024','256x256'], #'original', 
                         return_as_urls = True,
+                        check_exists = False,
+                        image_hash_sha256 = False,
                         image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
                         image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
                         ):
     """
+    Retrieves latest cached version of this image.
+    
     See also: `cache_image()`
+    
+    Args:
+        _id:               Note - Assumed to be already cryptographically hashed, for even distribution.
+        do_sizes:          Output resized versions, with these sizes.
+        return_as_urls:    Return as URLs, otherwise return filenames.
+        check_exists:      Check that the files actually exist. Can considerably slow down lookups.
+                           TODO: auto-generate lower res versions from the higher-res versions, if needed?
+        image_hash_sha256: TODO: Optionally verify that retrieved original matches this hash?
     """
     
     if '_' in _id:
@@ -204,7 +216,7 @@ def lookup_cached_image(_id,
     
     if not image_cache_host.endswith('/'):
         image_cache_host = image_cache_host + '/'
-        
+    
     rh = {}
     
     for size in do_sizes:
@@ -214,8 +226,11 @@ def lookup_cached_image(_id,
         dr2 = dr1 + _id[:3] + '/'
         
         fn_cache = dr2 + _id + '.jpg'
-        
+
         ## TODO: handle cache misses here?
+        
+        if check_exists:
+            assert exists(fn_cache), fn_cache
         
         if return_as_urls:
             rh[size] = image_cache_host + 'hh_' + size + '/' + _id[:3] + '/' + _id + '.jpg'
@@ -264,6 +279,11 @@ def cache_image(_id,
        - Content-based vector calculation.
        - HTTP server for cached images for Frontend.
     
+    TODO:
+       - Clear out all sizes of outdated images (upon hash change), instead of just the replacing the sizes specified 
+         during the `cache_image()` call. See partial implementation below.
+       - Unlikely to be perfectly atomic. Look deeper into whether the failure scenarios are acceptable.
+    
     Open questions, not too important for now:
        - Expiration? Intentionally delaying a decision on this for now.
        - flush()'s required to make this more likely to be atomic on more filesystems?
@@ -290,7 +310,22 @@ def cache_image(_id,
     
     rh = {}
     
+    current_cached = False
+    if exists(fn_h):
+        with open(fn_h) as f:
+            xx = f.read()
+        xx = xx.split('\t')
+        old_hsh = xx[-1]
+        old_sizes = xx[:-1]
+        if old_hsh == image_hash_sha256:
+            current_cached = True
+        else:
+            ## TODO delete all old sizes, to be safer.
+            pass
+    
     for size in do_sizes:
+
+        assert '\t' not in size, repr(size)
         
         ## Check if file is cached, and has not changed for this ID:
         
@@ -305,13 +340,6 @@ def cache_image(_id,
         fn_cache = dr2 + _id + '.jpg'
         
         url = image_cache_host + 'hh_' + size + '/' + _id[:3] + '/' + _id + '.jpg'
-        
-        current_cached = False
-        if exists(fn_h):
-            with open(fn_h) as f:
-                r_hsh = f.read()
-            if r_hsh == image_hash_sha256:
-                current_cached = True
         
         ## Store image content, return URLs or file paths:
         
@@ -352,15 +380,16 @@ def cache_image(_id,
         
         if return_as_urls:
             rh[size] = url
-
+        
         else:
             rh[size] = fn_cache
-
+    
     
     ## Finally write out the hash file, after all image sizes have been written out to disk:
+    ## Also record sizes, so they can hopefully be deleted upon next update.
     
     with open(fn_h + '.temp', 'w') as f:
-        f.write(image_hash_sha256)
+        f.write(('\t'.join(do_sizes)) + '\t' + image_hash_sha256)
     
     rename(fn_h + '.temp',
            fn_h,
