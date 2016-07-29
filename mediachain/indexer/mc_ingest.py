@@ -230,7 +230,8 @@ def lookup_cached_image(_id,
 
 
 def cache_image(_id,
-                image_base64 = False,
+                image_origin = None,
+                image_open_fn = None,
                 image_bytes = False,
                 do_sizes = ['1024x1024','256x256'], #'original', 
                 return_as_urls = True,
@@ -244,7 +245,7 @@ def cache_image(_id,
     
     Args:
        _id:            Note - Assumed to be already cryptographically hashed, for even distribution.
-       image_base64:   Base64 encoded image content.
+       image_open_fn:  Function that will return a file-like image object when called with no args.
        image_bytes:    Image content bytes.
        do_sizes:       Output resized versions with these sizes.
        return_as_urls: Return as URLs, otherwise return filenames.
@@ -268,8 +269,8 @@ def cache_image(_id,
         ## TODO: either md5 of native_id or not:
         _id = hashlib.md5(_id).hexdigest()
     
-    assert (image_base64 is not False) or (image_bytes is not False)
-    assert not ((image_base64 is not False) and (image_bytes is not False))
+    assert (image_open_fn is not None) or (image_bytes is not False)
+    assert not ((image_open_fn is not None) and (image_bytes is not False))
     
     if not image_cache_dir.endswith('/'):
         image_cache_dir = image_cache_dir + '/'
@@ -295,7 +296,7 @@ def cache_image(_id,
         
         url = image_cache_host + 'hh_' + size + '/' + _id[:3] + '/' + _id + '.jpg'
         
-        hsh = hashlib.md5(image_base64).hexdigest()
+        hsh = hashlib.md5(image_origin.encode('utf-8')).hexdigest()
 
         current_cached = False
         if exists(fn_h):
@@ -305,29 +306,47 @@ def cache_image(_id,
                 current_cached = True
         
         ## Store image content, return URLs or file paths:
-        
-        if not current_cached:
-            
-            if not exists(dr1):
-                mkdir(dr1)
 
-            if not exists(dr1_b):
-                mkdir(dr1_b)
-            
-            if not exists(dr2):
-                mkdir(dr2)
-            
-            if image_base64 is not False:
-                if image_bytes is False:
-                    #image_base64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
-                    image_bytes = decode_image(image_base64)
+        if current_cached and exists(fn_cache):
+            if return_as_urls:
+                rh[size] = url
             else:
-                assert image_bytes is not False
+                rh[size] = fn_cache
+                
+            continue
+
+        if not exists(dr1):
+            mkdir(dr1)
+
+        if not exists(dr1_b):
+            mkdir(dr1_b)
+
+        if not exists(dr2):
+            mkdir(dr2)
+
+        if image_open_fn is not False:
+            if image_bytes is False:
+                print('LOADING_REMOTE_IMAGE', image_origin)
+                #image_base64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+                resource = image_open_fn()
+                if resource is None:
+                    print('CANT_LOAD_REMOTE_IMAGE', image_origin)
+                    continue
+
+                with resource as f:
+                    image_bytes = f.read()
+        else:
+            assert image_bytes is not False
+
+        with open(fn_h + '.temp', 'w') as f:
+            f.write(hsh)
+
+        rename(fn_h + '.temp', fn_h)
             
-            if size != 'original':
-                iw, ih = size.split('x')
-                iw, ih = int(iw), int(ih)
-            
+        if size != 'original':
+            iw, ih = size.split('x')
+            iw, ih = int(iw), int(ih)
+
             try:
                 bytes_out = shrink_and_encode_image(image_bytes,
                                                     size = (iw, ih),
@@ -336,16 +355,11 @@ def cache_image(_id,
             except:
                 print ('BAD_IMAGE_FILE',len(image_bytes),image_bytes[:100])
                 continue
-                        
-            with open(fn_cache, 'w') as f:
-                f.write(bytes_out)
-            
-            with open(fn_h + '.temp', 'w') as f:
-                f.write(hsh)
+        else:
+            bytes_out = image_bytes
 
-            rename(fn_h + '.temp',
-                   fn_h,
-                   )
+        with open(fn_cache, 'w') as f:
+            f.write(bytes_out)
         
         if return_as_urls:
             rh[size] = url
@@ -447,7 +461,7 @@ def ingest_bulk(iter_json = False,
         t0 = time()
         
         for hh in iter_json:
-            
+
             xdoc = {'_op_type': 'index',
                     '_index': index_name,
                     '_type': doc_type,
@@ -459,10 +473,14 @@ def ingest_bulk(iter_json = False,
 
             ## Cache multiple sizes of image, requires `_id` field:
 
-            if ('thumbnail_base64' in hh):
-
+            if isinstance(hh.get('thumbnail'), dict):
+                from mediachain.reader.api import open_binary_asset
+                thumb_asset = hh['thumbnail']
+                open_fn = lambda: open_binary_asset(thumb_asset)
+                thumb_origin = thumb_asset.get('uri')
                 fns = cache_image(_id = hh['_id'],
-                                  image_base64 = hh['thumbnail_base64'],
+                                  image_origin=thumb_origin,
+                                  image_open_fn=open_fn,
                                   do_sizes = ['1024x1024','256x256'],
                                   return_as_urls = False,
                                   )
