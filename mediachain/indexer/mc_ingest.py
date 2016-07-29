@@ -308,8 +308,9 @@ def cache_image(_id,
     if not image_cache_host.endswith('/'):
         image_cache_host = image_cache_host + '/'
     
-    rh = {}
-
+    
+    ## Check previously recorded hash of input file for this ID, vs expected hash:
+    
     dr1_b = image_cache_dir + 'hh_hash/'
     
     fn_h = dr1_b + _id + '.hash'
@@ -327,9 +328,26 @@ def cache_image(_id,
             ## TODO delete all old sizes, to be safer.
             pass
     
+    if image_func is not False:
+        assert image_bytes is False
+        
+        ## TODO - crash hard here on failure? Expect image_func to manage retries?:
+        image_bytes = image_func().read()
+    else:
+        assert image_bytes is not False
+
+    if image_hash_sha256 is False:
+        image_hash_sha256 = hashlib.sha256(image_bytes).hexdigest()
+    
+    
+    ## Output resized images:
+    
+    rh = {}
+        
     for size in do_sizes:
 
         assert '\t' not in size, repr(size)
+        
         
         ## Check if file is cached, and has not changed for this ID:
         
@@ -340,10 +358,9 @@ def cache_image(_id,
         fn_cache = dr2 + _id + '.jpg'
         
         url = image_cache_host + 'hh_' + size + '/' + _id[:3] + '/' + _id + '.jpg'
-        
-        ## Store image content, return URLs or file paths:
-        
-        if not current_cached:
+
+                
+        if (not current_cached) or (not exists(fn_cache)):
             
             if not exists(dr1):
                 mkdir(dr1)
@@ -353,16 +370,7 @@ def cache_image(_id,
             
             if not exists(dr2):
                 mkdir(dr2)
-            
-            if (image_bytes is False) and (image_func is not False):
-                ## TODO - crash hard here on failure? Expect image_func to manage retries?:
-                image_bytes = image_func().read()
-            else:
-                assert image_bytes is not False
-
-            if image_hash_sha256 is False:
-                image_hash_sha256 = hashlib.sha256(image_bytes).hexdigest()
-                
+                            
             if size != 'original':
                 iw, ih = size.split('x')
                 iw, ih = int(iw), int(ih)
@@ -389,7 +397,7 @@ def cache_image(_id,
     
     
     ## Finally write out the hash file, after all image sizes have been written out to disk:
-    ## Also record sizes, so they can hopefully be deleted upon next update.
+    ## Also record sizes, so they can hopefully be used to delete all sizes of old images upon next update.
     
     with open(fn_h + '.temp', 'w') as f:
         f.write(('\t'.join(do_sizes)) + '\t' + image_hash_sha256)
