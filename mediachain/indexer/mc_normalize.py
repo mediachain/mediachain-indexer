@@ -1575,8 +1575,16 @@ def apply_post_ingestion_normalizers(rr,
             
             ii['_source']['date_created'] = ii['_source'].get('date_created_original') or ii['_source'].get('date_created_at_source') or None
 
-            ii['_source']['title'] = ' '.join(ii['_source']['title']) if (ii['_source']['title'] and ii['_source']['title'][0]) else None
-
+            if ii['_source']['title'] and ii['_source']['title'][0]:
+                
+                if isinstance(ii['_source']['title'], basestring):
+                    ii['_source']['title'] = ii['_source']['title']
+                else:
+                    ii['_source']['title'] = ' '.join(ii['_source']['title'])
+            
+            else:
+                ii['_source']['title'] = None
+            
             if ii['_source'].get('licenses'):
                                 
                 ii['_source']['license'] = ii['_source']['licenses'][0]

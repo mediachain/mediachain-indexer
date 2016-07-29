@@ -523,6 +523,19 @@ class handle_search(BaseHandler):
         skip_query_cache = data.get('skip_query_cache', None)
         filter_incomplete = data.get('filter_incomplete', None)
         schema_variant = data.get('schema_variant', 'new')
+
+        unk = set(data).difference(['q', 'q_id', 'q_id_file', 'offset', 'limit',
+                                    'index_name', 'doc_type', 'include_docs', 'include_thumb', 'rerank_eq',
+                                    'filter_licenses', 'filter_sources', 'skip_query_cache', 'filter_incomplete',
+                                    'schema_variant',
+                                    ])
+        
+        if unk:
+            self.set_status(500)
+            self.write_json({'error':'UNKNOWN_ARGS',
+                             'error_message':repr(list(unk)),
+                            })
+            return
         
         if filter_incomplete is None:
             filter_incomplete = mc_config.MC_FILTER_INCOMPLETE_INT and True or False
