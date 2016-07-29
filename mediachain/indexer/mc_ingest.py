@@ -138,7 +138,7 @@ def get_image_cache_url(_id,
 
         #assert exists(real_fn),real_fn
                 
-        r = image_cache_host + 'images/pe/' + fn
+        r = image_cache_host + 'pe/' + fn
         
         #print ('get_cache_url result:', r)
         
@@ -152,7 +152,7 @@ def get_image_cache_url(_id,
 
         #ln -s /datasets2/datasets/getty_unpack/getty_all_images/ /datasets/datasets/indexer_cache/gg
         
-        return image_cache_host + 'images/gg/' + fn
+        return image_cache_host + 'gg/' + fn
         
         base = '/datasets/datasets/indexer_cache/images/'
         
@@ -178,7 +178,7 @@ def get_image_cache_url(_id,
         
         fn = ('/'.join(xid[:4])) + '/' + xid + '.jpg'
         
-        return image_cache_host + 'images/ey/' + fn
+        return image_cache_host + 'ey/' + fn
     
     else:
         return None
@@ -230,8 +230,8 @@ def lookup_cached_image(_id,
 
 
 def cache_image(_id,
-                image_origin = None,
-                image_open_fn = None,
+                image_hash_sha256 = False,
+                image_func = False,
                 image_bytes = False,
                 do_sizes = ['1024x1024','256x256'], #'original', 
                 return_as_urls = True,
@@ -239,13 +239,18 @@ def cache_image(_id,
                 image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
                 ):
     """
+    NOTE: unfinished draft of an API shape, quickly sketched up at 3am. Consider this unfinished and untested.
+    Ping me before rewriting.
+    
     Cache an image for later use by other stages of the pipeline.
     
     Uses plain files for now, because that's what works the best for HTTP serving of image files to the Frontend.
     
     Args:
        _id:            Note - Assumed to be already cryptographically hashed, for even distribution.
-       image_open_fn:  Function that will return a file-like image object when called with no args.
+       image_hash_sha256:     SHA256 hash of image bytes content. If you want to do lazy-loading with `image_func`,
+                       you should pass this hash. Otherwise `image_func` must always be called.
+       image_func:     When called, returns an open file ready for reading. Used for lazy image retrieval.
        image_bytes:    Image content bytes.
        do_sizes:       Output resized versions with these sizes.
        return_as_urls: Return as URLs, otherwise return filenames.
@@ -259,18 +264,23 @@ def cache_image(_id,
        - Content-based vector calculation.
        - HTTP server for cached images for Frontend.
     
-    Open questions:
+    Open questions, not too important for now:
        - Expiration? Intentionally delaying a decision on this for now.
-
+       - flush()'s required to make this more likely to be atomic on more filesystems?
+       - Add file locking to avoid stampeeds from multiple threads?
+    
     See also: `lookup_cached_image()`
     """
-
+    
     if '_' in _id:
         ## TODO: either md5 of native_id or not:
+        print ('WARN: Should pass hashed IDs to `cache_image()`, so we get an even distribution between dirs.')
         _id = hashlib.md5(_id).hexdigest()
     
-    assert (image_open_fn is not None) or (image_bytes is not False)
-    assert not ((image_open_fn is not None) and (image_bytes is not False))
+    assert (image_func is not False) or (image_bytes is not False),'Must pass either image_func or image_bytes.'
+    assert not ((image_func is not False) and (image_bytes is not False)),'Cannot pass both image_func and image_bytes.'
+    assert (image_func is False) or \
+           ((image_func is not False) and (image_hash_sha256 is not False)),'image_hash_sha256 must be passed if image_func is passed.'
     
     if not image_cache_dir.endswith('/'):
         image_cache_dir = image_cache_dir + '/'
@@ -289,77 +299,56 @@ def cache_image(_id,
         dr1_b = image_cache_dir + 'hh_hash/'
         
         dr2 = dr1 + _id[:3] + '/'
-                
+        
         fn_h = dr1_b + _id + '.hash'
         
         fn_cache = dr2 + _id + '.jpg'
         
         url = image_cache_host + 'hh_' + size + '/' + _id[:3] + '/' + _id + '.jpg'
         
-        hsh = hashlib.md5(image_origin.encode('utf-8')).hexdigest()
-
         current_cached = False
         if exists(fn_h):
             with open(fn_h) as f:
                 r_hsh = f.read()
-            if r_hsh == hsh:
+            if r_hsh == image_hash_sha256:
                 current_cached = True
         
         ## Store image content, return URLs or file paths:
-
-        if current_cached and exists(fn_cache):
-            if return_as_urls:
-                rh[size] = url
-            else:
-                rh[size] = fn_cache
-                
-            continue
-
-        if not exists(dr1):
-            mkdir(dr1)
-
-        if not exists(dr1_b):
-            mkdir(dr1_b)
-
-        if not exists(dr2):
-            mkdir(dr2)
-
-        if image_open_fn is not False:
-            if image_bytes is False:
-                print('LOADING_REMOTE_IMAGE', image_origin)
-                #image_base64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
-                resource = image_open_fn()
-                if resource is None:
-                    print('CANT_LOAD_REMOTE_IMAGE', image_origin)
-                    continue
-
-                with resource as f:
-                    image_bytes = f.read()
-        else:
-            assert image_bytes is not False
-
-        with open(fn_h + '.temp', 'w') as f:
-            f.write(hsh)
-
-        rename(fn_h + '.temp', fn_h)
+        
+        if not current_cached:
             
-        if size != 'original':
-            iw, ih = size.split('x')
-            iw, ih = int(iw), int(ih)
-
+            if not exists(dr1):
+                mkdir(dr1)
+            
+            if not exists(dr1_b):
+                mkdir(dr1_b)
+            
+            if not exists(dr2):
+                mkdir(dr2)
+            
+            if image_func is not False:
+                ## TODO - crash hard here on failure? Expect image_func to manage retries?:
+                image_bytes = image_func().read()
+            else:
+                assert image_bytes is not False
+            
+            if size != 'original':
+                iw, ih = size.split('x')
+                iw, ih = int(iw), int(ih)
+            
             try:
                 bytes_out = shrink_and_encode_image(image_bytes,
                                                     size = (iw, ih),
                                                     to_base64 = False,
                                                     )
             except:
+                ## TODO: bubbling up exceptions for now:
+                raise
                 print ('BAD_IMAGE_FILE',len(image_bytes),image_bytes[:100])
                 continue
-        else:
-            bytes_out = image_bytes
-
-        with open(fn_cache, 'w') as f:
-            f.write(bytes_out)
+            
+            with open(fn_cache, 'w') as f:
+                f.write(bytes_out)
         
         if return_as_urls:
             rh[size] = url
@@ -367,10 +356,70 @@ def cache_image(_id,
         else:
             rh[size] = fn_cache
 
+    
+    ## Finally write out the hash file, after all image sizes have been written out to disk:
+    
+    with open(fn_h + '.temp', 'w') as f:
+        f.write(image_hash_sha256)
+    
+    rename(fn_h + '.temp',
+           fn_h,
+           )
+    
     print ('cache_image',rh)
     
     return rh
 
+
+def test_image_cache(via_cli = False):
+    """
+    Basic sanity check for image caching. TODO: more testing, instead of just running the code.
+    """
+    
+    image_base64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4"\
+                   "//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+    
+    image_bytes = decode_image(image_base64)
+
+    image_hash = hashlib.sha256(image_bytes).hexdigest()
+
+    _id = hashlib.md5('test_123').hexdigest()
+
+    def image_func():
+        from cStringIO import StringIO
+        ff = StringIO(image_bytes)
+        return ff
+    
+    for as_urls in [True, False]:
+        
+        for use_image_func in [True, False]:
+            
+            rh1 = cache_image(_id,
+                              image_hash_sha256 = image_hash,
+                              image_func = image_func if use_image_func else False,
+                              image_bytes = image_bytes if not use_image_func else False,
+                              do_sizes = ['1024x1024','256x256','original'],
+                              return_as_urls = as_urls,
+                              )
+
+            if not as_urls:
+                for k,v in rh1.items():
+                    assert exists(v),(as_urls, use_image_func, v)
+            
+            rh2 = lookup_cached_image(_id,
+                                      do_sizes = ['1024x1024','256x256', 'original'],
+                                      return_as_urls = as_urls,
+                                      )
+
+            if not as_urls:
+                for k,v in rh2.items():
+                    assert exists(v),(as_urls, use_image_func, v)
+
+            for k,v in rh1.items():
+                assert rh1[k] == rh2[k],(k, rh1[k], rh2[k])
+                
+    print ('FINISHED')
+    
 
 def ingest_bulk(iter_json = False,
                 thread_count = 1,
@@ -461,7 +510,10 @@ def ingest_bulk(iter_json = False,
         t0 = time()
         
         for hh in iter_json:
-
+            
+            if nnn % 100 == 0:
+                print 'YIELDING_FOR_INSERT','num:',nnn, 'index_name:',index_name, 'doc_type:',doc_type,'per_second:',nnn / (time() - t0)
+            
             xdoc = {'_op_type': 'index',
                     '_index': index_name,
                     '_type': doc_type,
@@ -471,89 +523,46 @@ def ingest_bulk(iter_json = False,
             
             assert '_id' in hh,hh.keys()
 
-            ## Cache multiple sizes of image, requires `_id` field:
-
-            if isinstance(hh.get('thumbnail'), dict):
-                from mediachain.reader.api import open_binary_asset
-                thumb_asset = hh['thumbnail']
-                open_fn = lambda: open_binary_asset(thumb_asset)
-                thumb_origin = thumb_asset.get('uri')
-                fns = cache_image(_id = hh['_id'],
-                                  image_origin=thumb_origin,
-                                  image_open_fn=open_fn,
-                                  do_sizes = ['1024x1024','256x256'],
-                                  return_as_urls = False,
-                                  )
-
-                print ('CACHED_IMAGE',fns)
-            else:
-                assert False
-
             
-            ## -- START TEMPORARY FOR DEMO:
-            ignore_thumbs_elsewhere = False
-            if hh.get('source_dataset') == 'getty':
-                ignore_thumbs_elsewhere = True
-            else:
-                print '???',repr(hh.get('source_dataset'))
-            ## -- END TEMPORARY FOR DEMO
-            
+            if (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
                 
-            if thumbs_elsewhere and not ignore_thumbs_elsewhere:
-
-                ## Temporarily ignoring image thumbnails. Will switch from storing these in ES, to using the
-                ## shared file-based image cache.
-                
-                if 'img_data' in hh:
-                    del hh['img_data']
-                
-                if 'image_thumb' in hh:
-                    del hh['image_thumb']
-                
-                print 'THUMBS_ELSEWHERE'
-            
-            elif (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
-                ## One-off ignoring of thumbnail generation via `NO_IMAGE`.
+                ## One-off ignoring of thumbnail generation via `NO_IMAGE`:
                                 
                 if 'img_data' in hh:
                     del hh['img_data']
                 
                 if 'image_thumb' in hh:
                     del hh['image_thumb']
+
+            elif ('thumbnail' in hh) and ('image_hash_sha256' in hh):
+                
+                ## Mediachain metadata formatted 'thumbnail':
+                
+                from mediachain.reader.api import open_binary_asset
+                
+                cache_image(_id = hh['_id'],
+                            image_hash_sha256 = hh['image_hash_sha256'],
+                            image_func = lambda: open_binary_asset(hh['thumbnail']),
+                            do_sizes = ['1024x1024','256x256'],
+                            return_as_urls = False,
+                            )
+                        
+            elif 'img_data' in hh:
+                
+                ## Base64 encoded image string:
+                
+                cache_image(_id = hh['_id'],
+                            image_bytes = decode_image(hh['img_data']),
+                            do_sizes = ['1024x1024','256x256'],
+                            return_as_urls = False,
+                            )
+            else:
+                assert False, 'No thumbnail detected, and "NO_IMAGE" not used.'
             
-            elif not ignore_thumbs:
-                if redo_thumbs:
-                    # Check existing thumbs meet size & format requirements:
-
-                    if 'img_data' in hh:
-                        hh['image_thumb'] = shrink_and_encode_image(decode_image(hh['img_data']))
-
-                    elif 'image_thumb' in hh:
-                        hh['image_thumb'] = shrink_and_encode_image(decode_image(hh['image_thumb']))
-
-                    else:
-                        print 'CANT_GENERATE_THUMBNAIL'
-                        #assert False,'CANT_GENERATE_THUMBNAIL'
-
-                elif 'image_thumb' not in hh:
-                    # Generate thumbs from raw data:
-
-                    if 'img_data' in hh:
-                        hh['image_thumb'] = shrink_and_encode_image(decode_image(hh['img_data']))
-
-                    else:
-                        print 'CANT_GENERATE_THUMBNAIL'
-                        #assert False,'CANT_GENERATE_THUMBNAIL'
-
-                if 'img_data' in hh:
-                    del hh['img_data']
             
             chh = hh.copy()
             if 'image_thumb' in chh:
                 del chh['image_thumb']
-            
-            if nnn % 100 == 0:
-                print 'YIELDING_FOR_INSERT','num:',nnn, 'index_name:',index_name, 'doc_type:',doc_type,'per_second:',nnn / (time() - t0)
             
             nnn += 1
             
@@ -1099,6 +1108,7 @@ functions=['receive_blockchain_into_indexer',
            'search_by_image',
            'config',
            'tail_blockchain',
+           'test_image_cache',
            ]
 
 def main():
