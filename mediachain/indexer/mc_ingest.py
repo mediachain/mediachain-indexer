@@ -309,6 +309,10 @@ def cache_image(_id,
         image_cache_host = image_cache_host + '/'
     
     rh = {}
+
+    dr1_b = image_cache_dir + 'hh_hash/'
+    
+    fn_h = dr1_b + _id + '.hash'
     
     current_cached = False
     if exists(fn_h):
@@ -330,12 +334,8 @@ def cache_image(_id,
         ## Check if file is cached, and has not changed for this ID:
         
         dr1 = image_cache_dir + 'hh_' + size + '/'
-        
-        dr1_b = image_cache_dir + 'hh_hash/'
-        
+                
         dr2 = dr1 + _id[:3] + '/'
-        
-        fn_h = dr1_b + _id + '.hash'
         
         fn_cache = dr2 + _id + '.jpg'
         
@@ -354,12 +354,15 @@ def cache_image(_id,
             if not exists(dr2):
                 mkdir(dr2)
             
-            if image_func is not False:
+            if (image_bytes is False) and (image_func is not False):
                 ## TODO - crash hard here on failure? Expect image_func to manage retries?:
                 image_bytes = image_func().read()
             else:
                 assert image_bytes is not False
-            
+
+            if image_hash_sha256 is False:
+                image_hash_sha256 = hashlib.sha256(image_bytes).hexdigest()
+                
             if size != 'original':
                 iw, ih = size.split('x')
                 iw, ih = int(iw), int(ih)
