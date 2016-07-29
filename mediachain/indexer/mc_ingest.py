@@ -327,19 +327,8 @@ def cache_image(_id,
         else:
             ## TODO delete all old sizes, to be safer.
             pass
-    
-    if image_func is not False:
-        assert image_bytes is False
         
-        ## TODO - crash hard here on failure? Expect image_func to manage retries?:
-        image_bytes = image_func().read()
-    else:
-        assert image_bytes is not False
 
-    if image_hash_sha256 is False:
-        image_hash_sha256 = hashlib.sha256(image_bytes).hexdigest()
-    
-    
     ## Output resized images:
     
     rh = {}
@@ -348,9 +337,7 @@ def cache_image(_id,
 
         assert '\t' not in size, repr(size)
         
-        
-        ## Check if file is cached, and has not changed for this ID:
-        
+                
         dr1 = image_cache_dir + 'hh_' + size + '/'
                 
         dr2 = dr1 + _id[:3] + '/'
@@ -358,8 +345,9 @@ def cache_image(_id,
         fn_cache = dr2 + _id + '.jpg'
         
         url = image_cache_host + 'hh_' + size + '/' + _id[:3] + '/' + _id + '.jpg'
-
-                
+        
+        ## Check if file is cached, and has not changed for this ID:
+        
         if (not current_cached) or (not exists(fn_cache)):
             
             if not exists(dr1):
@@ -370,7 +358,18 @@ def cache_image(_id,
             
             if not exists(dr2):
                 mkdir(dr2)
-                            
+
+            ## Retrieve image content from image_func, if needed:
+            
+            if (image_bytes is False) and (image_func is not False):                
+                ## TODO - crash hard here on failure? Expect image_func to manage retries?:
+                image_bytes = image_func().read()
+            
+            if image_hash_sha256 is False:
+                ## When image_bytes is passed but not image_hash_sha256:
+                image_hash_sha256 = hashlib.sha256(image_bytes).hexdigest()
+            
+                
             if size != 'original':
                 iw, ih = size.split('x')
                 iw, ih = int(iw), int(ih)
@@ -435,13 +434,13 @@ def test_image_cache(via_cli = False):
         for use_image_func in [True, False]:
             
             rh1 = cache_image(_id,
-                              image_hash_sha256 = image_hash,
+                              image_hash_sha256 = image_hash if use_image_func else False,
                               image_func = image_func if use_image_func else False,
                               image_bytes = image_bytes if not use_image_func else False,
                               do_sizes = ['1024x1024','256x256','original'],
                               return_as_urls = as_urls,
                               )
-
+            
             if not as_urls:
                 for k,v in rh1.items():
                     assert exists(v),(as_urls, use_image_func, v)
