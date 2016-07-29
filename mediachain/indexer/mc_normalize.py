@@ -1497,13 +1497,16 @@ def apply_post_ingestion_normalizers(rr,
     TODO - 
         Do both pre-ingestion and post-ingestion normalization?
     """
+
+    print ('schema_variant',schema_variant)
     
     for ii in rr:
+        native_id = ''
         try:
             native_id = ii['_source']['native_id']
         except:
             ## Likely images that didn't go through the mc_normalizers path and don't have `native_id`s.
-            continue
+            pass
 
         if native_id.startswith('pexels'):
             ii['_source']['title'] = None
@@ -1563,20 +1566,18 @@ def apply_post_ingestion_normalizers(rr,
                          ]
 
                 ii['_source']['sizes'] = sizes
-
-
-
+        
         if schema_variant == 'new':
             ## New Schema Format
             ## See: https://rawgit.com/mediachain/mediachain-indexer/master/doc/index.html
             
-            ii['_source']['artist_name'] = ', '.join(ii['_source']['artist_names']) if ii['_source']['artist_names'] else None
+            ii['_source']['artist_name'] = ', '.join(ii['_source']['artist_names']) if ii['_source'].get('artist_names') else None
             
             ii['_source']['date_created'] = ii['_source'].get('date_created_original') or ii['_source'].get('date_created_at_source') or None
 
             ii['_source']['title'] = ' '.join(ii['_source']['title']) if (ii['_source']['title'] and ii['_source']['title'][0]) else None
 
-            if ii['_source']['licenses']:
+            if ii['_source'].get('licenses'):
                                 
                 ii['_source']['license'] = ii['_source']['licenses'][0]
                 ii['_source']['license']['url'] = ii['_source'].get('license_url')
@@ -1597,6 +1598,13 @@ def apply_post_ingestion_normalizers(rr,
                 ii['_source']['origin'] = None
             
             ii['_source']['image_url'] = ii['_source']['url_direct_cache']['url']
+
+            ## Blockchain getty stuff:
+            
+            if ii['_source'].get('artist') and (not ii['_source']['artist_name']):
+                ii['_source']['artist_name'] = ii['_source']['artist']
+
+            ## TODO - license for blockchain getty.
             
             ## Delete superseded:
             

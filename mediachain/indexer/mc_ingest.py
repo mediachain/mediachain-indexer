@@ -241,7 +241,7 @@ def lookup_cached_image(_id,
             
             rh[size] = fn_cache
 
-    print ('lookup_cached_image',rh)
+    #print ('lookup_cached_image',rh)
     
     return rh
 
