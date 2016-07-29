@@ -364,6 +364,8 @@ def cache_image(_id,
             if (image_bytes is False) and (image_func is not False):                
                 ## TODO - crash hard here on failure? Expect image_func to manage retries?:
                 image_bytes = image_func().read()
+            else:
+                assert image_bytes is not False
             
             if image_hash_sha256 is False:
                 ## When image_bytes is passed but not image_hash_sha256:
@@ -563,6 +565,9 @@ def ingest_bulk(iter_json = False,
             assert '_id' in hh,hh.keys()
 
             
+            do_lazy = False ## TODO: temporarily disabling lazy image retrieval, for datasets ingested without `image_hash_sha256`.
+            
+            
             if (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
                 
                 ## One-off ignoring of thumbnail generation via `NO_IMAGE`:
@@ -572,19 +577,30 @@ def ingest_bulk(iter_json = False,
                 
                 if 'image_thumb' in hh:
                     del hh['image_thumb']
-
-            elif ('thumbnail' in hh) and ('image_hash_sha256' in hh):
+            
+            elif ('thumbnail' in hh) and (('image_hash_sha256' in hh) or (do_lazy == False)):
                 
                 ## Mediachain metadata formatted 'thumbnail':
                 
                 from mediachain.reader.api import open_binary_asset
                 
-                cache_image(_id = hh['_id'],
-                            image_hash_sha256 = hh['image_hash_sha256'],
-                            image_func = lambda: open_binary_asset(hh['thumbnail']),
-                            do_sizes = ['1024x1024','256x256'],
-                            return_as_urls = False,
-                            )
+                if do_lazy:
+                    cache_image(_id = hh['_id'],
+                                image_hash_sha256 = hh['image_hash_sha256'],
+                                image_func = lambda: open_binary_asset(hh['thumbnail']),
+                                do_sizes = ['1024x1024','256x256'],
+                                return_as_urls = False,
+                                )
+                    
+                else:
+                    
+                    print ('NON-LAZY_IMAGE_RETRIEVAL',)
+                    cache_image(_id = hh['_id'],
+                                image_bytes = open_binary_asset(hh['thumbnail']).read(),
+                                do_sizes = ['1024x1024','256x256'],
+                                return_as_urls = False,
+                                )
+                    
                         
             elif 'img_data' in hh:
                 
