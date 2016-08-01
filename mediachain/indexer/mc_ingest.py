@@ -656,6 +656,8 @@ def ingest_bulk(iter_json = False,
                     assert False, ('No thumbnail detected, and "NO_IMAGE" not used.',hh.keys())
                     
             except:
+                ## TODO: a fix has been applied upstream of this step. This won't be needed
+                ## once the datasets are reprocessed.
                 print ('ERROR_RESIZING_IMAGE /datasets/datasets/error_record',)
                 with open('/datasets/datasets/error_record','w') as f:
                     f.write(json.dumps(hh, indent=4))

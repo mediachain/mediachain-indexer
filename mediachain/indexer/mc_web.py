@@ -152,7 +152,9 @@ class BaseHandler(tornado.web.RequestHandler):
         """
         Central point where we can customize the JSON output.
         """
-        print 'PRETTY',pretty
+        if 'error' in hh:
+            print ('ERROR',hh)
+        
         self.set_header("Content-Type", "application/json")
         
         if pretty:
@@ -204,9 +206,10 @@ from urllib import urlencode
 from mc_rerank import ReRankingBasic
 
 try:
-    from mc_crawlers import get_remote_search
+    from mc_crawlers import get_remote_search, get_enriched_tags
 except:
     get_remote_search = False
+    get_enriched_tags = False
 
 
 class handle_get_embed_url(BaseHandler):
@@ -523,11 +526,12 @@ class handle_search(BaseHandler):
         skip_query_cache = data.get('skip_query_cache', None)
         filter_incomplete = data.get('filter_incomplete', None)
         schema_variant = data.get('schema_variant', 'new')
+        enrich_tags = data.get('enrich_tags', True)
 
         unk = set(data).difference(['q', 'q_id', 'q_id_file', 'offset', 'limit',
                                     'index_name', 'doc_type', 'include_docs', 'include_thumb', 'rerank_eq',
                                     'filter_licenses', 'filter_sources', 'skip_query_cache', 'filter_incomplete',
-                                    'schema_variant',
+                                    'schema_variant', 'enrich_tags',
                                     ])
         
         if unk:
@@ -608,6 +612,7 @@ class handle_search(BaseHandler):
                           'filter_sources':filter_sources,
                           'filter_incomplete':filter_incomplete,
                           'schema_variant':schema_variant,
+                          'enrich_tags':enrich_tags,
                           }
             print ('QUERY_ARGS',query_args)
 
@@ -636,13 +641,15 @@ class handle_search(BaseHandler):
                 rr['prev_page'] = {'token':the_token, 'offset':max(0, offset - limit), 'limit':limit}
 
             rr['results'] = rr['results'][offset:offset + limit]
-
+            
             self.write_json(rr,
                             pretty = data.get('pretty', True),
                             max_indent_depth = data.get('max_indent_depth', False),
                             )
             
             return
+
+        is_id_search = False
         
         if not (q_text or q_id or q_id_file):
             #self.set_status(500)
@@ -731,6 +738,8 @@ class handle_search(BaseHandler):
             else:
                 #ID-based search:
 
+                is_id_search = True
+                
                 print ('ID-BASED-SEARCH', q_id)
                 query = {"query":{ "ids": { "values": [ q_id ] } } }
         
@@ -853,57 +862,37 @@ class handle_search(BaseHandler):
         
         ## Add in frontend image cached preview images:
         ## Skip items without preview:
-        ## TODO: rework `get_image_cache_url()` and ensure `native_id`s for all records.
 
-        from mc_ingest import lookup_cached_image, get_image_cache_url
+        from mc_ingest import lookup_cached_image
         
         image_cache_failed = False
         
         r2 = []
         for ii in rr:
+            
+            ## From inline thumbnail:
+
+            urls = lookup_cached_image(_id = ii['_id'],
+                                       do_sizes = ['1024x1024',],
+                                       )
+
+            ii['_source']['url_direct_cache'] = {'url':urls['1024x1024']}
 
 
-            if True:
+            ## Tag enrichment, using the image cache URLs:
 
-                ## From inline thumbnail, to replace `get_image_cache_url()` method below:
+            if enrich_tags and is_id_search and get_enriched_tags:
 
-                urls = lookup_cached_image(_id = ii['_id'],
-                                           do_sizes = ['1024x1024',],
-                                           )
+                etags = get_enriched_tags([urls['1024x1024']])[0]
 
-                ii['_source']['url_direct_cache'] = {'url':urls['1024x1024']}
+                if not ii['_source'].get('keywords'):
+                    ii['_source']['keywords'] = []
 
-                r2.append(ii)
+                ii['_source']['keywords'].extend(etags)
 
-                continue
+            r2.append(ii)
 
-            else:
-
-                ## Cache lookup via native_id, replaced by `lookup_cached_image()` method above:
-
-                try:
-                    url = get_image_cache_url(ii['_source']['native_id'],
-                                              image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
-                                              image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
-                                              )
-
-                    if (not url) and (filter_incomplete):
-
-                        ## Filter incomplete records that would break things on the frontend:
-
-                        print 'FILTER_SKIP',ii['_source']['native_id']
-                        continue
-
-                    ii['_source']['url_direct_cache'] = {'url':url}
-                except:
-                    image_cache_failed = True
-                    ii['_source']['url_direct_cache'] = None
-
-                r2.append(ii)
-        
-        if image_cache_failed:
-            print ('!!!IMAGE_CACHE_FAILED', get_image_cache_url, mc_config.MC_IMAGE_CACHE_DIR)
-            #raise
+            continue
         
         rr = r2
         
