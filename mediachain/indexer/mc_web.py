@@ -883,7 +883,11 @@ class handle_search(BaseHandler):
 
             if enrich_tags and is_id_search and get_enriched_tags:
 
-                etags = get_enriched_tags([urls['1024x1024']])[0]
+                etags = []
+                try:
+                    etags = get_enriched_tags([urls['1024x1024']])[0]
+                except:
+                    print ('ENRICH_TAGS_FAILED - API KEYS?',)
 
                 if not ii['_source'].get('keywords'):
                     ii['_source']['keywords'] = []
