@@ -53,6 +53,7 @@ import itertools
 
 import hashlib
 
+import elasticsearch.exceptions
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import parallel_bulk, scan
 
@@ -60,13 +61,34 @@ data_pat = 'data:image/jpeg;base64,'
 data_pat_2 = 'data:image/png;base64,'
 
 
+def verify_img(buf):
+    """
+    Verify image.
+    """
+    from PIL import Image
+    from cStringIO import StringIO
+
+    sbuf = StringIO(buf)
+    
+    try:
+        ## Basic check:
+        img = Image.open(sbuf)
+        img.verify()
+
+        ## Detect truncated:
+        img = Image.open(sbuf)
+        img.load()
+    except:
+        return False
+    return True
+
+
 def shrink_and_encode_image(s, size = (1024, 1024), to_base64 = True):
     """
     Resize image to small size & base64 encode it.
     """
-    
     img = Image.open(StringIO(s))
-
+    
     print ('shrink_and_encode_image',img.size,'->',size)
     
     if (img.size[0] > size[0]) or (img.size[1] > size[1]):
@@ -75,6 +97,10 @@ def shrink_and_encode_image(s, size = (1024, 1024), to_base64 = True):
         img.convert('RGB').save(f2, "JPEG")
         f2.seek(0)
         s = f2.read()
+    
+    else:
+        ## Detect truncated and throw error:
+        img.load()
 
     if to_base64:        
         return data_pat + base64.b64encode(s)
@@ -567,67 +593,73 @@ def ingest_bulk(iter_json = False,
             assert '_id' in hh,hh.keys()
             
             do_lazy = False ## TODO: temporarily disabling lazy image retrieval, for datasets ingested without `image_hash_sha256`.
-            
-            if (('thumbnail' in hh) and (('image_hash_sha256' in hh) or (do_lazy is False))) or ('img_data' in hh):
-                
-                ## Mediachain metadata formatted 'thumbnail':
-                
-                from cStringIO import StringIO
-                
-                def get_asset():
-                    from mediachain.reader.api import open_binary_asset
-                    with open_binary_asset(hh['thumbnail']) as f:
-                        return StringIO(f.read())
 
-                if 'img_data' in hh:
-                    fns = cache_image(_id = hh['_id'],
-                                      image_bytes = decode_image(hh['img_data']),
-                                      do_sizes = ['1024x1024','256x256'],
-                                      return_as_urls = False,
-                                      )
-                    
-                elif do_lazy:
-                    fns = cache_image(_id = hh['_id'],
-                                      image_hash_sha256 = hh['image_hash_sha256'],
-                                      image_func = lambda: get_asset(),
-                                      do_sizes = ['1024x1024','256x256'],
-                                      return_as_urls = False,
-                                      )
-                    
+            try:
+                if (('thumbnail' in hh) and (('image_hash_sha256' in hh) or (do_lazy is False))) or ('img_data' in hh):
+
+                    ## Mediachain metadata formatted 'thumbnail':
+
+                    from cStringIO import StringIO
+
+                    def get_asset():
+                        from mediachain.reader.api import open_binary_asset
+                        with open_binary_asset(hh['thumbnail']) as f:
+                            return StringIO(f.read())
+
+                    if 'img_data' in hh:
+                        fns = cache_image(_id = hh['_id'],
+                                          image_bytes = decode_image(hh['img_data']),
+                                          do_sizes = ['1024x1024','256x256'],
+                                          return_as_urls = False,
+                                          )
+
+                    elif do_lazy:
+                        fns = cache_image(_id = hh['_id'],
+                                          image_hash_sha256 = hh['image_hash_sha256'],
+                                          image_func = lambda: get_asset(),
+                                          do_sizes = ['1024x1024','256x256'],
+                                          return_as_urls = False,
+                                          )
+
+                    else:
+
+                        print ('NON-LAZY_IMAGE_RETRIEVAL',)
+                        fns = cache_image(_id = hh['_id'],
+                                          image_bytes = get_asset().read(),
+                                          do_sizes = ['1024x1024','256x256'],
+                                          return_as_urls = False,
+                                          )
+
+                    ## Add aspect ratio for all images:
+
+                    with open(fns['256x256']) as f:
+                        img = Image.open(f)
+                        hh['aspect_ratio'] = img.size[0] / float(img.size[1])
+
+
+                elif (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
+
+                    ## One-off ignoring of thumbnail generation via `NO_IMAGE`:
+
+                    if 'img_data' in hh:
+                        del hh['img_data']
+
+                    if 'image_thumb' in hh:
+                        del hh['image_thumb']
+
+                    ## Add aspect ratio for all images:
+
+                    if 'aspect_ratio' not in hh:
+                        hh['aspect_ratio'] = None
+
                 else:
+                    assert False, ('No thumbnail detected, and "NO_IMAGE" not used.',hh.keys())
                     
-                    print ('NON-LAZY_IMAGE_RETRIEVAL',)
-                    fns = cache_image(_id = hh['_id'],
-                                      image_bytes = get_asset().read(),
-                                      do_sizes = ['1024x1024','256x256'],
-                                      return_as_urls = False,
-                                      )
-                    
-                ## Add aspect ratio for all images:
-                    
-                with open(fns['256x256']) as f:
-                    img = Image.open(f)
-                    hh['aspect_ratio'] = img.size[0] / float(img.size[1])
-                    
-            
-            elif (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
-                
-                ## One-off ignoring of thumbnail generation via `NO_IMAGE`:
-                                
-                if 'img_data' in hh:
-                    del hh['img_data']
-                
-                if 'image_thumb' in hh:
-                    del hh['image_thumb']
-
-                ## Add aspect ratio for all images:
-                
-                if 'aspect_ratio' not in hh:
-                    hh['aspect_ratio'] = None
-            
-            else:
-                assert False, ('No thumbnail detected, and "NO_IMAGE" not used.',hh.keys())
-
+            except:
+                print ('ERROR_RESIZING_IMAGE /datasets/datasets/error_record',)
+                with open('/datasets/datasets/error_record','w') as f:
+                    f.write(json.dumps(hh, indent=4))
+                raw_input()
             
             ## TODO: get dedupe to read from cache, because we're not saving `img_data` anymore?
             if 'img_data' in hh:
@@ -667,9 +699,21 @@ def ingest_bulk(iter_json = False,
             assert xaction == 'index',(xaction,)
             
             #print 'BODY',hh
-
-            ## TODO - re-add batching:
-            res = es.index(index = xindex, doc_type = xtype, id = xid, body = hh)
+            
+            ## Retry, ignoring likey-transient errors:
+            
+            while True:
+                try:
+                    res = es.index(index = xindex, doc_type = xtype, id = xid, body = hh) ## TODO - re-add batching
+                except elasticsearch.exceptions.ConnectionTimeout:
+                    print ('elasticsearch.exceptions.ConnectionTimeout',)
+                    sleep_loud(1)
+                    continue
+                except elasticsearch.exceptions.ConnectionError:
+                    print ('elasticsearch.exceptions.ConnectionError',)
+                    sleep_loud(1)
+                    continue
+                break
             
             #print 'DONE-NON_PARALLEL_BULK',xaction,xid
             
@@ -947,6 +991,7 @@ def send_compactsplit_to_indexer(path_glob = False,
                                  doc_type = mc_config.MC_DOC_TYPE,
                                  auto_dedupe = False,
                                  extra_translator_func = False,
+                                 resize_images_again = False, ## already resized during compactsplit creation?
                                  via_cli = False,
                                  ):
     """
@@ -983,7 +1028,7 @@ def send_compactsplit_to_indexer(path_glob = False,
     else:
         assert path_glob
         
-    iter_json = lambda : iter_compactsplit(path_glob, max_num = max_num)
+    iter_json = lambda : iter_compactsplit(path_glob, max_num = max_num, resize_images_again = resize_images_again)
     
     iter_json = apply_normalizer(iter_json,
                                  normalizer_name,

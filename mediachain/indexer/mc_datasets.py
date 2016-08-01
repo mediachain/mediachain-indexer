@@ -246,7 +246,100 @@ def convert_to_compactsplit(the_iter = False,
         except: pass
 
 
+def line_tailer(ff,
+                ending = '\n',
+                sleep_time = 1.0,
+                confirm_time = 60,
+                confirm_min_attempts = 5,
+                verbose = True,
+                ):
+    """
+    Enumerate lines in a file object, and then continue to tail new lines as they arrive. After receiving an EOF,
+    continue to try to read lines, until `confirm_time` seconds have elapse without seeing a new line. Useful for
+    streaming data between a sequence of non-critical batch job steps, each being run by separate processes.
+    
+    This is only lightly tested.
+    
+    Intentionally unsupported features, for now:
+        + Does not detect file rotation. May not be possible on file-like objects (vs filenames.)
+        + Don't use in cases where the file is truncated and written to again.
+        + Dealing with anything other than normal files, on a normal filesystem, on Linux.
+    
+    Note: If the upstream process writing to the file crashes mid-line, then the line tailer will intentionally wait
+    forever, trying to get the rest of the line.
+    
+    Args:
+        ff:                   File-like object.
+        ending:               End of line characters. Not tested on anything other than '\n'.
+        sleep_time:           Seconds to wait before retrying after receiving partial lines or EOF.
+        confirm_time:         Seconds to wait after most recent EOF before giving up.
+        confirm_min_attempts: Minimum number of attempts to read more after EOF. Useful for when system gets
+                              suspended and resumed much later, or when system is under heavy load.
+        verbose:              Verbose printing to stdout.
+    """
+    
+    from time import time,sleep
+    
+    partial = False
+    reached_end = False
+    num_attempts = 0
+    
+    while True:
+        
+        for c,line in enumerate(ff):
+
+            #print ('LINE_TAILER',c)
+            
+            reached_end = False
+            num_attempts = 0
+            
+            if line.endswith(ending):
+                partial = False
+            else:
+                partial = True
+                ff.seek(ff.tell() -len(line))
+                break
+            
+            yield line
+
+        ff.seek(ff.tell()) ## apparently the way to read more after EOF.
+        num_attempts += 1
+        
+        if partial:
+            
+            if verbose:
+                print ('LINE_TAILER_PARTIAL_LINE...',
+                       'sleep_time:', sleep_time,
+                       )
+            sleep(sleep_time)
+        
+        else:
+            
+            if reached_end is False:
+                reached_end = time()
+
+            tm = time() - reached_end
+                
+            if verbose:
+                print ('LINE_TAILER_CONFIRMING_END...',
+                       'tell:',ff.tell(),
+                       'tm:', '%.3f' % tm,
+                       'confirm_time:', confirm_time,
+                       'num_attempts:', num_attempts,
+                       'confirm_min_attempts:', confirm_min_attempts,
+                       'sleep_time:', sleep_time,
+                       )
+                sleep(sleep_time)
+            
+            if (tm >= confirm_time) and (num_attempts >= confirm_min_attempts):
+                if verbose:
+                    print ('LINE_TAILER_FINISHED',)
+                break
+
+
 def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit',
+                      resize_images_again = True,
+                      do_tail = True,
                       max_num = 0,
                       ):
     """
@@ -256,6 +349,7 @@ def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit',
     
     Args:
         fn_in_glob:   Input file(s) to read from. Wildcards allowed.
+        do_tail:      Read all records and then tail file to continue to read new records as they arrive.
     """
     
     from os.path import expanduser, isfile
@@ -293,6 +387,10 @@ def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit',
                 ctx = GzipFile
             
             with ctx(fn) as f:
+
+                if do_tail:
+                    f = line_tailer(f)
+                
                 for line in f:
                     if nn % 100 == 0:
                         print ('iter_compactsplit', nn, max_num)

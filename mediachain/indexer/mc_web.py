@@ -756,8 +756,15 @@ class handle_search(BaseHandler):
                                       )
         
             print ('GOT','time:',time() - t1,repr(rr.body)[:100])
-        
-            hh = json.loads(rr.body)
+
+            try:
+                hh = json.loads(rr.body)
+            except:
+                self.set_status(500)
+                self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
+                                 'error_message':'Elasticsearch down or timeout? - ' + repr(hh)[:1000],
+                                 })
+                return
 
             if 'error' in hh:
                 self.set_status(500)
@@ -790,9 +797,16 @@ class handle_search(BaseHandler):
                                   )
         
         print ('GOT','time:',time() - t1, repr(rr.body)[:100])
-        
-        hh = json.loads(rr.body)
 
+        try:
+            hh = json.loads(rr.body)
+        except:
+            self.set_status(500)
+            self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
+                             'error_message':'Elasticsearch down or timeout? - ' + repr(hh)[:1000],
+                             })
+            return
+        
         if 'error' in hh:
             self.set_status(500)
             self.write_json({'error':'ELASTICSEARCH_ERROR',
