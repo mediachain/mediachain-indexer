@@ -294,6 +294,7 @@ class SimpleClient(object):
     
         
     def get_objects(self,
+                    catchup_blockchain = True, # TODO, replace with last_block_height, once client support is in
                     start_id = False,
                     end_id = False,
                     only_ids = False,
@@ -371,7 +372,7 @@ class SimpleClient(object):
             
             try:
                 started = False
-                with self.transactor.canonical_stream(timeout=timeout) as stream:
+                with self.transactor.canonical_stream(catchup=catchup_blockchain, timeout=timeout) as stream:
                     for ref, obj in stream:
 
                         if (start_id is not False) and (not started):
