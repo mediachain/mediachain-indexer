@@ -837,7 +837,6 @@ def receive_blockchain_into_indexer(last_block_ref = None,
     # TODO: replace this flag with a ref to the last known block, once
     # the client supports seeking back to a known block
     catchup = ('--disable-catchup' not in sys.argv)
-    print('BLOCKCHAIN_CATCHUP', catchup)
     def the_gen():
         ## Convert from blockchain format to Indexer format:
         
