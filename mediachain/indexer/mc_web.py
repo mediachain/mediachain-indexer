@@ -531,7 +531,7 @@ class handle_search(BaseHandler):
         unk = set(data).difference(['q', 'q_id', 'q_id_file', 'offset', 'limit',
                                     'index_name', 'doc_type', 'include_docs', 'include_thumb', 'rerank_eq',
                                     'filter_licenses', 'filter_sources', 'skip_query_cache', 'filter_incomplete',
-                                    'schema_variant', 'enrich_tags',
+                                    'schema_variant', 'enrich_tags','token',
                                     ])
         
         if unk:

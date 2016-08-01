@@ -659,9 +659,10 @@ def ingest_bulk(iter_json = False,
                 ## TODO: a fix has been applied upstream of this step. This won't be needed
                 ## once the datasets are reprocessed.
                 print ('ERROR_RESIZING_IMAGE /datasets/datasets/error_record',)
-                with open('/datasets/datasets/error_record','w') as f:
-                    f.write(json.dumps(hh, indent=4))
-                raw_input()
+                #with open('/datasets/datasets/error_record','w') as f:
+                #    f.write(json.dumps(hh, indent=4))
+                #raw_input()
+                continue
             
             ## TODO: get dedupe to read from cache, because we're not saving `img_data` anymore?
             if 'img_data' in hh:
