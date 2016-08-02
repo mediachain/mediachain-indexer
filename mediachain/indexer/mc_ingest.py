@@ -78,6 +78,8 @@ def verify_img(buf):
         ## Detect truncated:
         img = Image.open(sbuf)
         img.load()
+    except KeyboardInterrupt:
+        raise
     except:
         return False
     return True
@@ -122,6 +124,8 @@ def decode_image(s):
 
     try:
         rr = base64.b64decode(ss)
+    except KeyboardInterrupt:
+        raise
     except:
         ## Temporary workaround for broken encoder:
         rr = base64.urlsafe_b64decode(ss)
@@ -409,6 +413,8 @@ def cache_image(_id,
                                                     size = (iw, ih),
                                                     to_base64 = False,
                                                     )
+            except KeyboardInterrupt:
+                raise
             except:
                 ## TODO: bubbling up exceptions for now:
                 raise
@@ -500,6 +506,7 @@ def ingest_bulk(iter_json = False,
                 use_aggressive = True,
                 refresh_after = True,
                 thumbs_elsewhere = True,
+                gen_dedupe_vectors = True,
                 ):
     """
     Ingest Getty dumps from JSON files.
@@ -520,6 +527,8 @@ def ingest_bulk(iter_json = False,
         auto_reindex_max:        Auto-reindex at least every `auto_reindex_max` seconds, regardless of ingestion activity.
 
         thumbs_elsewhere: Don't store thumbs in ES database. TODO: store thumbs via new shared disk cache system.
+
+        gen_dedupe_vectors: Continuously generate dedupe vectors.
     
     Returns:
         Number of inserted records.
@@ -527,6 +536,10 @@ def ingest_bulk(iter_json = False,
     Examples:
         See `mc_test.py`
     """
+
+    if gen_dedupe_vectors:
+        import mc_models
+        vmodel = mc_models.VectorsBaseline()
     
     index_settings = {'settings': {'number_of_shards': mc_config.MC_NUMBER_OF_SHARDS_INT,
                                    'number_of_replicas': mc_config.MC_NUMBER_OF_REPLICAS_INT,                             
@@ -540,6 +553,14 @@ def ingest_bulk(iter_json = False,
                                                              'created_date':{'type':'date'},
                                                              'image_thumb':{'type':'string', 'index':'no'},
                                                              'dedupe_hsh':{'type':'string', 'index':'not_analyzed'},
+                                                             ## Reserving space for a bunch of these now, since adding them 
+                                                             ## later would require destroying the ES Index...:
+                                                             'canonical_id':{'type':'string', 'index':'not_analyzed'},
+                                                             'dedupe_id':{'type':'string', 'index':'not_analyzed'},
+                                                             'native_id':{'type':'string', 'index':'not_analyzed'},
+                                                             'source_id':{'type':'string', 'index':'not_analyzed'},
+                                                             'license_id':{'type':'string', 'index':'not_analyzed'},
+                                                             'content_id':{'type':'string', 'index':'not_analyzed'},
                                                              },
                                               },
                                    },
@@ -596,11 +617,11 @@ def ingest_bulk(iter_json = False,
 
             try:
                 if (('thumbnail' in hh) and (('image_hash_sha256' in hh) or (do_lazy is False))) or ('img_data' in hh):
-
+                    
                     ## Mediachain metadata formatted 'thumbnail':
-
+                    
                     from cStringIO import StringIO
-
+                    
                     def get_asset():
                         from mediachain.reader.api import open_binary_asset
                         with open_binary_asset(hh['thumbnail']) as f:
@@ -630,6 +651,19 @@ def ingest_bulk(iter_json = False,
                                           return_as_urls = False,
                                           )
 
+                    assert fns
+                    
+                    if gen_dedupe_vectors:
+                        fn = fns['256x256']
+                        with open(fn) as f:
+                            d = f.read()
+                        
+                        vv = vmodel.img_to_terms(img_bytes = d)
+
+                        print ('VECTORS',repr(vv)[:500])
+                        
+                        hh.update(vv)
+                    
                     ## Add aspect ratio for all images:
 
                     with open(fns['256x256']) as f:
@@ -655,6 +689,8 @@ def ingest_bulk(iter_json = False,
                 else:
                     assert False, ('No thumbnail detected, and "NO_IMAGE" not used.',hh.keys())
                     
+            except KeyboardInterrupt:
+                raise
             except:
                 ## TODO: a fix has been applied upstream of this step. This won't be needed
                 ## once the datasets are reprocessed.
@@ -727,6 +763,8 @@ def ingest_bulk(iter_json = False,
                 print ('REFRESH-NON_PARALLEL_BULK',c)
                 try:
                     es.indices.refresh(index = xindex)
+                except KeyboardInterrupt:
+                    raise
                 except:
                     print 'REFRESH_ERROR'
                 print 'REFRESHED',time() - t1
@@ -735,6 +773,8 @@ def ingest_bulk(iter_json = False,
                     try:
                         import mc_models
                         mc_models.dedupe_reindex_all()
+                    except KeyboardInterrupt:
+                        raise
                     except:
                         print '!!! REINDEX_ERROR:'
                         import traceback, sys, os
@@ -744,6 +784,8 @@ def ingest_bulk(iter_json = False,
         print ('REFRESH-NON_PARALLEL_BULK',c)
         try:
             es.indices.refresh(index = xindex)
+        except KeyboardInterrupt:
+            raise
         except:
             print 'REFRESH_ERROR'
         print 'REFRESHED'
@@ -847,62 +889,44 @@ def receive_blockchain_into_indexer(last_block_ref = None,
                 
                 if art['type'] != u'artefact':
                     continue
-
-                meta = art['meta']['data']
                 
-                rh = {}
+                ## TODO: Use all the same post-blockchain normalization / translation
+                ## code as the non-blockchain pipeline:
                 
-                ## Copy these keys in from meta. Use tuples to rename keys. Keys can be repeated:
-
-                if False:
-                    for kk in [u'caption', u'date_created', u'title', u'artist',
-                               u'keywords', u'collection_name', u'editorial_source',
-                               '_id',
-                               ('_id','getty_id'),
-                               ('thumbnail_base64','image_thumb'),
-                               ]:
-
-                        if type(kk) == tuple:
-                            rh[kk[1]] = meta.get(kk[0], None)
-                        elif kk == u'keywords':
-                            rh[kk] = ' '.join(meta.get(kk, []))
-                        else:
-                            rh[kk] = meta.get(kk, None)
-                else:
-                    ## TODO - Is simply copying everything over, without changes or checks, what we want to do?:
-                    
-                    rh = meta
-                    
+                rh = art['meta']['data']
                 
-                #TODO: Phase out `rawRef`:
+                ## TODO - Add normalizers here?
+                
                 if 'raw_ref' in art['meta']:
                     raw_ref = art['meta']['raw_ref']
-                elif 'rawRef' in art['meta']:
-                    raw_ref = art['meta']['rawRef']
                 else:
                     assert False,('RAW_REF',repr(art)[:500])
                 
+                rh['ingested_indexer_utc'] = time()
                 rh['latest_ref'] = base58.b58encode(raw_ref[u'@link'])
-                rh['canonical_ref'] = ref
-
-                ## TODO - use different created date? Phase out `translatedAt`:
-                xx = None
+                rh['canonical_id'] = ref
+                
+                rh['old_id'] = rh['_id']
+                
+                rh['_id'] = rh['canonical_id']
+                
                 if 'translated_at' in art['meta']:
-                    xx = art['meta']['translated_at']
-                elif 'translatedAt' in art['meta']:
-                    xx = art['meta']['translatedAt']
-
-                if xx is not None:
-                    rh['date_created'] = date_parser.parse(xx)
-
+                    rh['date_translated'] = date_parser.parse(art['meta']['translated_at'])
+                
                 rhc = rh.copy()
+                
                 if 'img_data' in rhc:
                     del rhc['img_data']
+                    
                 if 'thumbnail_base64' in rhc:
                     del rhc['thumbnail_base64']
+                
                 print 'INSERT',rhc
                 
                 yield rh
+                
+            except KeyboardInterrupt:
+                raise
             except:
                 raise
                 print ('!!!ARTEFACT PARSING ERROR:',)

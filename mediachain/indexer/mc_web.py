@@ -207,6 +207,8 @@ from mc_rerank import ReRankingBasic
 
 try:
     from mc_crawlers import get_remote_search, get_enriched_tags
+except KeyboardInterrupt:
+    raise
 except:
     get_remote_search = False
     get_enriched_tags = False
@@ -222,6 +224,8 @@ class handle_get_embed_url(BaseHandler):
         
         try:
             from mc_crawlers import send_to_cdn
+        except KeyboardInterrupt:
+            raise
         except:
             self.write_json({'error':'IMPORT FAILED',
                              'error_message':'from mc_crawlers import get_embed_url',
@@ -238,6 +242,8 @@ class handle_get_embed_url(BaseHandler):
                     
             try:
                 data = json.loads(d)
+            except KeyboardInterrupt:
+                raise
             except:
                 self.set_status(500)
                 self.write_json({'error':'JSON_PARSE_ERROR',
@@ -258,6 +264,8 @@ class handle_get_embed_url(BaseHandler):
         
         try:
             r = send_to_cdn(ii)
+        except KeyboardInterrupt:
+            raise
         except:
             raise
             self.set_status(500)
@@ -299,6 +307,8 @@ def query_cache_lookup(key,
         try:
             with open(fn_out) as f:
                 rh = json.loads(f.read())
+        except KeyboardInterrupt:
+            raise
         except:
             return False
         
@@ -496,6 +506,8 @@ class handle_search(BaseHandler):
                 
         try:
             data = json.loads(d)
+        except KeyboardInterrupt:
+            raise
         except:
             self.set_status(500)
             self.write_json({'error':'JSON_PARSE_ERROR',
@@ -513,6 +525,7 @@ class handle_search(BaseHandler):
         
         q_text = data.get('q','')
         q_id = data.get('q_id','')
+        canonical_id = data.get('canonical_id',None)
         q_id_file = None
         offset = max(0, intget(data.get('offset'), 0))
         limit = intget(data.get('limit'), 15)
@@ -531,7 +544,7 @@ class handle_search(BaseHandler):
         unk = set(data).difference(['q', 'q_id', 'q_id_file', 'offset', 'limit',
                                     'index_name', 'doc_type', 'include_docs', 'include_thumb', 'rerank_eq',
                                     'filter_licenses', 'filter_sources', 'skip_query_cache', 'filter_incomplete',
-                                    'schema_variant', 'enrich_tags','token',
+                                    'schema_variant', 'enrich_tags', 'token', 'canonical_id',
                                     ])
         
         if unk:
@@ -557,6 +570,8 @@ class handle_search(BaseHandler):
             fileinfo = self.request.files['file'][0]
             print ("FILE UPLOAD", fileinfo['filename'])
             q_id_file = fileinfo['body']
+        except KeyboardInterrupt:
+            raise
         except:
             pass
         
@@ -613,6 +628,7 @@ class handle_search(BaseHandler):
                           'filter_incomplete':filter_incomplete,
                           'schema_variant':schema_variant,
                           'enrich_tags':enrich_tags,
+                          'canonical_id':canonical_id,
                           }
             print ('QUERY_ARGS',query_args)
 
@@ -651,7 +667,7 @@ class handle_search(BaseHandler):
 
         is_id_search = False
         
-        if not (q_text or q_id or q_id_file):
+        if not (q_text or q_id or q_id_file or canonical_id):
             #self.set_status(500)
             #self.write_json({'error':'BAD_QUERY',
             #                 'error_message':'Either `q` or `q_id` is required.',
@@ -693,9 +709,16 @@ class handle_search(BaseHandler):
             return
 
         
-        elif q_id or q_id_file:
+        elif q_id or q_id_file or canonical_id:
             
-            if q_id_file or (q_id.startswith(data_pat) or q_id.startswith(data_pat_2)):
+            if canonical_id:
+                ## Search by canonical_id:
+                
+                print ('CANONICAL_ID_SEARCH', canonical_id)
+                
+                query = {"query": {"constant_score": {"filter": {"term": {"canonical_id": canonical_id}}}}}
+            
+            elif q_id_file or (q_id.startswith(data_pat) or q_id.startswith(data_pat_2)):
                 
                 #Resolve ID(s) for query based on content.
                 #Note that this is similar to `/dupe_lookup` with `include_docs` = True:
@@ -768,6 +791,8 @@ class handle_search(BaseHandler):
 
             try:
                 hh = json.loads(rr.body)
+            except KeyboardInterrupt:
+                raise
             except:
                 self.set_status(500)
                 self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
@@ -809,6 +834,8 @@ class handle_search(BaseHandler):
 
         try:
             hh = json.loads(rr.body)
+        except KeyboardInterrupt:
+            raise
         except:
             self.set_status(500)
             self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
@@ -886,6 +913,8 @@ class handle_search(BaseHandler):
                 etags = []
                 try:
                     etags = get_enriched_tags([urls['1024x1024']])[0]
+                except KeyboardInterrupt:
+                    raise
                 except:
                     print ('ENRICH_TAGS_FAILED - API KEYS?',)
 
@@ -1021,6 +1050,8 @@ class handle_dupe_lookup(BaseHandler):
         
         try:
             data = json.loads(d)
+        except KeyboardInterrupt:
+            raise
         except:
             self.set_status(500)
             self.write_json({'error':'JSON_PARSE_ERROR',
@@ -1119,6 +1150,8 @@ class handle_score(BaseHandler):
         
         try:
             data = json.loads(d)
+        except KeyboardInterrupt:
+            raise
         except:
             self.set_status(500)
             self.write_json({'error':'JSON_PARSE_ERROR',
