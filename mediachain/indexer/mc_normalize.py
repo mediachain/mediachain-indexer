@@ -1112,9 +1112,9 @@ def normalize_dpla(iter_json):
         source_tags = ['dp.la']
         
         try:
-            prov = hh['source_record']['_source']['dataProvider']
+            prov = jj_top['source_record']['_source']['dataProvider']
         except:
-            prov = hh['source_record']['_source']['provider']
+            prov = jj_top['source_record']['_source']['provider']
             
         if (type(prov) == list):
             source_tags.extend(prov)
@@ -1129,6 +1129,14 @@ def normalize_dpla(iter_json):
         the_title = get_shallowest_matching(jj, 'title')
         if isinstance(the_title, basestring):
             the_title = [the_title]
+
+        try:
+            desc = get_shallowest_matching(jj, 'description')
+            if type(desc) == list:
+                desc = ' '.join(desc)
+        except:
+            print ('EXCEPT_DESC',desc)
+            desc = None
         
         hh = {'_id':xid,
               'aspect_ratio':st['aspect_ratio'],
@@ -1152,7 +1160,7 @@ def normalize_dpla(iter_json):
               'date_created_original':get_shallowest_matching(jj, 'displayDate'), # Actual creation date.
               'date_created_at_source':None,                  # Item created at data source.
               'title':the_title,    # Title string(s)
-              'description':get_shallowest_matching(jj, 'description'), # Description
+              'description':desc, # Description
               'attribution':artists,                          ## Artist / Entity names.
               'keywords':[],                                  # Keywords
               'orientation':None,                             # Should photo be rotated?
@@ -1168,7 +1176,7 @@ def normalize_dpla(iter_json):
                   'place_name':[],       # Place Name
                   },
               'derived_qualities':{      ## Possibly derived from image / from other metadata:
-                  'general_type':get_shallowest_matching(jj, 'format'),   # (photo, illustration, GIF, face)
+                  'general_type':None,#get_shallowest_matching(jj, 'format'),   # (photo, illustration, GIF, face)
                   'colors':None,         # Dominant colors.
                   'has_people':None,     # Has people?
                   'time_period':None,    # (contemporary, 1960s, etc)
@@ -1570,8 +1578,15 @@ def apply_post_ingestion_normalizers(rr,
         if schema_variant == 'new':
             ## New Schema Format
             ## See: https://rawgit.com/mediachain/mediachain-indexer/master/doc/index.html
-            
-            ii['_source']['artist_name'] = ', '.join(ii['_source']['artist_names']) if ii['_source'].get('artist_names') else None
+
+            try:
+                if ii['_source'].get('artist_names') and (type(ii['_source'].get('artist_names')[0]) == list):
+                    ii['_source']['artist_name'] = ', '.join(ii['_source']['artist_names'][0])
+                else:
+                    ii['_source']['artist_name'] = ', '.join(ii['_source']['artist_names']) if ii['_source'].get('artist_names') else None
+            except:
+                print repr(ii['_source'].get('artist_names'))
+                ii['_source']['artist_name'] = None
             
             ii['_source']['date_created'] = ii['_source'].get('date_created_original') or ii['_source'].get('date_created_at_source') or None
 

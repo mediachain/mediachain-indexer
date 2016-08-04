@@ -69,6 +69,7 @@ def convert_to_compactsplit(the_iter = False,
                             delete_existing = True,
                             max_num = 0,
                             confirm_clear = True,
+                            cache_images_now = False,
                             via_cli = False,
                             ):
     """
@@ -92,6 +93,8 @@ def convert_to_compactsplit(the_iter = False,
         max_num:            Terminate early after `max_num` records.
         confirm_clear:      Prompt for confirmation before clearing output directory.
     """
+
+    from mc_ingest import cache_image, decode_image
     
     assert pre_split_num <= (10 ** num_digits - 1),(pre_split_num, num_digits)
     
@@ -157,7 +160,14 @@ def convert_to_compactsplit(the_iter = False,
                 assert '\n' not in dd
 
                 f.write(new_id + '\t' + dd + '\n')
-
+                
+                if cache_images_now:
+                    fns = cache_image(_id = hh['_id'],
+                                      image_bytes = decode_image(hh['img_data']),
+                                      do_sizes = cache_images_now,
+                                      return_as_urls = False,
+                                      )
+                
         if not do_sort:
             rename(fn_out_temp, fn_out_temp_2)
         
@@ -337,8 +347,7 @@ def line_tailer(ff,
                 break
 
 
-def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit',
-                      resize_images_again = True,
+def iter_compactsplit(fn_in_glob,
                       do_tail = True,
                       max_num = 0,
                       ):
@@ -387,8 +396,8 @@ def iter_compactsplit(fn_in_glob = 'getty_small_compactsplit',
                 ctx = GzipFile
             
             with ctx(fn) as f:
-
-                if do_tail:
+                
+                if allow_tempfile and ('-tempfile' in fn) and do_tail: ## didn't add tailing support for gz files yet.
                     f = line_tailer(f)
                 
                 for line in f:

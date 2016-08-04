@@ -446,6 +446,128 @@ def cache_image(_id,
     return rh
 
 
+def aes_backfill(batch_size = 100,
+                 index_name = mc_config.MC_INDEX_NAME,
+                 doc_type = mc_config.MC_DOC_TYPE,
+                 via_cli = False,
+                 ):
+
+    import ujson
+    
+    if mc_config.LOW_LEVEL:
+        es = mc_neighbors.low_level_es_connect()    
+
+        ## TODO: https://www.elastic.co/guide/en/elasticsearch/reference/current/breaking_21_search_changes.html
+        
+        res = scan(client = es,
+                   index = index_name,
+                   doc_type = doc_type,
+                   scroll = '100m', #TODO - hard coded.
+                   query = {"query": {'match_all': {}
+                                     },
+                           #'from':0,
+                           #'size':1,                           
+                           },
+                   )
+    else:
+        nes = mc_neighbors.high_level_connect(index_name = index_name,
+                                              doc_type = doc_type,
+                                              )
+        
+        res = nes.scan_all()
+        
+    def do_commit(rrr):
+        print ('COMMITTING BATCH...',len(rrr))
+        
+        if mc_config.LOW_LEVEL:
+            from elasticsearch.helpers import parallel_bulk, scan
+            
+            ii = parallel_bulk(es,
+                               rrr,
+                               thread_count = 1,
+                               chunk_size = 500,
+                               max_chunk_bytes = 100 * 1024 * 1024, #100MB
+                               )
+        else:
+            ii = nes.parallel_bulk(rrr)
+        
+        for is_success,res in ii:
+            #print ('COMMITTED',is_success,res)
+            pass
+        
+        rrr[:] = []
+        print ('COMMITTED')
+    
+    def get_fn_out(_id, mode = 'w'):
+        #print ('get_fn_out', _id)
+        xid = hashlib.md5(_id).hexdigest()
+        dd = '/datasets/datasets/aes_out/' + xid[:3] + '/'
+        if mode == 'w':
+            if not exists(dd):
+                mkdir(dd)
+        return dd + xid + '.json'
+    
+    ## Main loop:
+    
+    nn = 0
+
+    rr = []
+    
+    for c,hit in enumerate(res):
+
+        doc_update = {}
+
+        native_id = hit['_source'].get('native_id') or hit['_id']
+        
+        assert '_' in native_id, hit
+        
+        if c % 1000 == 0:
+            print ('LOOP:', c, native_id)
+        
+        fn_aes = get_fn_out(native_id, 'r')
+
+        if not exists(fn_aes):
+            continue
+
+        with open(fn_aes) as f:
+            aes = ujson.loads(f.read())
+        
+        doc_update['aesthetics'] = aes
+        
+        ## For now, only bother if there was an image:
+        
+        rr.append({'_op_type': 'update',
+                   '_index': index_name,
+                   '_type': doc_type,
+                   '_id': hit['_id'],
+                   'body': {'doc':doc_update},
+                   })
+        
+        if nn % 50 == 0:
+            print ('YES_AES', nn, 'of', c, hit['_source'].get('source_dataset'), aes)
+        
+        nn += 1
+        
+        #print ('ADD',c) #rr
+        
+        if len(rr) >= batch_size:
+            do_commit(rr)
+        
+    if rr:
+        do_commit(rr)
+    
+    print ('AES_ENRICHED',nn)
+    
+    if mc_config.LOW_LEVEL:
+        print ('REFRESHING', index_name)
+        es.indices.refresh(index = index_name)
+        print ('REFRESHED',)
+    else:
+        nes.refresh_index()
+    
+    print ('DONE_ALL',)
+
+
 def test_image_cache(via_cli = False):
     """
     Basic sanity check for image caching. TODO: more testing, instead of just running the code.
@@ -643,7 +765,7 @@ def ingest_bulk(iter_json = False,
                                           )
 
                     else:
-
+                        
                         print ('NON-LAZY_IMAGE_RETRIEVAL',)
                         fns = cache_image(_id = hh['_id'],
                                           image_bytes = get_asset().read(),
@@ -1021,7 +1143,7 @@ def send_compactsplit_to_indexer(path_glob = False,
                                  doc_type = mc_config.MC_DOC_TYPE,
                                  auto_dedupe = False,
                                  extra_translator_func = False,
-                                 resize_images_again = False, ## already resized during compactsplit creation?
+                                 #resize_images_again = False, ## already resized during compactsplit creation?
                                  via_cli = False,
                                  ):
     """
@@ -1058,7 +1180,10 @@ def send_compactsplit_to_indexer(path_glob = False,
     else:
         assert path_glob
         
-    iter_json = lambda : iter_compactsplit(path_glob, max_num = max_num, resize_images_again = resize_images_again)
+    iter_json = lambda : iter_compactsplit(path_glob,
+                                           max_num = max_num,
+                                           #resize_images_again = resize_images_again,
+                                           )
     
     iter_json = apply_normalizer(iter_json,
                                  normalizer_name,
@@ -1257,6 +1382,7 @@ functions=['receive_blockchain_into_indexer',
            'config',
            'tail_blockchain',
            'test_image_cache',
+           'aes_backfill',
            ]
 
 def main():
