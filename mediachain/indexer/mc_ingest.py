@@ -876,14 +876,26 @@ def receive_blockchain_into_indexer(last_block_ref = None,
     
     cur = SimpleClient()
 
-    # TODO: replace this flag with a ref to the last known block, once
-    # the client supports seeking back to a known block
     catchup = ('--disable-catchup' not in sys.argv)
+
+    # TODO: remove cli flag and lookup last block from persistent storage
+    # where to write last known block?
+    if via_cli and last_block_ref is None:
+        for arg in sys.argv:
+            if arg.startswith('--last-known-block='):
+                last_block_ref = arg.split('=')[-1]
+                break
+
     def the_gen():
         ## Convert from blockchain format to Indexer format:
-        
-        for ref, art in cur.get_artefacts(catchup_blockchain=catchup, force_exit = via_cli): ## Force exit after loop is complete, if CLI.
-            
+
+        for obj_info in cur.get_artefacts(catchup_blockchain=catchup,
+                                          last_known_block_ref=last_block_ref,
+                                          force_exit = via_cli): ## Force exit after loop is complete, if CLI.
+            ref = obj_info['canonical_id']
+            art = obj_info['record']
+            # TODO: persist block_ref so we can use it for the next run
+            block_ref = obj_info['prev_block_ref']
             try:
                 print 'GOT',art.get('type')
                 
