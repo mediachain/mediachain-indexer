@@ -540,11 +540,12 @@ class handle_search(BaseHandler):
         filter_incomplete = data.get('filter_incomplete', None)
         schema_variant = data.get('schema_variant', 'new')
         enrich_tags = data.get('enrich_tags', True)
+        allow_nsfw = data.get('allow_nsfw', True)
         
         unk = set(data).difference(['q', 'q_id', 'q_id_file', 'offset', 'limit',
                                     'index_name', 'doc_type', 'include_docs', 'include_thumb', 'rerank_eq',
                                     'filter_licenses', 'filter_sources', 'skip_query_cache', 'filter_incomplete',
-                                    'schema_variant', 'enrich_tags', 'token', 'canonical_id',
+                                    'schema_variant', 'enrich_tags', 'token', 'canonical_id', 'allow_nsfw',
                                     ])
         
         if unk:
@@ -634,6 +635,7 @@ class handle_search(BaseHandler):
                           'schema_variant':schema_variant,
                           'enrich_tags':enrich_tags,
                           'canonical_id':canonical_id,
+                          'allow_nsfw':allow_nsfw,
                           }
             print ('QUERY_ARGS',query_args)
 
@@ -857,6 +859,18 @@ class handle_search(BaseHandler):
         
         rr = hh['hits']['hits']
 
+        
+        ## NSFW filtering:
+        
+        if not allow_nsfw:
+
+            r2 = []
+            for xx in rr:
+                if not xx['_source'].get('nsfw'):
+                    r2.append(xx)
+            rr = r2
+
+        
         ## Prepend remote hits, filter ID dupes:
         
         rr = remote_hits + rr

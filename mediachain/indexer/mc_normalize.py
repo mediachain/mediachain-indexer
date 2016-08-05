@@ -1690,6 +1690,8 @@ def normalize_500px(iter_json):
                         'url':'https://500px.com' + jj["url"],
                         }
               
+        hh['nsfw'] = jj['nsfw']
+
         hh['title'] = jj['name']
         
 	hh['description'] = jj['description']

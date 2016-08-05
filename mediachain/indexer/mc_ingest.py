@@ -1222,8 +1222,9 @@ def send_compactsplit_to_indexer(path_glob = False,
                                  normalizer_name,
                                  )
 
-    rr = ingest_bulk(iter_json = iter_json)
     
+    rr = ingest_bulk(iter_json = iter_json)
+
 
     if auto_dedupe:
         ## TODO: automatically do this for now, so we don't forget:
