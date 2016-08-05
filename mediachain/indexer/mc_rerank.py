@@ -46,7 +46,7 @@ rsc
 """
 #rsc *= ((item['_source'].get('native_id','').startswith('dpla') and 1 or 2))
 
-ranking_basic_equations = {'noop':"item['_score']",
+ranking_basic_equations = {'tfidf':"item['_score']",
                            'harmonic_mean_score_comments':"(item['_score'] * item['num_comments']) / (item['_score'] + item['num_comments'])",
                            ## boost pexels source above others:
                            'boost_pexels':"item['_score'] * (item['_source'].get('native_id','').startswith('pexels') and 2 or 1) * item['_source'].get('boosted', 0.1)",

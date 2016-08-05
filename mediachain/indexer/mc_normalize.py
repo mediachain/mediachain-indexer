@@ -1289,8 +1289,8 @@ def normalize_mirflickr1mm(iter_json):
         if jj['license'].get('License'):
             licenses = [{'name_long':jj['license'].get('License')}]
 
-        sizes = [{'width':st['width'],            # pixel width - TODO
-                  'height':st['height'],          # pixel height - TODO
+        sizes = [{'width':st['width'],            # pixel width
+                  'height':st['height'],          # pixel height
                   'dpi':None,                     # DPI - Use to estimate real-world width / height if needed?
                   'bytes':None,                   # bytes size of this version
                   'content_type':st['mime'],      # Image mime-type
@@ -1437,6 +1437,289 @@ def normalize_places(iter_json):
         yield hh
 
 
+def simple_schema_validate(record,
+                           ):
+    """
+    1) Apply the normalizer
+    2) Apply ES transforms.
+    3) Apply post-ingest transforms.
+    4) Check for all the following fields, expected by frontend:
+    
+    === FROM FRONTEND:
+    
+    function normalizeImageJson(json) {
+      const {
+        artist_name,
+        keywords,
+        license,
+        id,
+        title,
+        source,
+        sizes,
+        image_url
+      } = json
+
+      const author = artist_name && toTitleCase(artist_name)
+
+      const size = sizes[0];
+      const { width, height } = size;
+
+      return {
+        id,
+        attribution: author,
+        title,
+        imageUrl: image_url,
+        keywords,
+        license: license.name,
+        source,
+        width,
+        height
+      }
+    }
+    """
+    import copy
+    
+    record = copy.deepcopy(record)
+
+    ## Apply ES transform:
+
+        
+    r2 = {'_source':{}}
+    for k, v in record.items():
+        if k.startswith('_'):
+            r2[k] = v
+        else:
+            r2['_source'][k] = v
+    record = r2
+    
+    ## Apply post-ingest transforms:
+
+    record['_source']['url_direct_cache'] = {'url':None}
+
+    apply_post_ingestion_normalizers([record], schema_variant = 'new')
+
+    #print 'keys',record.keys()
+
+    #'id', 'image_url'
+    
+    missing = set(['artist_name', 'keywords', 'license',
+                    'title', 'source', 'sizes',]).difference(record['_source'].keys())
+    
+    assert not missing, ('MISSING -', missing)
+    
+    assert record['_source']['license'] is not None, ('MISSING - license',)
+    
+    assert 'name' in record['_source']['license'], ('MISSING - license.name',record['_source']['license'])
+    
+    print 'PASSED simple_schema_validate()'
+        
+    
+    
+        
+def normalize_500px(iter_json):
+    """
+    {
+		"id": 165862179,
+		"user_id": 8187387,
+		"name": "The light",
+		"description": null,
+		"camera": "FinePix HS20EXR",
+		"lens": null,
+		"focal_length": "22.1",
+		"iso": "400",
+		"shutter_speed": "1/45",
+		"aperture": "4.5",
+		"times_viewed": 862,
+		"rating": 78.4,
+		"status": 1,
+		"created_at": "2016-08-01T12:06:09-04:00",
+		"category": 0,
+		"location": null,
+		"latitude": 47.1718531,
+		"longitude": 19.5013194000001,
+		"taken_at": "2014-10-18T08:04:01-04:00",
+		"hi_res_uploaded": 0,
+		"for_sale": false,
+		"width": 3264,
+		"height": 2448,
+		"votes_count": 44,
+		"favorites_count": 0,
+		"comments_count": 0,
+		"nsfw": false,
+		"sales_count": 0,
+		"for_sale_date": null,
+		"highest_rating": 92.0,
+		"highest_rating_date": "2016-08-02T00:02:10-04:00",
+		"license_type": 4,
+		"converted": 27,
+		"collections_count": 0,
+		"crop_version": 3,
+		"privacy": false,
+		"profile": true,
+		"image_url": ["https://drscdn.500px.org/photo/165862179/w%3D70_h%3D70/e4601655f405bc0c354ff1ad306d996e?v=3", "https://drscdn.500px.org/photo/165862179/q%3D50_w%3D140_h%3D140/50519f2a27543fc98277068f7f1dce5a?v=3", "https://drscdn.500px.org/photo/165862179/q%3D80_h%3D300/bcaf3ff5e8f7fd0fb22bc18e211ff1cf", "https://drscdn.500px.org/photo/165862179/q%3D80_h%3D450/7f086e6acc50b53cb24944e88987c034", "https://drscdn.500px.org/photo/165862179/q%3D80_h%3D600_k%3D1/cfd9d62daffb7fc5de30e190a5c1ef4a", "https://drscdn.500px.org/photo/165862179/q%3D80_m%3D1000_k%3D1/6515263ce3e2fbd42a288e28279f9818", "https://drscdn.500px.org/photo/165862179/q%3D80_m%3D1500_k%3D1/d48e6ec5ccaff39e34495b957cadb878", "https://drscdn.500px.org/photo/165862179/q%3D80_m%3D2000_k%3D1/9ce813eb3eb1b3e4717f5b695eb9f953", "https://drscdn.500px.org/photo/165862179/m%3D2048_k%3D1/ae57f79d32bcb15d113b5880d2ae216a", "https://drscdn.500px.org/photo/165862179/m%3D900/6053571d0eaffae1c1a764f3943c21a9", "https://drscdn.500px.org/photo/165862179/m%3D900_s%3D1_k%3D1_a%3D1/bbfd96899c225596bf6b91235ecd0356?v=3"],
+		"images": [{
+			"size": 1,
+			"url": "https://drscdn.500px.org/photo/165862179/w%3D70_h%3D70/e4601655f405bc0c354ff1ad306d996e?v=3",
+			"https_url": "https://drscdn.500px.org/photo/165862179/w%3D70_h%3D70/e4601655f405bc0c354ff1ad306d996e?v=3",
+			"format": "jpeg"
+		}, {
+			"size": 2,
+			"url": "https://drscdn.500px.org/photo/165862179/q%3D50_w%3D140_h%3D140/50519f2a27543fc98277068f7f1dce5a?v=3",
+			"https_url": "https://drscdn.500px.org/photo/165862179/q%3D50_w%3D140_h%3D140/50519f2a27543fc98277068f7f1dce5a?v=3",
+			"format": "jpeg"
+		}, {
+			"size": 4,
+			"url": "https://drscdn.500px.org/photo/165862179/m%3D900/6053571d0eaffae1c1a764f3943c21a9",
+			"https_url": "https://drscdn.500px.org/photo/165862179/m%3D900/6053571d0eaffae1c1a764f3943c21a9",
+			"format": "jpeg"
+		}, {
+			"size": 14,
+			"url": "https://drscdn.500px.org/photo/165862179/m%3D900_s%3D1_k%3D1_a%3D1/bbfd96899c225596bf6b91235ecd0356?v=3",
+			"https_url": "https://drscdn.500px.org/photo/165862179/m%3D900_s%3D1_k%3D1_a%3D1/bbfd96899c225596bf6b91235ecd0356?v=3",
+			"format": "jpeg"
+		}, {
+			"size": 31,
+			"url": "https://drscdn.500px.org/photo/165862179/q%3D80_h%3D450/7f086e6acc50b53cb24944e88987c034",
+			"https_url": "https://drscdn.500px.org/photo/165862179/q%3D80_h%3D450/7f086e6acc50b53cb24944e88987c034",
+			"format": "jpeg"
+		}, {
+			"size": 32,
+			"url": "https://drscdn.500px.org/photo/165862179/q%3D80_h%3D300/bcaf3ff5e8f7fd0fb22bc18e211ff1cf",
+			"https_url": "https://drscdn.500px.org/photo/165862179/q%3D80_h%3D300/bcaf3ff5e8f7fd0fb22bc18e211ff1cf",
+			"format": "jpeg"
+		}, {
+			"size": 33,
+			"url": "https://drscdn.500px.org/photo/165862179/q%3D80_h%3D600_k%3D1/cfd9d62daffb7fc5de30e190a5c1ef4a",
+			"https_url": "https://drscdn.500px.org/photo/165862179/q%3D80_h%3D600_k%3D1/cfd9d62daffb7fc5de30e190a5c1ef4a",
+			"format": "jpeg"
+		}, {
+			"size": 34,
+			"url": "https://drscdn.500px.org/photo/165862179/q%3D80_m%3D1000_k%3D1/6515263ce3e2fbd42a288e28279f9818",
+			"https_url": "https://drscdn.500px.org/photo/165862179/q%3D80_m%3D1000_k%3D1/6515263ce3e2fbd42a288e28279f9818",
+			"format": "jpeg"
+		}, {
+			"size": 35,
+			"url": "https://drscdn.500px.org/photo/165862179/q%3D80_m%3D1500_k%3D1/d48e6ec5ccaff39e34495b957cadb878",
+			"https_url": "https://drscdn.500px.org/photo/165862179/q%3D80_m%3D1500_k%3D1/d48e6ec5ccaff39e34495b957cadb878",
+			"format": "jpeg"
+		}, {
+			"size": 36,
+			"url": "https://drscdn.500px.org/photo/165862179/q%3D80_m%3D2000_k%3D1/9ce813eb3eb1b3e4717f5b695eb9f953",
+			"https_url": "https://drscdn.500px.org/photo/165862179/q%3D80_m%3D2000_k%3D1/9ce813eb3eb1b3e4717f5b695eb9f953",
+			"format": "jpeg"
+		}, {
+			"size": 2048,
+			"url": "https://drscdn.500px.org/photo/165862179/m%3D2048_k%3D1/ae57f79d32bcb15d113b5880d2ae216a",
+			"https_url": "https://drscdn.500px.org/photo/165862179/m%3D2048_k%3D1/ae57f79d32bcb15d113b5880d2ae216a",
+			"format": "jpeg"
+		}],
+		"url": "/photo/165862179/the-light-by-wacrizspiritualphoto",
+		"positive_votes_count": 44,
+		"converted_bits": 27,
+		"share_counts": {
+			"facebook": 0,
+			"pinterest": 0
+		},
+		"tags": ["forest", "light", "vakriz", "vacriz", "foest road"],
+		"watermark": true,
+		"image_format": "jpeg",
+		"licensing_requested": false,
+		"licensing_suggested": false,
+		"is_free_photo": false,
+		"user": {
+			"id": 8187387,
+			"username": "vakriz",
+			"firstname": "Wacrizspiritualphoto",
+			"lastname": "",
+			"city": "Pusztavacs",
+			"country": "Hungary",
+			"usertype": 0,
+			"fullname": "Wacrizspiritualphoto",
+			"userpic_url": "https://pacdn.500px.org/8187387/a4434863510e29118b63b16dfb4ee9c3fd2824b2/1.jpg?6",
+			"userpic_https_url": "https://pacdn.500px.org/8187387/a4434863510e29118b63b16dfb4ee9c3fd2824b2/1.jpg?6",
+			"cover_url": "https://pacdn.500px.org/8187387/a4434863510e29118b63b16dfb4ee9c3fd2824b2/cover_2048.jpg?7",
+			"upgrade_status": 0,
+			"store_on": true,
+			"affection": 25753,
+			"avatars": {
+				"default": {
+					"https": "https://pacdn.500px.org/8187387/a4434863510e29118b63b16dfb4ee9c3fd2824b2/1.jpg?6"
+				},
+				"large": {
+					"https": "https://pacdn.500px.org/8187387/a4434863510e29118b63b16dfb4ee9c3fd2824b2/2.jpg?6"
+				},
+				"small": {
+					"https": "https://pacdn.500px.org/8187387/a4434863510e29118b63b16dfb4ee9c3fd2824b2/3.jpg?6"
+				},
+				"tiny": {
+					"https": "https://pacdn.500px.org/8187387/a4434863510e29118b63b16dfb4ee9c3fd2824b2/4.jpg?6"
+				}
+			},
+			"followers_count": 258
+		}
+	}
+    """
+    
+    assert not hasattr(iter_json, 'next'), 'Should be function that returns iterator when called, to allow restarting.'
+
+    cc_license_names_500px = dict([(8,'CC0'),
+                                   (7,'Public Domain'),
+                                   (4,'CC BY'),
+                                   (1,'CC NC'),
+                                   (6,'CC BY-SA'),
+                                   (5,'CC BY-ND'),
+                                   (3,'CC BY-NC-SA'),
+                                   (2,'CC BY-NC-ND'),
+                                   ])
+    
+    for jj_top in iter_json():
+
+        hh = {}
+        
+        jj = jj_top['source_record'] ## Ignore the minimal normalization we did initially. Look at source.
+        
+        hh['_id'] = make_id(jj_top['_id'])
+        
+        hh['native_id'] = jj_top['_id']
+        
+        hh['source_tags'] = ['500px.com']
+        
+        hh['source_dataset'] = '500px'
+
+        hh['source'] = {'name':'500px',
+                        'url':'https://500px.com' + jj["url"],
+                        }
+              
+        hh['title'] = jj['name']
+        
+	hh['description'] = jj['description']
+        
+        hh['keywords'] = jj['tags']
+        
+        nm = cc_license_names_500px[jj['license_type']]
+        
+        hh['license_tags'] = [nm]
+        hh['licenses'] = [{'name_long':nm, 'name':nm}]
+        hh['license_url'] = None
+        hh['artist_name'] = (' '.join([jj['user']['firstname'] or '', jj['user']['lastname'] or ''])).strip() or None
+        
+        hh['origin'] = 'https://500px.com' + jj["url"]
+
+        hh['date_created'] = jj['created_at']
+        
+        st = get_image_stats(jj_top['img_data'])
+        
+        hh['aspect_ratio'] = st['aspect_ratio']
+        
+        hh['sizes'] = [{'content_type':st['mime'],      # Image mime-type
+                        'width':st['width'],            # pixel width
+                        'height':st['height'],          # pixel height
+                        }]
+        
+        hh['img_data'] = jj_top['img_data']             # Data URI of this version -- only for thumbnails.
+        
+        yield hh
+        
         
 ## name, func, default archive location:
 
@@ -1472,6 +1755,10 @@ normalizer_names = {'eyeem':{'func':normalize_eyeem,
                               'dir_compactsplit':'/datasets/datasets/compactsplit/places',
                               'dir_cache':False,
                               },
+                    '500px':{'func':normalize_500px,
+                              'dir_compactsplit':'/datasets/datasets/compactsplit/500px',
+                              'dir_cache':False,
+                             },
                     }
 
 
@@ -1486,9 +1773,12 @@ def apply_normalizer(iter_json,
 
     func = normalizer_names[normalizer_name]['func']
 
-    for x in func(iter_json):
-        yield x
+    for c, x in enumerate(func(iter_json)):
 
+        if c <= 50:
+            simple_schema_validate(x)
+        
+        yield x
 
 
 def apply_post_ingestion_normalizers(rr,
