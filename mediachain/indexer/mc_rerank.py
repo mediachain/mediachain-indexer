@@ -4,9 +4,15 @@
 """
 Models for search re-ranking.
 
-NOTE: See here for the restrictions / features of asteval: https://newville.github.io/asteval/basics.html
+Equation `eq_name` can use any features provided by asteval, in addition to numpy via `np`.
 
-Equation `eq` can use any features provided by asteval, in addition to numpy via `np`.
+NOTE: Certain names cannot be used within the asteval interpreter:
+
+    and, as, assert, break, class, continue, def, del, elif, else, except, exec, finally, for, from, global,
+    if, import, in, is, lambda, not, or, pass, print, raise, return, try, while, with, True, False, None, eval,
+    execfile, __import__, __package__
+
+See: https://newville.github.io/asteval/basics.html
 """
 
 from mc_generic import setup_main, group, raw_input_enter, pretty_print, intget, print_config, sleep_loud
@@ -17,50 +23,78 @@ import math
 from time import time
 from collections import Counter
 
-## Re-ranking equations that have names:
+
+#### Re-ranking equations that have names:
+
+## Harmonic mean of (tf-IDF query relevance) and (general aesthetics) scores. Higher is better -
+## 
+## NOTES:
+##   - 0.4 was chosen for the not-yet-aesthetically analyzed items, because that emperically puts it
+##     above the peaks of the bad library datasets but below the high-aesthetics datasets. See the histograms.
+##
+## TODO:
+##   - Remap scores to percentiles? May be bad idea.
+##   - Revert back to putting aesthetically scored images at the very bottom, instead of at 0.4?
+##   - Consider image resolution
+
+aes_func = \
+"""
+0.4
+asc = (item['_source'].get('aesthetics', {}).get('score', 0.4) + 1) * 2
+rsc = (asc * item['_score']) / (asc + item['_score'])
+rsc
+"""
+#rsc *= ((item['_source'].get('native_id','').startswith('dpla') and 1 or 2))
 
 ranking_basic_equations = {'noop':"item['_score']",
                            'harmonic_mean_score_comments':"(item['_score'] * item['num_comments']) / (item['_score'] + item['num_comments'])",
+                           ## boost pexels source above others:
                            'boost_pexels':"item['_score'] * (item['_source'].get('native_id','').startswith('pexels') and 2 or 1) * item['_source'].get('boosted', 0.1)",
+                           ##all datasetswith aesthetics (aes) scores, then the pexels without aes scores, then all others without aes scores:
+                           'aesthetics':aes_func,
                            }
 
 class ReRankingBasic():
-    """
-    Basic search results re-ranking model. Allows you to specify a simple custom re-ranking equation.
-    
-    NOTE: See here for the restrictions / features of asteval: https://newville.github.io/asteval/basics.html
-    
-    Equation `eq_name` can use any features provided by asteval, in addition to numpy via `np`.
-
-    Args:
-        first_pass_eq_name:  (Optional) Equation run for first-pass, which can view the whole dataset.
-        eq_name:             Second-pass equation, which operates on the dataset per-item.
-
-    """
+    """ See: __init__() """
     
     def __init__(self,
                  first_pass_eq_name = None,
                  eq_name = None,
+                 default_eq_name = 'aesthetics',
                  ):
+        """
+        Basic search results re-ranking model. Allows you to specify a simple custom re-ranking equation.
 
+        NOTE: See here for the restrictions / features of asteval: https://newville.github.io/asteval/basics.html
+
+        Equation `eq_name` can use any features provided by asteval, in addition to numpy via `np`.
+
+        Args:
+            first_pass_eq_name:  (Optional) Equation run for first-pass, which can view the whole dataset.
+            eq_name:             String name (TODO or python callable?) to use as the re-ranking equation. Operates per-item.
+
+        TODO: Intentionally not supporting python callables for now. Strings only.
+        """
+        
         self.first_pass_eq_name = first_pass_eq_name
         
-        if not eq_name:
-            eq_name = 'boost_pexels'
-        
+        if eq_name is None:
+            ## Done this way, instead of default args on the function, so that mc_web can pass in `None` to indicate default:
+            eq_name = default_eq_name
+
         if eq_name in ranking_basic_equations:
             eq = ranking_basic_equations[eq_name]
         else:
             eq = eq_name
-                    
+        
         self.eq = eq
-        
+
         self.aeval = Interpreter()
-        
+
         ## Access all functions of these modules:
-        
+
         ## Turns out that asteval already imports all of `math`.
-        
+
         for mod in []:
             for attr in dir(mod):
                 if attr.startswith('_'):
@@ -68,9 +102,10 @@ class ReRankingBasic():
                 self.aeval.symtable[attr] = getattr(math, attr)
 
         ## numpy:
-        
+
         self.aeval.symtable['np'] = np
-    
+        
+            
     def rerank(self, items, **kw):
         """
         Re-rank items according to new score output by `self.eq`.
@@ -105,8 +140,10 @@ class ReRankingBasic():
         for c,(new_score,item) in enumerate(sorted(rr, reverse = True)):
             item['_score'], item['_old_score'] = new_score, item['_score']
 
-            #if c <= 20:
-            #    print ('RERANK', item['_old_score'], item['_source'].get('boosted'),item['_score'],item['_source'].get('native_id'),item['_source'].get('title'))
+            if c <= 20:
+                #print ('RERANK', item['_old_score'], item['_source'].get('boosted'),item['_score'],item['_source'].get('native_id'),item['_source'].get('title'))
+                print ('RERANK', item['_source'].get('aesthetics', {}).get('score', None), item['_score'])
+            
             
             rrr.append(item)
         

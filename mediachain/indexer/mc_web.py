@@ -540,7 +540,7 @@ class handle_search(BaseHandler):
         filter_incomplete = data.get('filter_incomplete', None)
         schema_variant = data.get('schema_variant', 'new')
         enrich_tags = data.get('enrich_tags', True)
-
+        
         unk = set(data).difference(['q', 'q_id', 'q_id_file', 'offset', 'limit',
                                     'index_name', 'doc_type', 'include_docs', 'include_thumb', 'rerank_eq',
                                     'filter_licenses', 'filter_sources', 'skip_query_cache', 'filter_incomplete',
@@ -584,12 +584,17 @@ class handle_search(BaseHandler):
         
         include_thumb = False ## Always disabled, for now
         full_limit = 200
+
+        
+        ## Remote ranking hints:
         
         remote_ids = []
-        if q_text and (get_remote_search is not False):
-            t1 = time()
-            remote_ids = get_remote_search(q_text)
-            print ('REMOTE_IDS','time:',time()-t1,len(remote_ids))
+        
+        if False:
+            if q_text and (get_remote_search is not False):
+                t1 = time()
+                remote_ids = get_remote_search(q_text)
+                print ('REMOTE_IDS','time:',time()-t1,len(remote_ids))
 
         
         ## Cache & token lookup:
