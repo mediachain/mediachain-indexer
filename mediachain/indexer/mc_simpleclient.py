@@ -294,7 +294,8 @@ class SimpleClient(object):
     
         
     def get_objects(self,
-                    catchup_blockchain = True, # TODO, replace with last_block_height, once client support is in
+                    catchup_blockchain = True,
+                    last_known_block_ref = None,
                     start_id = False,
                     end_id = False,
                     only_ids = False,
@@ -362,7 +363,7 @@ class SimpleClient(object):
                                      object_id = oid,
                                      fetch_images = fetch_images,
                                      )
-                yield oid, obj
+                yield {'canonical_id': oid, 'record': obj}
         
         else:
 
@@ -372,19 +373,24 @@ class SimpleClient(object):
             
             try:
                 started = False
-                with self.transactor.canonical_stream(catchup=catchup_blockchain, timeout=timeout) as stream:
-                    for ref, obj in stream:
+                with self.transactor.canonical_stream(
+                    catchup=catchup_blockchain,
+                    last_known_block_ref=last_known_block_ref,
+                    timeout=timeout
+                ) as stream:
+                    for obj_info in stream:
+                        obj = obj_info['record']
 
                         if (start_id is not False) and (not started):
-                            if obj['data']['_id'] == start_id:
+                            if obj['meta']['data']['_id'] == start_id:
                                 started = True
                             else:
                                 continue
 
-                        yield ref, obj
+                        yield obj_info
 
                         if (end_id is not False):
-                            if obj['data']['_id'] == end_id:
+                            if obj['meta']['data']['_id'] == end_id:
                                 break
                     
             

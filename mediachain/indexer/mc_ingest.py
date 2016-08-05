@@ -979,7 +979,30 @@ def tail_blockchain(via_cli = False):
         print ('ART:',time(),art)
     
 
-    
+def get_last_known_block_ref():
+    last_block_file = os.path.join(os.path.expanduser('~'), '.mediachain',
+                                   'last-known-block')
+    try:
+        with open(last_block_file) as f:
+            return f.read().strip()
+    except IOError:
+        raise
+
+
+def save_last_known_block_ref(ref):
+    mediachain_dir = os.path.join(os.path.expanduser('~'), '.mediachain')
+    last_block_file = os.path.join(mediachain_dir, 'last-known-block')
+    try:
+        os.makedirs(mediachain_dir)
+        with open(last_block_file) as f:
+            f.write(ref)
+    except os.error:
+        pass
+    except IOError as e:
+        print('ERROR SAVING BLOCK REF', e)
+        pass
+
+
 def receive_blockchain_into_indexer(last_block_ref = None,
                                     index_name = mc_config.MC_INDEX_NAME,
                                     doc_type = mc_config.MC_DOC_TYPE,
@@ -998,14 +1021,24 @@ def receive_blockchain_into_indexer(last_block_ref = None,
     
     cur = SimpleClient()
 
-    # TODO: replace this flag with a ref to the last known block, once
-    # the client supports seeking back to a known block
     catchup = ('--disable-catchup' not in sys.argv)
+
+    if last_block_ref is None:
+        last_block_ref = get_last_known_block_ref()
+
     def the_gen():
         ## Convert from blockchain format to Indexer format:
-        
-        for ref, art in cur.get_artefacts(catchup_blockchain=catchup, force_exit = via_cli): ## Force exit after loop is complete, if CLI.
-            
+
+        for obj_info in cur.get_artefacts(catchup_blockchain=catchup,
+                                          last_known_block_ref=last_block_ref,
+                                          force_exit = via_cli): ## Force exit after loop is complete, if CLI.
+            ref = obj_info['canonical_id']
+            art = obj_info['record']
+
+            # persist block ref for next run
+            block_ref = obj_info['prev_block_ref']
+            save_last_known_block_ref(block_ref)
+
             try:
                 print 'GOT',art.get('type')
                 
