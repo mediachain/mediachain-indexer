@@ -842,7 +842,10 @@ def ingest_bulk(iter_json = False,
 
 
                 elif (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
-
+                    
+                    print ('WARNING, SKIPPING: "NO_IMAGE"', hh.get('_id'), hh.get('native_id'))
+                    continue
+                
                     ## One-off ignoring of thumbnail generation via `NO_IMAGE`:
 
                     if 'img_data' in hh:
@@ -857,8 +860,10 @@ def ingest_bulk(iter_json = False,
                         hh['aspect_ratio'] = None
 
                 else:
-                    assert False, ('No thumbnail detected, and "NO_IMAGE" not used.',hh.keys())
-                    
+                    print ('WARNING, SKIPPING: No thumbnail detected, and "NO_IMAGE" not used.', hh.get('_id'), hh.get('native_id'))
+                    #assert False, ('No thumbnail detected, and "NO_IMAGE" not used.',hh.keys())
+                    continue
+                
             except KeyboardInterrupt:
                 raise
             except:
