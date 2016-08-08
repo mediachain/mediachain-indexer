@@ -540,7 +540,7 @@ class handle_search(BaseHandler):
         filter_incomplete = data.get('filter_incomplete', None)
         schema_variant = data.get('schema_variant', 'new')
         enrich_tags = data.get('enrich_tags', True)
-        allow_nsfw = data.get('allow_nsfw', True)
+        allow_nsfw = data.get('allow_nsfw', False)
         
         unk = set(data).difference(['q', 'q_id', 'q_id_file', 'offset', 'limit',
                                     'index_name', 'doc_type', 'include_docs', 'include_thumb', 'rerank_eq',
@@ -584,7 +584,7 @@ class handle_search(BaseHandler):
             return                
         
         include_thumb = False ## Always disabled, for now
-        full_limit = 200
+        full_limit = 300
 
         
         ## Remote ranking hints:
@@ -749,10 +749,10 @@ class handle_search(BaseHandler):
                                           type = doc_type,
                                           source = {"query": {"constant_score":{"filter":{"term": terms}}}},
                                           )
-                #print ('GOT',repr(rr.body)[:100])
+                print ('GOT_Q_ID_FILE_OR_Q_ID',repr(rr.body)[:100])
                 
                 rr = json.loads(rr.body)
-
+                
                 if 'error' in rr:
                     self.set_status(500)
                     self.write_json({'error':'ELASTICSEARCH_ERROR',
@@ -796,6 +796,8 @@ class handle_search(BaseHandler):
         
             print ('GOT','time:',time() - t1,repr(rr.body)[:100])
 
+            hh = False
+            
             try:
                 hh = json.loads(rr.body)
             except KeyboardInterrupt:
@@ -839,6 +841,8 @@ class handle_search(BaseHandler):
         
         print ('GOT','time:',time() - t1, repr(rr.body)[:100])
 
+        hh = False
+        
         try:
             hh = json.loads(rr.body)
         except KeyboardInterrupt:
@@ -898,12 +902,13 @@ class handle_search(BaseHandler):
 
         ## Remove `dedupe_*` fields:
 
-        for xx in rr:
-            xx['_source']  = {x:y
-                              for x,y
-                              in xx['_source'].iteritems()
-                              if not x.startswith('dedupe_')
-                              }
+        if False:
+            for xx in rr:
+                xx['_source']  = {x:y
+                                  for x,y
+                                  in xx['_source'].iteritems()
+                                  if not x.startswith('dedupe_')
+                                  }
         
         
         ## Add in frontend image cached preview images:
@@ -947,6 +952,12 @@ class handle_search(BaseHandler):
             continue
         
         rr = r2
+
+        
+        ## Apply post-ingestion normalizers, if there are any:
+                
+        mc_normalize.apply_post_ingestion_normalizers(rr, schema_variant = schema_variant)
+
         
         ## Re-rank:
         
@@ -954,9 +965,27 @@ class handle_search(BaseHandler):
         rr = rrm.rerank(rr)
 
         
-        ## Apply post-ingestion normalizers, if there are any:
-        
-        mc_normalize.apply_post_ingestion_normalizers(rr, schema_variant = schema_variant)
+        ## AES for debug:
+
+        for ii in rr:
+
+            if not ii['_source'].get('keywords'):
+                ii['_source']['keywords'] = []
+
+            sc = ii['_source'].get('aesthetics', {}).get('score', False)
+
+            if sc is False:
+                ii['_source']['keywords'].append('aes=False')
+            else:
+                ii['_source']['keywords'].append('aes=%.4f' % sc)
+                            
+            ii['_source']['keywords'].append('ni=' + ii['_source'].get('native_id', 'False'))
+
+            ii['_source']['keywords'].append('width=' + str(ii['_source'].get('sizes') and ii['_source'].get('sizes')[0].get('width', False)))
+            
+            ii['_source']['keywords'].append('tfidf=%.4f' % ii['_old_score'])
+            ii['_source']['keywords'].append('score=%.4f' % ii['_score'])
+
         
         ## Note: swapping these for ES queries shortly:
         

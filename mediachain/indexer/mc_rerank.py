@@ -39,11 +39,15 @@ from collections import Counter
 
 aes_func = \
 """
-0.4
-asc = (item['_source'].get('aesthetics', {}).get('score', 0.4) + 1) * 2
+asc = (item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) * 3.0
 rsc = (asc * item['_score']) / (asc + item['_score'])
+rsc *= (item['_source'].get('max_width', 0) > 600) and 10 or 1
 rsc
 """
+
+#max_width = item['_source'].get('sizes') and max([x.get('width',0) for x in item['_source'].get('sizes')]) or 0
+
+
 #rsc *= ((item['_source'].get('native_id','').startswith('dpla') and 1 or 2))
 
 ranking_basic_equations = {'tfidf':"item['_score']",
@@ -75,13 +79,15 @@ class ReRankingBasic():
 
         TODO: Intentionally not supporting python callables for now. Strings only.
         """
-        
+
         self.first_pass_eq_name = first_pass_eq_name
         
         if eq_name is None:
             ## Done this way, instead of default args on the function, so that mc_web can pass in `None` to indicate default:
             eq_name = default_eq_name
 
+        print ('RERANK_EQUATION', first_pass_eq_name, eq_name)
+        
         if eq_name in ranking_basic_equations:
             eq = ranking_basic_equations[eq_name]
         else:
@@ -142,9 +148,14 @@ class ReRankingBasic():
 
             if c <= 20:
                 #print ('RERANK', item['_old_score'], item['_source'].get('boosted'),item['_score'],item['_source'].get('native_id'),item['_source'].get('title'))
-                print ('RERANK', item['_source'].get('aesthetics', {}).get('score', None), item['_score'])
+                print ('RERANK',
+                       'aes:', item['_source'].get('aesthetics', {}).get('score', None),
+                       'tfidf:', item['_old_score'],
+                       'width:', item['_source'].get('max_width'), #item['_source'].get('sizes') and item['_source'].get('sizes')[0].get('width',0),
+                       'final:', item['_score'],
+                )
             
-            
+                
             rrr.append(item)
         
         ## TODO: normalize `_score`s?

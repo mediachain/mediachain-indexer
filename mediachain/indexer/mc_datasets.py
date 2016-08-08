@@ -42,7 +42,7 @@ from sys import exit
 from datetime import datetime
 from dateutil import parser as date_parser
 
-from mc_generic import group, setup_main, raw_input_enter, download_streamed, tcache, pretty_print, tarfile_extract_if_not_exists, walk_files
+from mc_generic import igroup, group, setup_main, raw_input_enter, download_streamed, tcache, pretty_print, tarfile_extract_if_not_exists, walk_files
 import mc_config
 import mc_ingest
 
@@ -60,6 +60,20 @@ import gzip
 
 VERSION_COMPACTSPLIT = '0001'
 
+def worker_convert_to_compactsplit((hh, )):
+    """
+    Parallelize the expensive part of the inner loop for `convert_to_compactsplit`.
+    """
+    
+    from mc_ingest import cache_image, decode_image
+    
+    cache_image(_id = hh['_id'],
+                image_bytes = decode_image(hh['img_data']),
+                #do_sizes = cache_images_now,
+                return_as = 'filenames',
+                )
+    
+
 def convert_to_compactsplit(the_iter = False,
                             dir_out = False,
                             do_sort = True,
@@ -70,6 +84,7 @@ def convert_to_compactsplit(the_iter = False,
                             max_num = 0,
                             confirm_clear = True,
                             cache_images_now = False,
+                            n_jobs = 1,
                             via_cli = False,
                             ):
     """
@@ -92,6 +107,7 @@ def convert_to_compactsplit(the_iter = False,
         delete_existing:    Delete any existing files in `dir_out` folder.
         max_num:            Terminate early after `max_num` records.
         confirm_clear:      Prompt for confirmation before clearing output directory.
+        n_jobs:             Number of parallel processing jobs.
     """
 
     from mc_ingest import cache_image, decode_image
@@ -126,7 +142,7 @@ def convert_to_compactsplit(the_iter = False,
         for fn in xdd:
             fn = join(dir_out, fn)
             unlink(fn)
-
+    
     the_path, the_dir = split_path(dir_out)
     assert exists(the_path),('PATH_DOES_NOT_EXIST', the_path)
     assert the_dir,('SPECIFY_OUTPUT_DIR',the_dir)
@@ -138,35 +154,42 @@ def convert_to_compactsplit(the_iter = False,
     fn_out_temp = fn_out + '-tempfile' + str(randint(1,1000000000000))
     fn_out_temp_2 = fn_out_temp + '-2'
     fn_out_temp_3 = fn_out_temp + '-3'
+
+    if n_jobs != 1:
+        pp = multiprocessing.Pool(n_jobs)
     
     try:
         with open(fn_out_temp, 'w') as f:
             
-            for hh in the_iter:
+            for hh_batch in igroup(the_iter, 50):
+                
+                for hh in hh_batch:
+                    xid = hh['_id']
+                    if type(xid) == unicode:
+                        xid = xid.encode('utf8')
 
-                xid = hh['_id']
-                if type(xid) == unicode:
-                    xid = xid.encode('utf8')
-                
-                new_id = hashlib.md5(xid).hexdigest()
-                
-                #assert len(new_id) == 24,new_id ## Fixed-length makes sorting easier.
-                assert '\t' not in new_id
-                assert '\n' not in new_id            
-                
-                dd = json.dumps(hh, separators=(',', ':'))
-                
-                assert '\t' not in dd
-                assert '\n' not in dd
+                    new_id = hashlib.md5(xid).hexdigest()
 
-                f.write(new_id + '\t' + dd + '\n')
+                    #assert len(new_id) == 24,new_id ## Fixed-length makes sorting easier.
+                    assert '\t' not in new_id
+                    assert '\n' not in new_id            
+
+                    if cache_images_now:
+                        assert False
+                        if n_jobs != 1:
+                            assert False, 'TODO'
+                            inner_args.append((hh,))
+                        else:
+                            worker_convert_to_compactsplit((hh, ))
+
+                    dd = json.dumps(hh, separators=(',', ':'))
+
+                    assert '\t' not in dd
+                    assert '\n' not in dd
+                    
+                    f.write(new_id + '\t' + dd + '\n')
+
                 
-                if cache_images_now:
-                    fns = cache_image(_id = hh['_id'],
-                                      image_bytes = decode_image(hh['img_data']),
-                                      do_sizes = cache_images_now,
-                                      return_as_urls = False,
-                                      )
                 
         if not do_sort:
             rename(fn_out_temp, fn_out_temp_2)

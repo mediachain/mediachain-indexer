@@ -1929,8 +1929,10 @@ def apply_post_ingestion_normalizers(rr,
                 if kk in ii['_source']:
                     del ii['_source'][kk]
 
+        if len(ii['_source'].get('sizes')):
+            ii['_source']['max_width'] = max([x.get('width',0) for x in ii['_source']['sizes']])
 
-        
+            
 def get_type_str(x):
     s = str(type(x))
     assert "<type '" in s,repr(s)

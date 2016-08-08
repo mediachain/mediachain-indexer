@@ -141,6 +141,24 @@ def tarfile_extract_if_not_exists(fn_in,
             else:
                 tar.extract(name, path=directory)
 
+from itertools import islice
+                
+def igroup(seq,
+           num,
+           ):
+    seq = iter(seq)
+    r=[]
+    while True:
+        x = list(islice(seq,
+                        0,
+                        num,
+                        ))
+        if len(x)==0:
+            break
+        yield x
+        if len(x)<num:
+            break
+
 def group(seq, size):
     """
     Group sequence `seq` into chunks of size `size`.

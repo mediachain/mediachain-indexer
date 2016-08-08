@@ -219,7 +219,7 @@ def get_image_cache_url(_id,
 
 def lookup_cached_image(_id,
                         do_sizes = ['1024x1024','256x256'], #'original', 
-                        return_as_urls = True,
+                        return_as = 'urls',
                         check_exists = False,
                         image_hash_sha256 = False,
                         image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
@@ -233,11 +233,13 @@ def lookup_cached_image(_id,
     Args:
         _id:               Note - Assumed to be already cryptographically hashed, for even distribution.
         do_sizes:          Output resized versions, with these sizes.
-        return_as_urls:    Return as URLs, otherwise return filenames.
+        return_as:         'urls', 'filenames', 'bytes', 'base64'
         check_exists:      Check that the files actually exist. Can considerably slow down lookups.
                            TODO: auto-generate lower res versions from the higher-res versions, if needed?
         image_hash_sha256: TODO: Optionally verify that retrieved original matches this hash?
     """
+
+    orig_id = _id
     
     if '_' in _id:
         ## TODO: either md5 of native_id or not:
@@ -262,26 +264,43 @@ def lookup_cached_image(_id,
         ## TODO: handle cache misses here?
         
         if check_exists:
-            assert exists(fn_cache), fn_cache
-        
-        if return_as_urls:
+            if not exists(fn_cache):
+                print ('CACHE_MISS', orig_id, _id, fn_cache)
+                return False
+            else:
+                print ('CACHE_HIT', orig_id, _id, fn_cache)
+
+        if return_as in ['bytes', 'base64']:
+            with open(fn_cache) as f:
+                bytes_out = f.read()
+            
+        if return_as == 'urls':
             rh[size] = image_cache_host + 'hh_' + size + '/' + _id[:3] + '/' + _id + '.jpg'
         
-        else:
-            
+        elif return_as == 'filenames':            
             rh[size] = fn_cache
+
+        elif return_as == 'bytes':
+            rh[size] = bytes_out
+            
+        elif return_as == 'base64':
+            rh[size] = data_pat + base64.b64encode(bytes_out)
+        
+        else:
+            assert False, ('TODO', return_as)
 
     #print ('lookup_cached_image',rh)
     
     return rh
 
+from random import randint
 
 def cache_image(_id,
                 image_hash_sha256 = False,
                 image_func = False,
                 image_bytes = False,
                 do_sizes = ['1024x1024','256x256'], #'original', 
-                return_as_urls = True,
+                return_as = 'urls',
                 image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
                 image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
                 ):
@@ -300,7 +319,7 @@ def cache_image(_id,
        image_func:     When called, returns an open file ready for reading. Used for lazy image retrieval.
        image_bytes:    Image content bytes.
        do_sizes:       Output resized versions with these sizes.
-       return_as_urls: Return as URLs, otherwise return filenames.
+       return_as:      'urls', 'filenames', 'bytes', 'base64'
     
     Process:
        1) Check if hash of image file for this `_id` has changed.
@@ -360,7 +379,8 @@ def cache_image(_id,
             ## TODO delete all old sizes, to be safer.
             pass
         
-
+    print ('current_cached', current_cached)
+        
     ## Output resized images:
     
     rh = {}
@@ -369,7 +389,6 @@ def cache_image(_id,
 
         assert '\t' not in size, repr(size)
         
-                
         dr1 = image_cache_dir + 'hh_' + size + '/'
                 
         dr2 = dr1 + _id[:3] + '/'
@@ -412,7 +431,7 @@ def cache_image(_id,
                 bytes_out = shrink_and_encode_image(image_bytes,
                                                     size = (iw, ih),
                                                     to_base64 = False,
-                                                    )
+                                                    )            
             except KeyboardInterrupt:
                 raise
             except:
@@ -424,20 +443,31 @@ def cache_image(_id,
             with open(fn_cache, 'w') as f:
                 f.write(bytes_out)
         
-        if return_as_urls:
+        if return_as == 'urls':
             rh[size] = url
         
-        else:
+        elif return_as == 'filenames':
             rh[size] = fn_cache
+
+        elif return_as == 'bytes':
+            rh[size] = bytes_out
+                    
+        elif return_as == 'base64':
+            rh[size] = data_pat + base64.b64encode(bytes_out)
+        
+        else:
+            assert False,('TODO', return_as)
     
     
     ## Finally write out the hash file, after all image sizes have been written out to disk:
     ## Also record sizes, so they can hopefully be used to delete all sizes of old images upon next update.
     
-    with open(fn_h + '.temp', 'w') as f:
+    fn_tmp = fn_h + '.temp-' + str(randint(0,100000000))
+    
+    with open(fn_tmp, 'w') as f:
         f.write(('\t'.join(do_sizes)) + '\t' + image_hash_sha256)
     
-    rename(fn_h + '.temp',
+    rename(fn_tmp,
            fn_h,
            )
     
@@ -446,9 +476,12 @@ def cache_image(_id,
     return rh
 
 
+from collections import Counter
+
 def aes_backfill(batch_size = 100,
                  index_name = mc_config.MC_INDEX_NAME,
                  doc_type = mc_config.MC_DOC_TYPE,
+                 only_datasets = ['500px'],
                  via_cli = False,
                  ):
 
@@ -512,6 +545,11 @@ def aes_backfill(batch_size = 100,
     nn = 0
 
     rr = []
+
+    common_prefixes = Counter()
+    skipped_prefixes = Counter()
+
+    only_datasets = set(only_datasets)
     
     for c,hit in enumerate(res):
 
@@ -520,17 +558,27 @@ def aes_backfill(batch_size = 100,
         native_id = hit['_source'].get('native_id') or hit['_id']
         
         assert '_' in native_id, hit
+
+        prefix = native_id[:native_id.index('_')]
+        
+        common_prefixes[prefix] += 1
         
         if c % 1000 == 0:
-            print ('LOOP:', c, native_id)
+            print ('LOOP:', c, native_id, 'common:', common_prefixes.most_common(50), 'skipped:', skipped_prefixes.most_common(50))
+        
+        if only_datasets and (prefix not in only_datasets):
+            continue
         
         fn_aes = get_fn_out(native_id, 'r')
-
+        
         if not exists(fn_aes):
+            skipped_prefixes[prefix] += 1
             continue
-
+        
         with open(fn_aes) as f:
             aes = ujson.loads(f.read())
+
+        #assert not '500px' in native_id,('2',native_id) ##TODO REMOVE
         
         doc_update['aesthetics'] = aes
         
@@ -565,7 +613,7 @@ def aes_backfill(batch_size = 100,
     else:
         nes.refresh_index()
     
-    print ('DONE_ALL',)
+    print ('DONE_ALL', 'common:', common_prefixes.most_common(50), 'skipped:', skipped_prefixes.most_common(50))
 
 
 def test_image_cache(via_cli = False):
@@ -587,7 +635,7 @@ def test_image_cache(via_cli = False):
         ff = StringIO(image_bytes)
         return ff
     
-    for as_urls in [True, False]:
+    for return_as in ['urls', 'filenames']:
         
         for use_image_func in [True, False]:
             
@@ -596,21 +644,21 @@ def test_image_cache(via_cli = False):
                               image_func = image_func if use_image_func else False,
                               image_bytes = image_bytes if not use_image_func else False,
                               do_sizes = ['1024x1024','256x256','original'],
-                              return_as_urls = as_urls,
+                              return_as = return_as,
                               )
             
-            if not as_urls:
+            if return_as == 'filenames':
                 for k,v in rh1.items():
-                    assert exists(v),(as_urls, use_image_func, v)
+                    assert exists(v),(return_as, use_image_func, v)
             
             rh2 = lookup_cached_image(_id,
                                       do_sizes = ['1024x1024','256x256', 'original'],
-                                      return_as_urls = as_urls,
+                                      return_as = return_as,
                                       )
 
-            if not as_urls:
+            if return_as == 'filenames':
                 for k,v in rh2.items():
-                    assert exists(v),(as_urls, use_image_func, v)
+                    assert exists(v),(return_as, use_image_func, v)
 
             for k,v in rh1.items():
                 assert rh1[k] == rh2[k],(k, rh1[k], rh2[k])
@@ -753,7 +801,7 @@ def ingest_bulk(iter_json = False,
                         fns = cache_image(_id = hh['_id'],
                                           image_bytes = decode_image(hh['img_data']),
                                           do_sizes = ['1024x1024','256x256'],
-                                          return_as_urls = False,
+                                          return_as = 'filenames',
                                           )
 
                     elif do_lazy:
@@ -761,7 +809,7 @@ def ingest_bulk(iter_json = False,
                                           image_hash_sha256 = hh['image_hash_sha256'],
                                           image_func = lambda: get_asset(),
                                           do_sizes = ['1024x1024','256x256'],
-                                          return_as_urls = False,
+                                          return_as = 'filenames',
                                           )
 
                     else:
@@ -770,7 +818,7 @@ def ingest_bulk(iter_json = False,
                         fns = cache_image(_id = hh['_id'],
                                           image_bytes = get_asset().read(),
                                           do_sizes = ['1024x1024','256x256'],
-                                          return_as_urls = False,
+                                          return_as = 'filenames',
                                           )
 
                     assert fns
@@ -814,6 +862,7 @@ def ingest_bulk(iter_json = False,
             except KeyboardInterrupt:
                 raise
             except:
+                raise
                 ## TODO: a fix has been applied upstream of this step. This won't be needed
                 ## once the datasets are reprocessed.
                 print ('ERROR_RESIZING_IMAGE /datasets/datasets/error_record',)
