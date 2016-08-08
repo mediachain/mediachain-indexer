@@ -1031,11 +1031,17 @@ def tail_blockchain(via_cli = False):
 def get_last_known_block_ref():
     last_block_file = os.path.join(os.path.expanduser('~'), '.mediachain',
                                    'last-known-block')
+
+    if not exists(last_block_file):
+        print ("DOESN'T EXIST:", last_block_file)
+        return None
+    
     try:
         with open(last_block_file) as f:
             return f.read().strip()
     except IOError:
-        raise
+        print ("FAILED GETTING LAST KNOWN BLOCK REF", last_block_file)
+        return None
 
 
 def save_last_known_block_ref(ref):
