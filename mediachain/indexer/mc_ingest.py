@@ -1073,7 +1073,8 @@ def receive_blockchain_into_indexer(last_block_ref = None,
     """
     
     from mc_simpleclient import SimpleClient
-    
+    from mediachain.reader.utils import stringify_refs
+
     cur = SimpleClient()
 
     catchup = ('--disable-catchup' not in sys.argv)
@@ -1133,7 +1134,7 @@ def receive_blockchain_into_indexer(last_block_ref = None,
                 
                 print 'INSERT',rhc
                 
-                yield rh
+                yield stringify_refs(rh)
                 
             except KeyboardInterrupt:
                 raise
