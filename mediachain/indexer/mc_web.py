@@ -545,13 +545,19 @@ debug_options = [{'name':'q',
                   'description':'List of zero-or-more allowable licenses. Select nothing or use "ALL" to allow all licenses.',
                   'default':'Creative Commons',
                   'type':'list-of-strings',
-                  'options':['Creative Commons','All'],
+                  'options':['Creative Commons','ALL'],
                  },
                  {'name':'filter_sources',
                   'description':'List of zero-or-more allowable sources. Select nothing or use "ALL" to allow all licenses.',
                   'default':[],
                   'type':'list-of-strings',
-                  'options':source_urls,
+                  'options':source_urls + ['ALL'],
+                 },
+                 {'name':'token',
+                  'description':'Token ID used to refer to previous search sessions.',
+                  'default':[],
+                  'type':'text',
+                  'options':None,
                  },
                  ]
 
@@ -564,61 +570,38 @@ class handle_search(BaseHandler):
     @tornado.gen.coroutine
     def post(self):
         """
-        Search for images based on text query, a media work, or a combination of both.
+        Search for images.
         
-        Args, as JSON-encoded POST body:
-            q:                Query text.
-            q_id:             Query media. See `Media Identifiers`.
-            
-            limit:            Maximum number of results to return.
-            include_self:     Include ID of query document in results.
-            include_docs:     Return entire indexed docs, instead of just IDs.
-            include_thumb:    Whether to include base64-encoded thumbnails in returned results.
-            
-            model_name:       Model name to use.
-            rerank_eq:        Override the re-ranking equation.
-            
-            pretty:           Pretty-print JSON output.
-            max_indent_depth: Maximum depth at which to indent for pretty-printed JSON output.
-
-            filter_licenses:  List of allowable licenses. Empty list to allow all licenses. See `/list_facets`.
-            filter_sources:   List of allowable sources. Empty list to allow all sources. See `/list_facets`.
-        
-        Returns:
-            List of image IDs, possibly with relevancy scores.
+        See: `/list_facets` endpoint, or `debug_options` field in returned the JSON response, for argument details.
         
         Example:
-           in:
-               curl "http://127.0.0.1:23456/search" -d '{"q":"crowd", "limit":5}'
-
-           out:
-                {
-                    "next_page": null, 
-                    "prev_page": null, 
-                    "results": [
-                        {
-                            "_id": "getty_531746924", 
-                            "_index": "getty_test", 
-                            "_score": 0.08742375, 
-                            "_source": {
-                                "artist": "Tristan Fewings", 
-                                "caption": "CANNES:  A policeman watches the crowd in front of the Palais des Festival", 
-                                "collection_name": "Getty Images Entertainment", 
-                                "date_created": "2016-05-16T00:00:00-07:00", 
-                                "dedupe_hsh": "d665691fe66393d81c078ae1ff1467cf18f78070900e23ff87c98704cc007c00", 
-                                "editorial_source": "Getty Images Europe", 
-                                "keywords": "People Vertical Crowd Watching France Police Force Cannes", 
-                                "title": "'Loving' - Red Carpet Arrivals - The 69th Annual Cannes Film Festival"
-                            }, 
-                            "_type": "image"
-                        }
-                    ]
-                }
-        
-            in:
-                curl "http://127.0.0.1:23456/search" -d '{"q_id":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==", "limit":5, "index_name":"mc_test", "doc_type":"mc_test_image"}' 
-            out:
-                 <see_previous_example>
+            $ curl "http://127.0.0.1:23456/search" -d '{"q":"crowd", "limit":1}'
+            
+            {
+                "next_page": {
+                    "limit": 15, 
+                    "offset": 15, 
+                    "token": "10908a245779ba1f1d371c40596ce487"
+                 },
+                "prev_page": null, 
+                "results": [
+                    {
+                        "_id": "getty_531746924", 
+                        "_index": "getty_test", 
+                        "_score": 0.08742375, 
+                        "_source": {
+                            "artist": "Tristan Fewings", 
+                            "caption": "CANNES:  A policeman watches the crowd in front of the Palais des Festival", 
+                            "collection_name": "Getty Images Entertainment", 
+                            "date_created": "2016-05-16T00:00:00-07:00", 
+                            "editorial_source": "Getty Images Europe", 
+                            "keywords": "People Vertical Crowd Watching France Police Force Cannes", 
+                            "title": "'Loving' - Red Carpet Arrivals - The 69th Annual Cannes Film Festival"
+                        }, 
+                        "_type": "image"
+                    }
+                ]
+            }
         """
         
         d = self.request.body
@@ -693,11 +676,7 @@ class handle_search(BaseHandler):
         the_input['doc_type'] = data.get('doc_type', mc_config.MC_DOC_TYPE)
         the_input['include_thumb'] = False
         the_input['full_limit'] = 300
-
         
-        #if the_input['filter_incomplete'] is None:
-        #    filter_incomplete = mc_config.MC_FILTER_INCOMPLETE_INT and True or False
-
         
         ## TODO: need multiple image upload support?:
 
@@ -719,9 +698,6 @@ class handle_search(BaseHandler):
                              })
             return                
         
-        include_thumb = False ## Always disabled, for now
-        full_limit = 300
-
         
         ## Remote ranking hints:
         
@@ -825,7 +801,7 @@ class handle_search(BaseHandler):
             rr = {'results':rr,
                   'next_page':None,
                   'prev_page':None,
-                  'results_count':('{:,}'.format(full_limit)) + '+',
+                  'results_count':('{:,}'.format(the_input['full_limit'])) + '+',
                   }
 
             rr['debug_options'] = debug_options
@@ -955,7 +931,7 @@ class handle_search(BaseHandler):
                 assert xx['_source']['boosted'] == 1
         
         query['from'] = the_input['offset']
-        query['size'] = full_limit
+        query['size'] = the_input['full_limit']
         
         print ('QUERY',query)
 
@@ -1018,7 +994,7 @@ class handle_search(BaseHandler):
         rr = r2
         
         ## Remove inline thumbnail data URIs:
-        if not include_thumb:
+        if not the_input['include_thumb']:
             for x in rr:
                 if 'image_thumb' in x['_source']:
                     del x['_source']['image_thumb']
@@ -1115,12 +1091,21 @@ class handle_search(BaseHandler):
         
         ## Note: swapping these for ES queries shortly:
         
-        if False: #the_input['filter_licenses']:
+        if the_input['filter_licenses'] == 'Creative Commons':
             filter_licenses_s = set(the_input['filter_licenses'])
             r2 = []
-            for ii in rr:                
-                if filter_licenses_s.intersection(ii['_source'].get('license_tags',[])):
+            for ii in rr:
+                
+                ## TODO: adding high-level "Creative Commons" license tag to relevant datasets,
+                ## instead of the following blacklisting:
+                
+                native_id = ii.get('native_id', '')
+                
+                if ('getty_' not in native_id) and ('eyeem_' not in native_id):
                     r2.append(ii)
+                
+                #if filter_licenses_s.intersection(ii['_source'].get('license_tags',[])):
+                #    r2.append(ii)
             
             print ('FILTER_LICENSES', the_input['filter_licenses'], len(rr),'->',len(r2))
             rr = r2
@@ -1150,8 +1135,8 @@ class handle_search(BaseHandler):
         results_count = len(rr)
         
         rr = {'results':rr,
-              'results_count':(results_count >= full_limit * 0.8) and \
-                               (('{:,}'.format(full_limit)) + '+') or \
+              'results_count':(results_count >= the_input['full_limit'] * 0.8) and \
+                               (('{:,}'.format(the_input['full_limit'])) + '+') or \
                                ('{:,}'.format(results_count)),
               }
         
@@ -1200,6 +1185,9 @@ class handle_record_relevance(BaseHandler):
             query:          Query args dict, as passed to `/search` endpoint.
             data:           Annotation data dict.
             nonce:          Random nonce used to prevent accidential double-submits. Only hex characters allowed.
+        
+        Example:
+            $ curl "http://127.0.0.1:23456/record_relevance" -d '{"user_id":"012345", "data":{}, "query":{}}'
         
         TODO:
         Million other features. Intentionally neglecting those features, because having anything here is far better
