@@ -1101,6 +1101,7 @@ class handle_record_relevance(BaseHandler):
             user_id:        Random hex string used as user ID.
             query:          Query args dict, as passed to `/search` endpoint.
             data:           Annotation data dict.
+            nonce:          Random nonce used to prevent accidential double-submits. Only hex characters allowed.
         
         TODO:
         Million other features. Intentionally neglecting those features, because having anything here is far better
@@ -1129,36 +1130,51 @@ class handle_record_relevance(BaseHandler):
                              'error_message':repr(list(diff)),
                              })
             return
-
         
         print ('RECORD_RELEVANCE', hh)
         
         user_id = hh['user_id']
-        
         diff = set(user_id).difference('1234567890abcdef')
-        
         if diff:
             self.set_status(500)
-            self.write_json({'error':'INVALID_USER_ID_COOKIE',
+            self.write_json({'error':'INVALID_USER_ID',
                              'error_message':'user_id string must only contain hex characters (0-9 a-f). Got: ' + repr(user_id),
                              })
             return
+
+        nonce = hh.get('nonce') or uuid4().hex
+        diff = set(nonce).difference('1234567890abcdef')
+        if diff:
+            self.set_status(500)
+            self.write_json({'error':'INVALID_NONCE',
+                             'error_message':'nonce string must only contain hex characters (0-9 a-f). Got: ' + repr(nonce),
+                             })
+            return
+
+        fn_out = join(dir_out,
+                      user_id + '_' + nonce + '.json',
+                      )
+
+        if exists(fn_out):
+            self.set_status(500)
+            self.write_json({'error':'NONCE_USED',
+                             'error_message':'Already recorded a response under provided nonce. Accidental double submit?',
+                             })
+            return
+
         
         rh = {'created':int(time()),
               'user_id':user_id,
               'data':hh,
+              'nonce':nonce,
               'user_ip':self.request.headers.get('X-Real-Ip'),
               'headers':dict(self.request.headers),
               }
-        
-        fn_out = join(dir_out,
-                      uuid4().hex + '_' + '.json',
-                      )
-        
+                
         with open(fn_out, 'w') as f:
             f.write(json.dumps(rh))
         
-        print ('WROTE', fn_out)
+        print ('WROTE', fn_out, rh)
         
         self.write_json({'success':True,
                          'fn':fn_out,
