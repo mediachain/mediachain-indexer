@@ -1147,7 +1147,10 @@ class handle_search(BaseHandler):
         
         ## Note: swapping these for ES queries shortly:
         
-        if the_input['filter_licenses'] == 'Creative Commons':
+        if (len(the_input['filter_licenses']) == 1) and ('Creative Commons' in the_input['filter_licenses']):
+
+            ## TODO, temporarily only doing open license or ALL filtering:
+            
             filter_licenses_s = set(the_input['filter_licenses'])
             r2 = []
             for ii in rr:
@@ -1155,7 +1158,7 @@ class handle_search(BaseHandler):
                 ## TODO: adding high-level "Creative Commons" license tag to relevant datasets,
                 ## instead of the following blacklisting:
                 
-                native_id = ii.get('native_id', '')
+                native_id = ii['_source'].get('native_id', '')
                 
                 if ('getty_' not in native_id) and ('eyeem_' not in native_id):
                     r2.append(ii)
@@ -1165,7 +1168,7 @@ class handle_search(BaseHandler):
             
             print ('FILTER_LICENSES', the_input['filter_licenses'], len(rr),'->',len(r2))
             rr = r2
-        
+                    
         if False: #the_input['filter_sources']:
             filter_sources_s = set(the_input['filter_sources'])
             r2 = []

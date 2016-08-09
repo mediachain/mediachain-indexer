@@ -1871,14 +1871,15 @@ def apply_post_ingestion_normalizers(rr,
             ## New Schema Format
             ## See: https://rawgit.com/mediachain/mediachain-indexer/master/doc/index.html
 
-            try:
-                if ii['_source'].get('artist_names') and (type(ii['_source'].get('artist_names')[0]) == list):
-                    ii['_source']['artist_name'] = ', '.join(ii['_source']['artist_names'][0])
-                else:
-                    ii['_source']['artist_name'] = ', '.join(ii['_source']['artist_names']) if ii['_source'].get('artist_names') else None
-            except:
-                print repr(ii['_source'].get('artist_names'))
-                ii['_source']['artist_name'] = None
+            if not ii['_source'].get('artist_name'):
+                try:
+                    if ii['_source'].get('artist_names') and (type(ii['_source'].get('artist_names')[0]) == list):
+                        ii['_source']['artist_name'] = ', '.join(ii['_source']['artist_names'][0])
+                    else:
+                        ii['_source']['artist_name'] = ', '.join(ii['_source']['artist_names']) if ii['_source'].get('artist_names') else None
+                except:
+                    print repr(ii['_source'].get('artist_names'))
+                    ii['_source']['artist_name'] = None
             
             ii['_source']['date_created'] = ii['_source'].get('date_created_original') or ii['_source'].get('date_created_at_source') or None
 
