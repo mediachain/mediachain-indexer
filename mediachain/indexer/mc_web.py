@@ -519,7 +519,7 @@ sources = {x:{"id":x,
            for x in source_urls
            }
 
-debug_options = [{'name':'q',
+default_options = [{'name':'q',
                   'description':'Query by text.',
                   'default':None,
                   'type':'text',
@@ -538,18 +538,26 @@ debug_options = [{'name':'q',
                   'options':None,
                   },
                  {'name':'limit',
-                  'description':'',
+                  'description':'Items per page.',
                   'default':15,
                   'type':'number',
                   'options':None,
                   },
                  {'name':'offset',
-                  'description':'',
+                  'description':'Page offset.',
                   'default':0,
                   'type':'number',
                   'options':None,
                   },
-                 {'name':'include_docs',
+                 {'name':'debug',
+                  'description':'Enable advanced mode.',
+                  'default':0,
+                  'type':'number',
+                  'options':[0, 1],
+                  },
+                   ]
+
+debug_options = [{'name':'include_docs',
                   'description':'Return entire indexed docs, instead of just IDs.',
                   'default':1,
                   'type':'number',
@@ -599,14 +607,14 @@ debug_options = [{'name':'q',
                   },
                  {'name':'filter_licenses',
                   'description':'List of zero-or-more allowable licenses. Select nothing or use "ALL" to allow all licenses.',
-                  'default':'Creative Commons',
+                  'default':['Creative Commons'],
                   'type':'list-of-strings',
                   'options':['Creative Commons','ALL'],
                  },
                  {'name':'filter_sources',
                   'description':'List of zero-or-more allowable sources. Select nothing or use "ALL" to allow all licenses.',
                   'default':[],
-                  'type':'list-of-strings',
+                  'type':['list-of-strings'],
                   'options':source_urls + ['ALL'],
                  },
                  {'name':'token',
@@ -680,6 +688,12 @@ class handle_search(BaseHandler):
                             })
             return
 
+        
+        is_debug_mode = intget(self.get_cookie('debug')) or intget(data.get('debug'))
+                
+        print ('DEBUG_MODE?', is_debug_mode, dict(self.request.cookies))
+        
+
         if 'help' in data:
             ## TODO: switch to using the "options" further below instead:
             ## Plain-text help:
@@ -697,7 +711,7 @@ class handle_search(BaseHandler):
         #                            'pretty',
         #                            ])
 
-        diff = set(data).difference([x['name'] for x in debug_options])
+        diff = set(data).difference([x['name'] for x in default_options + debug_options])
         if diff:
             self.set_status(500)
             self.write_json({'error':'UNKNOWN_ARGS',
@@ -709,7 +723,7 @@ class handle_search(BaseHandler):
         ## New method:
 
         the_input = {}
-        for arg in debug_options:
+        for arg in default_options + debug_options:
 
             if arg['type'] == 'number':
                 the_input[arg['name']] = intget(data.get(arg['name'], 'BAD'), arg['default'])
@@ -721,7 +735,7 @@ class handle_search(BaseHandler):
             if arg['type'] == 'list-of-strings':
                 if isinstance(the_input[arg['name']], basestring):
                     the_input[arg['name']] = [the_input[arg['name']]]
-
+                    
 
         the_input['q_text'] = the_input['q'] ## for reverse compatibility.
 
@@ -821,8 +835,11 @@ class handle_search(BaseHandler):
                 rr['prev_page'] = {'token':the_token, 'offset':max(0, the_input['offset'] - the_input['limit']), 'limit':the_input['limit']}
 
             rr['results'] = rr['results'][the_input['offset']:the_input['offset'] + the_input['limit']]
+
+            rr['default_options'] = default_options
             
-            rr['debug_options'] = debug_options
+            if is_debug_mode:
+                rr['debug_options'] = debug_options
             
             self.write_json(rr,
                             pretty = the_input['pretty'],
@@ -859,8 +876,11 @@ class handle_search(BaseHandler):
                   'prev_page':None,
                   'results_count':('{:,}'.format(the_input['full_limit'])) + '+',
                   }
-
-            rr['debug_options'] = debug_options
+            
+            rr['default_options'] = default_options
+            
+            if is_debug_mode:
+                rr['debug_options'] = debug_options
             
             self.write_json(rr)
             return
@@ -1143,28 +1163,29 @@ class handle_search(BaseHandler):
             
             ii['_source']['keywords'].append('tfidf=%.4f' % ii['_old_score'])
             ii['_source']['keywords'].append('score=%.4f' % ii['_score'])
-
+        
         
         ## Note: swapping these for ES queries shortly:
         
-        if (len(the_input['filter_licenses']) == 1) and ('Creative Commons' in the_input['filter_licenses']):
-
-            ## TODO, temporarily only doing open license or ALL filtering:
+        if the_input['filter_licenses'] and ('ALL' not in the_input['filter_licenses']):
             
             filter_licenses_s = set(the_input['filter_licenses'])
             r2 = []
             for ii in rr:
                 
-                ## TODO: adding high-level "Creative Commons" license tag to relevant datasets,
-                ## instead of the following blacklisting:
-                
                 native_id = ii['_source'].get('native_id', '')
                 
-                if ('getty_' not in native_id) and ('eyeem_' not in native_id):
-                    r2.append(ii)
+                ii['_source']['license_tags'] = ii['_source'].get('license_tags') or []
                 
-                #if filter_licenses_s.intersection(ii['_source'].get('license_tags',[])):
-                #    r2.append(ii)
+                assert type(ii['_source']['license_tags']) == list, ii['_source']['license_tags']
+                
+                ## The currently-ingested, except for these 2 datasets, should be all open-licensed:
+                if ('getty_' not in native_id) and ('eyeem_' not in native_id):
+                    ii['_source']['license_tags'].append('Creative Commons') 
+                
+                ## ANY match:
+                if filter_licenses_s.intersection(ii['_source'].get('license_tags',[])):
+                    r2.append(ii)
             
             print ('FILTER_LICENSES', the_input['filter_licenses'], len(rr),'->',len(r2))
             rr = r2
@@ -1219,7 +1240,10 @@ class handle_search(BaseHandler):
         
         ## Output:
 
-        rr['debug_options'] = debug_options
+        rr['default_options'] = default_options
+        
+        if is_debug_mode:
+            rr['debug_options'] = debug_options
         
         self.write_json(rr,
                         pretty = the_input['pretty'],
