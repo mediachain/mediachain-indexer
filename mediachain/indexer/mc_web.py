@@ -112,31 +112,58 @@ class BaseHandler(tornado.web.RequestHandler):
     @property
     def rand_typeahead(self):
         if not hasattr(self.application,'rand_typeahead'):
+            
             total = 0
             rr = []
+
+            total_mwe = 0
+            rr_mwe = []
             
             with open(mc_config.MC_TYPEAHEAD_TSV_PATH) as f:
                 for c, line in enumerate(f):
                     if c >= 10000:
                         break
+                    
                     if not line:
                         break
+                    
                     score, query, _ = line.split('\t')
                     score = int(score)
-                    rr.append((score, query))
-                    total += score
-            
+
+                    if c < 1000:
+                        rr.append((score, query))
+                        total += score
+
+                    if ' ' in query:
+                        rr_mwe.append((score, query))
+                        total_mwe += score
+                    
             self.application.rand_typeahead_total = total
             self.application.rand_typeahead = rr
+            
+            self.application.rand_typeahead_mwe_total = total_mwe
+            self.application.rand_typeahead_mwe = rr_mwe
             
         return self.application.rand_typeahead
     
     @property
     def rand_typeahead_total(self):
         if not hasattr(self.application,'rand_typeahead_total'):
-            self.rand_typeahead()
+            self.rand_typeahead
         return self.application.rand_typeahead_total
             
+    @property
+    def rand_typeahead_mwe(self):
+        if not hasattr(self.application,'rand_typeahead_mwe'):
+            self.rand_typeahead
+        return self.application.rand_typeahead_mwe
+
+    @property
+    def rand_typeahead_mwe_total(self):
+        if not hasattr(self.application,'rand_typeahead_mwe_total'):
+            self.rand_typeahead
+        return self.application.rand_typeahead_mwe_total
+    
     @tornado.gen.engine
     def render_template(self,template_name, kwargs):
         """
@@ -1219,6 +1246,10 @@ class handle_random_query(BaseHandler):
     def get(self):
         """        
         Return or redirect to a random search query.
+
+        Query Args:
+            as_url:      Redirect to a URL instead of returning JSON, if "1".
+            only_mwe:    Only multi-word queries, if "1",
         """
         
         if not exists(mc_config.MC_TYPEAHEAD_TSV_PATH):
@@ -1228,20 +1259,25 @@ class handle_random_query(BaseHandler):
                              })
             return
         
-        from urllib import quote_plus
+        from urllib import quote
+
+        if intget(self.get_argument('only_mwe', 0)):
+            aa, bb = self.rand_typeahead_mwe, self.rand_typeahead_mwe_total
+        else:
+            aa, bb = self.rand_typeahead, self.rand_typeahead_total
 
         if choice([0, 0, 0, 0, 0, 1]):
             ## Sometimes weighted:
-            q = weighted_choice(self.rand_typeahead, self.rand_typeahead_total)
+            q = weighted_choice(aa, bb)
         else:
             ## Sometimes totally random:
-            q = choice(self.rand_typeahead)[1]
+            q = choice(aa)[1]
 
-        print ('random_query', q, self.rand_typeahead_total)
-
+        print ('random_query', q, bb)
+        
         if intget(self.get_argument('as_url', 0)):
             ## TODO: temporary for convenience:
-            self.redirect('http://images.mediachainlabs.com/search/' + quote_plus(q), permanent = False)
+            self.redirect('http://images.mediachainlabs.com/search/' + quote(q), permanent = False)
         else:
             self.write_json({'query':q})
         
