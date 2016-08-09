@@ -69,6 +69,7 @@ class Application(tornado.web.Application):
                     (r'/list_facets',handle_list_facets),
                     (r'/get_embed_url',handle_get_embed_url,),
                     (r'/record_relevance',handle_record_relevance,),
+                    (r'/random_query',handle_random_query,),
                     #(r'.*', handle_notfound,),
                     ]
         
@@ -108,6 +109,34 @@ class BaseHandler(tornado.web.RequestHandler):
             self.application.es = ESConnection("localhost", 9200)
         return self.application.es
     
+    @property
+    def rand_typeahead(self):
+        if not hasattr(self.application,'rand_typeahead'):
+            total = 0
+            rr = []
+            
+            with open(mc_config.MC_TYPEAHEAD_TSV_PATH) as f:
+                for c, line in enumerate(f):
+                    if c >= 10000:
+                        break
+                    if not line:
+                        break
+                    score, query, _ = line.split('\t')
+                    score = int(score)
+                    rr.append((score, query))
+                    total += score
+            
+            self.application.rand_typeahead_total = total
+            self.application.rand_typeahead = rr
+            
+        return self.application.rand_typeahead
+    
+    @property
+    def rand_typeahead_total(self):
+        if not hasattr(self.application,'rand_typeahead_total'):
+            self.rand_typeahead()
+        return self.application.rand_typeahead_total
+            
     @tornado.gen.engine
     def render_template(self,template_name, kwargs):
         """
@@ -1167,6 +1196,56 @@ class handle_search(BaseHandler):
                         max_indent_depth = data.get('max_indent_depth', False),
                         )
 
+
+from random import uniform, randint, choice
+
+def weighted_choice(choices, total):
+    while True:
+        r = uniform(0, total)
+        cur = 0
+        for w, val in choices:
+            if cur + w >= r:
+                return val
+            cur += w
+   
+
+class handle_random_query(BaseHandler):
+    
+    #disable XSRF checking for this URL:
+    def check_xsrf_cookie(self): 
+        pass
+    
+    @tornado.gen.coroutine
+    def get(self):
+        """        
+        Return or redirect to a random search query.
+        """
+        
+        if not exists(mc_config.MC_TYPEAHEAD_TSV_PATH):
+            self.set_status(500)
+            self.write_json({'error':'TSV_FILE_NOT_FOUND',
+                             'error_message':'Please correct MC_TYPEAHEAD_TSV_PATH: ' + repr(mc_config.MC_TYPEAHEAD_TSV_PATH),
+                             })
+            return
+        
+        from urllib import quote_plus
+
+        if choice([0, 0, 0, 0, 0, 1]):
+            ## Sometimes weighted:
+            q = weighted_choice(self.rand_typeahead, self.rand_typeahead_total)
+        else:
+            ## Sometimes totally random:
+            q = choice(self.rand_typeahead)[1]
+
+        print ('random_query', q, self.rand_typeahead_total)
+
+        if intget(self.get_argument('as_url', 0)):
+            ## TODO: temporary for convenience:
+            self.redirect('http://images.mediachainlabs.com/search/' + quote_plus(q), permanent = False)
+        else:
+            self.write_json({'query':q})
+        
+        
 from uuid import uuid4
 
 class handle_record_relevance(BaseHandler):
