@@ -1110,20 +1110,30 @@ class handle_record_relevance(BaseHandler):
         """
         
         ## TODO: Switch to real auth system:
-        
-        if not exists(mc_config.MC_ANNOTATE_RELEVANCE_DIR):
-            mkdir(MC_ANNOTATE_RELEVANCE_DIR)
-        
-        dir_out = join_path(MC_ANNOTATE_DIR,
-                            'search_relevance',
-                            )
+                
+        dir_out = join(mc_config.MC_ANNOTATE_DIR,
+                       'search_relevance',
+                       )
+
+        if not exists(dir_out):
+            makedirs(dir_out)
             
         d = self.request.body
         hh = json.loads(d)
+
+        diff = set(['user_id', 'query', 'data']).difference(hh.keys())
+        
+        if diff:
+            self.set_status(500)
+            self.write_json({'error':'MISSING_ARGS',
+                             'error_message':repr(list(diff)),
+                             })
+            return
+
         
         print ('RECORD_RELEVANCE', hh)
         
-        user_id = self.get_cookie('user_id').lower()
+        user_id = hh['user_id']
         
         diff = set(user_id).difference('1234567890abcdef')
         
@@ -1134,15 +1144,15 @@ class handle_record_relevance(BaseHandler):
                              })
             return
         
-        rh = {'created':int(time),
+        rh = {'created':int(time()),
               'user_id':user_id,
               'data':hh,
-              'ip':handler.request.headers.get('X-Real-Ip'),
-              'headers':handler.request.headers,
+              'user_ip':self.request.headers.get('X-Real-Ip'),
+              'headers':dict(self.request.headers),
               }
         
         fn_out = join(dir_out,
-                      join_path(uuid4().hex) + '.json',
+                      uuid4().hex + '_' + '.json',
                       )
         
         with open(fn_out, 'w') as f:
