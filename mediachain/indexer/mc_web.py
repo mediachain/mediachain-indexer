@@ -426,6 +426,135 @@ class handle_list_facets(BaseHandler):
 from mc_generic import consistent_json_hash
 import hashlib
 
+source_urls = ['gettyimages.com',
+               'pexels.com',
+               'stock.tookapic.com',
+               'unsplash.com',
+               'pixabay.com',
+               'kaboompics.com',
+               'lifeofpix.com',
+               'skitterphoto.com',
+               'snapwiresnaps.tumblr.com',
+               'freenaturestock.com',
+               'negativespace.co',
+               'jaymantri.com',
+               'jeshoots.com',
+               'splitshire.com',
+               'stokpic.com',
+               'gratisography.com',
+               'picography.co',
+               'startupstockphotos.com',
+               'littlevisuals.co',
+               'gratisography.com',
+               'spacex.com',
+               'creativevix.com',
+               'photos.oliur.com',
+               'photos.uncoated.uk',
+               'tinyography.com',
+               'splashofrain.com',
+               'commons.wikimedia.org',
+               'dp.la',
+               ]
+        
+sources = {x:{"id":x,
+              "name":x,
+              "url":None,
+              }
+           for x in source_urls
+           }
+
+debug_options = [{'name':'q',
+                  'description':'Query by text.',
+                  'default':None,
+                  'type':'text',
+                  'options':None,
+                  },
+                 {'name':'q_id',
+                  'description':'Query by media. See Media Identifiers.',
+                  'default':None,
+                  'type':'text',
+                  'options':None,
+                  },
+                 {'name':'canonical_id',
+                  'description':'Query by canonical_id. TODO: Probably merging into q_id with prefixes.',
+                  'default':0,
+                  'type':'text',
+                  'options':None,
+                  },
+                 {'name':'limit',
+                  'description':'',
+                  'default':15,
+                  'type':'number',
+                  'options':None,
+                  },
+                 {'name':'offset',
+                  'description':'',
+                  'default':0,
+                  'type':'number',
+                  'options':None,
+                  },
+                 {'name':'include_docs',
+                  'description':'Return entire indexed docs, instead of just IDs.',
+                  'default':1,
+                  'type':'number',
+                  'options':['1', '0'],
+                  },
+                 {'name':'pretty',
+                  'description':'Indent and pretty-print JSON output.',
+                  'default':1,
+                  'type':'number',
+                  'options':['1','0'],
+                  },
+                 {'name':'filter_incomplete',
+                  'description':"Filter documents for which all features haven't been generated / ingested yet.",
+                  'default':0,
+                  'type':'number',
+                  'options':['0','1'],
+                  },
+                 {'name':'allow_nsfw',
+                  'description':'Include adult images.',
+                  'default':0,
+                  'type':'number',
+                  'options':['0','1'],
+                  },
+                 {'name':'skip_query_cache',
+                  'description':'Bypass the query cache.',
+                  'default':0,
+                  'type':'number',
+                  'options':['0','1']
+                  },
+                 {'name':'schema_variant',
+                  'description':'Select schema variant postprocessing version.',
+                  'default':'new',
+                  'type':'text',
+                  'options':['new','old'],
+                  },
+                 {'name':'rerank_eq',
+                  'description':'Name of reranking equation, or custom reranking equation string.',
+                  'default':'aesthetics',
+                  'type':'text',
+                  'options':['aesthetics', 'tfidf', 'boost_pexels',],
+                 },
+                 {'name':'enrich_tags',
+                  'description':'Use external API for tag enrichment on individual image pages.',
+                  'default':1,
+                  'type':'number',
+                  'options':['1','0'],
+                  },
+                 {'name':'filter_licenses',
+                  'description':'List of zero-or-more allowable licenses. Select nothing or use "ALL" to allow all licenses.',
+                  'default':'Creative Commons',
+                  'type':'list-of-strings',
+                  'options':['Creative Commons','All'],
+                 },
+                 {'name':'filter_sources',
+                  'description':'List of zero-or-more allowable sources. Select nothing or use "ALL" to allow all licenses.',
+                  'default':[],
+                  'type':'list-of-strings',
+                  'options':source_urls,
+                 },
+                 ]
+
 class handle_search(BaseHandler):
     
     #disable XSRF checking for this URL:
@@ -513,82 +642,66 @@ class handle_search(BaseHandler):
             return
 
         if 'help' in data:
+            ## TODO: switch to using the "options" further below instead:
             ## Plain-text help:
             from inspect import getdoc, getframeinfo, currentframe
             self.set_header("Content-Type", "text/plain")
             self.write(getdoc(getattr(self, getframeinfo(currentframe()).function)).replace('\n','\r\n') + '\r\n')
             self.finish()
             return
-        
-        q_text = data.get('q','')
-        q_id = data.get('q_id','')
-        canonical_id = data.get('canonical_id',None)
-        q_id_file = None
-        offset = max(0, intget(data.get('offset'), 0))
-        limit = intget(data.get('limit'), 15)
-        index_name = data.get('index_name', mc_config.MC_INDEX_NAME)
-        doc_type = data.get('doc_type', mc_config.MC_DOC_TYPE)
-        include_docs = data.get('include_docs', True)
-        include_thumb = data.get('include_thumb', True)
-        rerank_eq = data.get('rerank_eq', None)
-        filter_licenses = data.get('filter_license', None) or data.get('filter_licenses', None)
-        filter_sources = data.get('filter_sources', None)
-        skip_query_cache = intget(data.get('skip_query_cache', None)) or None
-        filter_incomplete = data.get('filter_incomplete', None)
-        schema_variant = data.get('schema_variant', 'new')
-        enrich_tags = intget(data.get('enrich_tags', True)) or None
-        allow_nsfw = data.get('allow_nsfw', False)
 
-        debug_options = [{'name':'skip_query_cache',
-                          'description':'Bypass the query cache.',
-                          'default':'0',
-                          'type':'categorical',
-                          'options':['0','1']
-                          },
-                         {'name':'schema_variant',
-                          'description':'Select schema variant postprocessing version.',
-                          'default':'new',
-                          'type':'categorical',
-                          'options':['new','old'],
-                          },
-                         {'name':'rerank_eq',
-                          'description':'Name of reranking equation, or custom reranking equation string.',
-                          'default':'aesthetics',
-                          'type':'categorical_or_text',
-                          'options':['tfidf','boost_pexels', 'aesthetics',],
-                          },
-                         {'name':'enrich_tags',
-                          'description':'Use external API for tag enrichment on individual image pages.',
-                          'default':'1',
-                          'type':'categorical',
-                          'options':['0','1'],
-                          },
-                         ]
         
-        unk = set(data).difference(['q', 'q_id', 'q_id_file', 'offset', 'limit',
-                                    'index_name', 'doc_type', 'include_docs', 'include_thumb', 'rerank_eq',
-                                    'filter_licenses', 'filter_sources', 'skip_query_cache', 'filter_incomplete',
-                                    'schema_variant', 'enrich_tags', 'token', 'canonical_id', 'allow_nsfw',
-                                    ])
-        
-        if unk:
+        #diff = set(data).difference(['q', 'q_id', 'q_id_file', 'offset', 'limit',
+        #                            'index_name', 'doc_type', 'include_docs', 'include_thumb', 'rerank_eq',
+        #                            'filter_licenses', 'filter_sources', 'skip_query_cache', 'filter_incomplete',
+        #                            'schema_variant', 'enrich_tags', 'token', 'canonical_id', 'allow_nsfw',
+        #                            'pretty',
+        #                            ])
+
+        diff = set(data).difference([x['name'] for x in debug_options])
+        if diff:
             self.set_status(500)
             self.write_json({'error':'UNKNOWN_ARGS',
-                             'error_message':repr(list(unk)),
+                             'error_message':repr(list(diff)),
                             })
             return
+
         
-        if filter_incomplete is None:
-            filter_incomplete = mc_config.MC_FILTER_INCOMPLETE_INT and True or False
+        ## New method:
+
+        the_input = {}
+        for arg in debug_options:
+
+            if arg['type'] == 'number':
+                the_input[arg['name']] = intget(data.get(arg['name'], 'BAD'), arg['default'])
+            else:
+                the_input[arg['name']] = data.get(arg['name'], arg['default'])
+
+            ## For convenience:
+            
+            if arg['type'] == 'list-of-strings':
+                if isinstance(the_input[arg['name']], basestring):
+                    the_input[arg['name']] = [the_input[arg['name']]]
+
+
+        the_input['q_text'] = the_input['q'] ## for reverse compatibility.
+
         
-        if isinstance(filter_licenses, basestring):
-            filter_licenses = [filter_licenses]
+        ## Disallow user modification of these, for now:
         
-        if isinstance(filter_sources, basestring):
-            filter_sources = [filter_sources]
+        the_input['index_name'] = data.get('index_name', mc_config.MC_INDEX_NAME)
+        the_input['doc_type'] = data.get('doc_type', mc_config.MC_DOC_TYPE)
+        the_input['include_thumb'] = False
+        the_input['full_limit'] = 300
+
         
+        #if the_input['filter_incomplete'] is None:
+        #    filter_incomplete = mc_config.MC_FILTER_INCOMPLETE_INT and True or False
+
         
         ## TODO: need multiple image upload support?:
+
+        q_id_file = False
         
         try:
             fileinfo = self.request.files['file'][0]
@@ -599,7 +712,7 @@ class handle_search(BaseHandler):
         except:
             pass
         
-        if q_id_file and q_id:
+        if q_id_file and the_input['q_id']:
             self.set_status(500)
             self.write_json({'error':'PARAMS',
                              'error_message':'Use either q_id or HTTP image upload, but not both.',
@@ -615,9 +728,9 @@ class handle_search(BaseHandler):
         remote_ids = []
         
         if False:
-            if q_text and (get_remote_search is not False):
+            if the_input['q_text'] and (get_remote_search is not False):
                 t1 = time()
-                remote_ids = get_remote_search(q_text)
+                remote_ids = get_remote_search(the_input['q_text'])
                 print ('REMOTE_IDS','time:',time()-t1,len(remote_ids))
 
         
@@ -631,7 +744,7 @@ class handle_search(BaseHandler):
 
         
         if the_token:
-            rr = query_cache_lookup(the_token, skip_query_cache = skip_query_cache)
+            rr = query_cache_lookup(the_token, skip_query_cache = the_input['skip_query_cache'])
 
             if rr is False:
                 self.set_status(500)
@@ -641,25 +754,14 @@ class handle_search(BaseHandler):
                 return                
 
         else:
-            ## core args for looking up this query again:
-            query_args = {'q':q_text,
-                          'q_id':q_id,
-                          'q_id_file_hash': q_id_file and hashlib.md5(q_id_file).hexdigest() or q_id_file,
-                          #'limit':limit,
-                          #'offset':offset,
-                          #'index_name':index_name,
-                          #'doc_type':doc_type,
-                          'include_docs':include_docs,
-                          'include_thumb':include_thumb,
-                          'rerank_eq':rerank_eq,
-                          'filter_licenses':filter_licenses,
-                          'filter_sources':filter_sources,
-                          'filter_incomplete':filter_incomplete,
-                          'schema_variant':schema_variant,
-                          'enrich_tags':enrich_tags,
-                          'canonical_id':canonical_id,
-                          'allow_nsfw':allow_nsfw,
-                          }
+            ## New method:
+            
+            query_args = the_input.copy()
+
+            for kk in ['limit','offset',]:
+                if kk in query_args:
+                    del query_args[kk]
+                
             print ('QUERY_ARGS',query_args)
 
             ## ignore those with default args:
@@ -669,29 +771,29 @@ class handle_search(BaseHandler):
             
             the_token = consistent_json_hash(query_args)
             
-            rr = query_cache_lookup(the_token, skip_query_cache = skip_query_cache)
+            rr = query_cache_lookup(the_token, skip_query_cache = the_input['skip_query_cache'])
         
         if rr is not False:
-            print ('CACHE_OR_TOKEN_HIT_QUERY','offset:',offset,'limit:',limit,'len(results)',len(rr['results']))
+            print ('CACHE_OR_TOKEN_HIT_QUERY','offset:', the_input['offset'], 'limit:', the_input['limit'], 'len(results)',len(rr['results']))
             
             results_count = len(rr['results'])
                                                 
-            if offset + limit >= len(rr['results']):
+            if the_input['offset'] + the_input['limit'] >= len(rr['results']):
                 rr['next_page'] = None
             else:
-                rr['next_page'] = {'token':the_token, 'offset':offset + limit, 'limit':limit}
+                rr['next_page'] = {'token':the_token, 'offset':the_input['offset'] + the_input['limit'], 'limit':the_input['limit']}
 
-            if offset == 0:
+            if the_input['offset'] == 0:
                 rr['prev_page'] = None
             else:
-                rr['prev_page'] = {'token':the_token, 'offset':max(0, offset - limit), 'limit':limit}
+                rr['prev_page'] = {'token':the_token, 'offset':max(0, the_input['offset'] - the_input['limit']), 'limit':the_input['limit']}
 
-            rr['results'] = rr['results'][offset:offset + limit]
+            rr['results'] = rr['results'][the_input['offset']:the_input['offset'] + the_input['limit']]
             
             rr['debug_options'] = debug_options
             
             self.write_json(rr,
-                            pretty = data.get('pretty', True),
+                            pretty = the_input['pretty'],
                             max_indent_depth = data.get('max_indent_depth', False),
                             )
             
@@ -699,16 +801,12 @@ class handle_search(BaseHandler):
 
         is_id_search = False
         
-        if not (q_text or q_id or q_id_file or canonical_id):
-            #self.set_status(500)
-            #self.write_json({'error':'BAD_QUERY',
-            #                 'error_message':'Either `q` or `q_id` is required.',
-            #                 })
+        if not (the_input['q_text'] or the_input['q_id'] or q_id_file or the_input['canonical_id']):
             
-            ## Match all, skip cache:
+            ## Match all mode, skip cache:
             
-            rr = yield self.es.search(index = index_name,
-                                      type = doc_type,
+            rr = yield self.es.search(index = the_input['index_name'],
+                                      type = the_input['doc_type'],
                                       source = {"query": {"match_all": {}}, "size":20}
                                       )
 
@@ -736,7 +834,7 @@ class handle_search(BaseHandler):
             return
 
         
-        if (q_text and q_id):
+        if (the_input['q_text'] and the_input['q_id']):
             self.set_status(500)
             self.write_json({'error':'BAD_QUERY',
                              'error_message':'Simultaneous `q` and `q_id` not yet implemented.',
@@ -744,16 +842,16 @@ class handle_search(BaseHandler):
             return
 
         
-        elif q_id or q_id_file or canonical_id:
+        elif the_input['q_id'] or q_id_file or the_input['canonical_id']:
             
-            if canonical_id:
+            if the_input['canonical_id']:
                 ## Search by canonical_id:
                 
-                print ('CANONICAL_ID_SEARCH', canonical_id)
+                print ('CANONICAL_ID_SEARCH', the_input['canonical_id'])
                 
-                query = {"query": {"constant_score": {"filter": {"term": {"canonical_id": canonical_id}}}}}
+                query = {"query": {"constant_score": {"filter": {"term": {"canonical_id": the_input['canonical_id']}}}}}
             
-            elif q_id_file or (q_id.startswith(data_pat) or q_id.startswith(data_pat_2)):
+            elif q_id_file or (the_input['q_id'].startswith(data_pat) or the_input['q_id'].startswith(data_pat_2)):
                 
                 #Resolve ID(s) for query based on content.
                 #Note that this is similar to `/dupe_lookup` with `include_docs` = True:
@@ -762,9 +860,9 @@ class handle_search(BaseHandler):
                 
                 model = mc_models.VECTORS_MODEL_NAMES['baseline']()
                 
-                if (q_id.startswith(data_pat) or q_id.startswith(data_pat_2)):
+                if (the_input['q_id'].startswith(data_pat) or the_input['q_id'].startswith(data_pat_2)):
                     print ('GOT_DATA_URI')
-                    terms = model.img_to_terms(img_data_uri = q_id)
+                    terms = model.img_to_terms(img_data_uri = the_input['q_id'])
                 else:
                     print ('GOT_RAW_BYTES')
                     assert q_id_file
@@ -773,8 +871,8 @@ class handle_search(BaseHandler):
                 print ('TERMS',repr(terms)[:100])
                 
                 
-                rr = yield self.es.search(index = index_name,
-                                          type = doc_type,
+                rr = yield self.es.search(index = the_input['index_name'],
+                                          type = the_input['doc_type'],
                                           source = {"query": {"constant_score":{"filter":{"term": terms}}}},
                                           )
                 print ('GOT_Q_ID_FILE_OR_Q_ID',repr(rr.body)[:100])
@@ -798,14 +896,14 @@ class handle_search(BaseHandler):
 
                 is_id_search = True
                 
-                print ('ID-BASED-SEARCH', q_id)
-                query = {"query":{ "ids": { "values": [ q_id ] } } }
+                print ('ID-BASED-SEARCH', the_input['q_id'])
+                query = {"query":{ "ids": { "values": [ the_input['q_id'] ] } } }
         
         
-        elif q_text:
+        elif the_input['q_text']:
 
             #text-based search:
-            query = {"query": {"multi_match": {"query":    q_text,
+            query = {"query": {"multi_match": {"query":    the_input['q_text'],
                                                "fields": [ "*" ],
                                                "type":     "cross_fields"
                                                },
@@ -817,8 +915,8 @@ class handle_search(BaseHandler):
         #assert remote_ids,remote_ids
         if remote_ids:
             t1 = time()
-            rr = yield self.es.search(index = index_name,
-                                      type = doc_type,
+            rr = yield self.es.search(index = the_input['index_name'],
+                                      type = the_input['doc_type'],
                                       source = {"query":{ "ids": { "values": remote_ids } } },
                                       )
         
@@ -856,14 +954,14 @@ class handle_search(BaseHandler):
             for xx in remote_hits:
                 assert xx['_source']['boosted'] == 1
         
-        query['from'] = offset
+        query['from'] = the_input['offset']
         query['size'] = full_limit
         
         print ('QUERY',query)
 
         t1 = time()
-        rr = yield self.es.search(index = index_name,
-                                  type = doc_type,
+        rr = yield self.es.search(index = the_input['index_name'],
+                                  type = the_input['doc_type'],
                                   source = query,
                                   )
         
@@ -894,7 +992,7 @@ class handle_search(BaseHandler):
         
         ## NSFW filtering:
         
-        if not allow_nsfw:
+        if not the_input['allow_nsfw']:
 
             r2 = []
             for xx in rr:
@@ -960,7 +1058,7 @@ class handle_search(BaseHandler):
 
             ## Tag enrichment, using the image cache URLs:
 
-            if enrich_tags and is_id_search and get_enriched_tags:
+            if the_input['enrich_tags'] and is_id_search and get_enriched_tags:
 
                 etags = []
                 try:
@@ -984,12 +1082,12 @@ class handle_search(BaseHandler):
         
         ## Apply post-ingestion normalizers, if there are any:
                 
-        mc_normalize.apply_post_ingestion_normalizers(rr, schema_variant = schema_variant)
+        mc_normalize.apply_post_ingestion_normalizers(rr, schema_variant = the_input['schema_variant'])
 
         
         ## Re-rank:
         
-        rrm = ReRankingBasic(eq_name = rerank_eq)        
+        rrm = ReRankingBasic(eq_name = the_input['rerank_eq'])
         rr = rrm.rerank(rr)
 
         
@@ -1017,30 +1115,30 @@ class handle_search(BaseHandler):
         
         ## Note: swapping these for ES queries shortly:
         
-        if filter_licenses:
-            filter_licenses_s = set(filter_licenses)
+        if False: #the_input['filter_licenses']:
+            filter_licenses_s = set(the_input['filter_licenses'])
             r2 = []
             for ii in rr:                
                 if filter_licenses_s.intersection(ii['_source'].get('license_tags',[])):
                     r2.append(ii)
             
-            print ('FILTER_LICENSES',filter_licenses,len(rr),'->',len(r2))
+            print ('FILTER_LICENSES', the_input['filter_licenses'], len(rr),'->',len(r2))
             rr = r2
         
-        if filter_sources:
-            filter_sources_s = set(filter_sources)
+        if False: #the_input['filter_sources']:
+            filter_sources_s = set(the_input['filter_sources'])
             r2 = []
             for ii in rr:                
                 if filter_sources_s.intersection(ii['_source'].get('source_tags',[])):
                     r2.append(ii)
             
-            print ('FILTER_SOURCES',filter_sources,len(rr),'->',len(r2))
+            print ('FILTER_SOURCES', the_input['filter_sources'], len(rr),'->',len(r2))
             rr = r2
         
         
         ## Include or don't include full docs:
         
-        if not include_docs:
+        if not the_input['include_docs']:
             
             rr = [{'_id':hit['_id']}
                   for hit
@@ -1061,26 +1159,26 @@ class handle_search(BaseHandler):
         
         ## Wrap in pagination:
         
-        if offset + limit >= len(rr['results']):
+        if the_input['offset'] + the_input['limit'] >= len(rr['results']):
             rr['next_page'] = None
         else:
-            rr['next_page'] = {'token':the_token, 'offset':offset + limit, 'limit':limit}
+            rr['next_page'] = {'token':the_token, 'offset':the_input['offset'] + the_input['limit'], 'limit':the_input['limit']}
         
-        if offset == 0:
+        if the_input['offset'] == 0:
             rr['prev_page'] = None
         else:
-            rr['prev_page'] = {'token':the_token, 'offset':max(0, offset - limit), 'limit':limit}
+            rr['prev_page'] = {'token':the_token, 'offset':max(0, offset - the_input['limit']), 'limit':the_input['limit']}
         
         ## Trim:
         
-        rr['results'] = rr['results'][offset:offset + limit]
+        rr['results'] = rr['results'][the_input['offset']:the_input['offset'] + the_input['limit']]
         
         ## Output:
 
         rr['debug_options'] = debug_options
         
         self.write_json(rr,
-                        pretty = data.get('pretty', True),
+                        pretty = the_input['pretty'],
                         max_indent_depth = data.get('max_indent_depth', False),
                         )
 
