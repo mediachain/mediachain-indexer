@@ -536,11 +536,37 @@ class handle_search(BaseHandler):
         rerank_eq = data.get('rerank_eq', None)
         filter_licenses = data.get('filter_license', None) or data.get('filter_licenses', None)
         filter_sources = data.get('filter_sources', None)
-        skip_query_cache = data.get('skip_query_cache', None)
+        skip_query_cache = intget(data.get('skip_query_cache', None)) or None
         filter_incomplete = data.get('filter_incomplete', None)
         schema_variant = data.get('schema_variant', 'new')
-        enrich_tags = data.get('enrich_tags', True)
+        enrich_tags = intget(data.get('enrich_tags', True)) or None
         allow_nsfw = data.get('allow_nsfw', False)
+
+        debug_options = [{'name':'skip_query_cache',
+                          'description':'Bypass the query cache.',
+                          'default':'0',
+                          'type':'categorical',
+                          'options':['0','1']
+                          },
+                         {'name':'schema_variant',
+                          'description':'Select schema variant postprocessing version.',
+                          'default':'new',
+                          'type':'categorical',
+                          'options':['new','old'],
+                          },
+                         {'name':'rerank_eq',
+                          'description':'Name of reranking equation, or custom reranking equation string.',
+                          'default':'aesthetics',
+                          'type':'categorical_or_text',
+                          'options':['tfidf','boost_pexels', 'aesthetics',],
+                          },
+                         {'name':'enrich_tags',
+                          'description':'Use external API for tag enrichment on individual image pages.',
+                          'default':'1',
+                          'type':'categorical',
+                          'options':['0','1'],
+                          },
+                         ]
         
         unk = set(data).difference(['q', 'q_id', 'q_id_file', 'offset', 'limit',
                                     'index_name', 'doc_type', 'include_docs', 'include_thumb', 'rerank_eq',
@@ -665,6 +691,8 @@ class handle_search(BaseHandler):
 
             rr['results'] = rr['results'][offset:offset + limit]
             
+            rr['debug_options'] = debug_options
+            
             self.write_json(rr,
                             pretty = data.get('pretty', True),
                             max_indent_depth = data.get('max_indent_depth', False),
@@ -704,6 +732,9 @@ class handle_search(BaseHandler):
                   'prev_page':None,
                   'results_count':('{:,}'.format(full_limit)) + '+',
                   }
+
+            rr['debug_options'] = debug_options
+            
             self.write_json(rr)
             return
 
@@ -1048,7 +1079,9 @@ class handle_search(BaseHandler):
         rr['results'] = rr['results'][offset:offset + limit]
         
         ## Output:
-                
+
+        rr['debug_options'] = debug_options
+        
         self.write_json(rr,
                         pretty = data.get('pretty', True),
                         max_indent_depth = data.get('max_indent_depth', False),
