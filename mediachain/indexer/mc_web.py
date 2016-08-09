@@ -68,9 +68,6 @@ class Application(tornado.web.Application):
                     (r'/search',handle_search,),
                     (r'/list_facets',handle_list_facets),
                     (r'/get_embed_url',handle_get_embed_url,),
-                    (r'/dupe_lookup',handle_dupe_lookup,),
-                    (r'/score',handle_score,),
-                    (r'/record_dupes',handle_record_dupes,),
                     (r'/record_relevance',handle_record_relevance,),
                     #(r'.*', handle_notfound,),
                     ]
@@ -1087,23 +1084,7 @@ class handle_search(BaseHandler):
                         max_indent_depth = data.get('max_indent_depth', False),
                         )
 
-
-
-class handle_record_dupes(BaseHandler):
-    
-    #disable XSRF checking for this URL:
-    def check_xsrf_cookie(self): 
-        pass
-    
-    @tornado.gen.coroutine
-    def post(self):
-        """
-        Record dupe / non-dupes. May factor this out later.
-        """
-        self.set_status(500)
-        self.write('NOT_IMPLEMENTED')
-        self.finish()
-
+from uuid import uuid4
 
 class handle_record_relevance(BaseHandler):
     
@@ -1114,11 +1095,64 @@ class handle_record_relevance(BaseHandler):
     @tornado.gen.coroutine
     def post(self):
         """        
-        Record relevance feedback. May factor this out later.
+        Record relevance feedback. 
+        
+        Input - JSON POST body containing the following fields:
+            user_id:        Random hex string used as user ID.
+            query:          Query args dict, as passed to `/search` endpoint.
+            data:           Annotation data dict.
+        
+        TODO:
+        Million other features. Intentionally neglecting those features, because having anything here is far better
+        than nothing. Goal is just to have a basic evaluation test and to record the results, instead of repeatedly
+        doing it all mentally.
+        
         """
-        self.set_status(500)
-        self.write('NOT_IMPLEMENTED')
-        self.finish()
+        
+        ## TODO: Switch to real auth system:
+        
+        if not exists(mc_config.MC_ANNOTATE_RELEVANCE_DIR):
+            mkdir(MC_ANNOTATE_RELEVANCE_DIR)
+        
+        dir_out = join_path(MC_ANNOTATE_DIR,
+                            'search_relevance',
+                            )
+            
+        d = self.request.body
+        hh = json.loads(d)
+        
+        print ('RECORD_RELEVANCE', hh)
+        
+        user_id = self.get_cookie('user_id').lower()
+        
+        diff = set(user_id).difference('1234567890abcdef')
+        
+        if diff:
+            self.set_status(500)
+            self.write_json({'error':'INVALID_USER_ID_COOKIE',
+                             'error_message':'user_id string must only contain hex characters (0-9 a-f). Got: ' + repr(user_id),
+                             })
+            return
+        
+        rh = {'created':int(time),
+              'user_id':user_id,
+              'data':hh,
+              'ip':handler.request.headers.get('X-Real-Ip'),
+              'headers':handler.request.headers,
+              }
+        
+        fn_out = join(dir_out,
+                      join_path(uuid4().hex) + '.json',
+                      )
+        
+        with open(fn_out, 'w') as f:
+            f.write(json.dumps(rh))
+        
+        print ('WROTE', fn_out)
+        
+        self.write_json({'success':True,
+                         'fn':fn_out,
+                         })
 
 
 def web(port = 23456,

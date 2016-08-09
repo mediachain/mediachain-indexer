@@ -69,6 +69,9 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
            {'MC_TRANSACTOR_HOST':('facade.mediachain.io', 'Mediachain transactor RPC host.'),
             'MC_TRANSACTOR_PORT_INT':('10001', ''),
            },
+       '7. Annotation Settings':
+           {'MC_ANNOTATE_DIR':('/datasets/datasets/annotate/', 'Location for query relevance annotation.'),
+            },
        }
 
 import mc_generic
