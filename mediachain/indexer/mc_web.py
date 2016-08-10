@@ -65,6 +65,7 @@ class Application(tornado.web.Application):
         
         handlers = [(r'/',handle_front,),
                     (r'/ping',handle_ping,),
+                    (r'/stats',handle_stats,),
                     (r'/search',handle_search,),
                     (r'/list_facets',handle_list_facets),
                     (r'/get_embed_url',handle_get_embed_url,),
@@ -209,17 +210,22 @@ class BaseHandler(tornado.web.RequestHandler):
             print ('ERROR',hh)
         
         self.set_header("Content-Type", "application/json")
-        
-        if pretty:
-            self.write(pretty_print(hh,
-                                    indent = indent,
-                                    max_indent_depth = max_indent_depth,
-                                    ).replace('\n','\r\n') + '\n')
-        
-        else:
-            self.write(json.dumps(hh,
-                                  sort_keys = sort_keys,
-                                  ) + '\n')
+
+        self.write(json.dumps(hh,
+                              sort_keys = True,
+                              indent = 4,
+                              ) + '\n')
+        if False:
+            if pretty:
+                self.write(pretty_print(hh,
+                                        indent = indent,
+                                        max_indent_depth = max_indent_depth,
+                                        ).replace('\n','\r\n') + '\n')
+
+            else:
+                self.write(json.dumps(hh,
+                                      sort_keys = sort_keys,
+                                      ) + '\n')
         self.finish()
         
 
@@ -249,11 +255,67 @@ class handle_ping(BaseHandler):
     
     @tornado.gen.coroutine
     def post(self):
+        """
+        Minimal ping of ES or other backend indexes. For more comprehensive system stats, see `/stats`.
+        """
         
         rr = yield self.es.ping()
         
-        self.write_json({'results':[rr]})
+        self.write_json({'results':rr})
 
+
+from tornado.httpclient import AsyncHTTPClient
+
+class handle_stats(BaseHandler):
+    @tornado.gen.coroutine
+    def get(self):
+        """
+        System stats.
+        """
+        
+        rh = {}
+        
+        with open('/datasets/datasets/stats_stage_1.json') as f:
+            d = f.read()
+        
+        h = json.loads(d)
+        
+        rh['stage_001_crawl'] = h
+        
+        url = 'http://127.0.0.1:9200/getty_test/_count'
+
+        h2 = {'error':'ES_CONNECTION_ERROR',
+              'message':url,
+              }
+        
+        try:
+            response = yield AsyncHTTPClient().fetch(url,
+                                                     connect_timeout = 5,
+                                                     request_timeout = 5,
+                                                     )
+            d = response.body
+
+            print ('ES_GOT',d)
+
+            h2 = json.loads(d)
+            
+        except Exception as e:
+            print ('CONNECT_FAIL', url, e)
+        
+        rh['stage_005_elasticsearch'] = h2
+        
+        self.write_json(rh)
+
+
+@tornado.gen.coroutine
+def post(self):
+
+    rr = yield self.es.ping()
+
+    self.write_json({'results':[rr]})
+
+
+        
 from urllib import urlencode
 
 from mc_rerank import ReRankingBasic
@@ -1178,10 +1240,11 @@ class handle_search(BaseHandler):
                 ii['_source']['license_tags'] = ii['_source'].get('license_tags') or []
                 
                 assert type(ii['_source']['license_tags']) == list, ii['_source']['license_tags']
-                
-                ## The currently-ingested, except for these 2 datasets, should be all open-licensed:
-                if ('getty_' not in native_id) and ('eyeem_' not in native_id):
-                    ii['_source']['license_tags'].append('Creative Commons') 
+
+                if 'Creative Commons' in the_input['filter_licenses']:
+                    ## The currently-ingested, except for these 2 datasets, should be all open-licensed:
+                    if ('getty_' not in native_id) and ('eyeem_' not in native_id):
+                        ii['_source']['license_tags'].append('Creative Commons') 
                 
                 ## ANY match:
                 if filter_licenses_s.intersection(ii['_source'].get('license_tags',[])):
