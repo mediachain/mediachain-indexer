@@ -41,22 +41,29 @@ aes_func = \
 """
 asc = (item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) * 3.0
 rsc = (asc * item['_score']) / (asc + item['_score'])
-rsc *= (item['_source'].get('max_width', 0) > 600) and 10 or 1
+rsc *= (item['_source'].get('max_width', 0) > 300) and 10 or 1
 rsc
 """
 
-#max_width = item['_source'].get('sizes') and max([x.get('width',0) for x in item['_source'].get('sizes')]) or 0
-
-
 #rsc *= ((item['_source'].get('native_id','').startswith('dpla') and 1 or 2))
 
-ranking_basic_equations = {'tfidf':"item['_score']",
-                           'harmonic_mean_score_comments':"(item['_score'] * item['num_comments']) / (item['_score'] + item['num_comments'])",
-                           ## boost pexels source above others:
+
+ranking_prebuilt_equations = {'tfidf':"item['_score']",
+                           #'harmonic_mean_score_comments':"(item['_score'] * item['num_comments']) / (item['_score'] + item['num_comments'])",
                            'boost_pexels':"item['_score'] * (item['_source'].get('native_id','').startswith('pexels') and 2 or 1) * item['_source'].get('boosted', 0.1)",
-                           ##all datasetswith aesthetics (aes) scores, then the pexels without aes scores, then all others without aes scores:
                            'aesthetics':aes_func,
+                           'aesthetics_pure':"item['_source'].get('aesthetics', {}).get('score', -1.0) + 1",
+                           'balance':"""(item['_source'].get('aesthetics', {}).get('balance', -1.0) + 1) """,
+                           'color_harmony':"""(item['_source'].get('aesthetics', {}).get('color_harmony', -1.0) + 1) """,
+                           'lighting':"""(item['_source'].get('aesthetics', {}).get('lighting', -1.0) + 1) """,
+                           'motion':"""(item['_source'].get('aesthetics', {}).get('motion_blur', -1.0) + 1) """,
+                           'repetition':"""(item['_source'].get('aesthetics', {}).get('repetition', -1.0) + 1) """,
+                           'vivid_color':"""(item['_source'].get('aesthetics', {}).get('vivid_color', -1.0) + 1) """,
+                           'symmetry':"""(item['_source'].get('aesthetics', {}).get('symmetry', -1.0) + 1) """,
+                           'uses_depth_of_field':"""(item['_source'].get('aesthetics', {}).get('depth_of_field', -1.0) + 1) """,
+                           'object_focus':"""(item['_source'].get('aesthetics', {}).get('object', -1.0) + 1) """,
                            }
+
 
 class ReRankingBasic():
     """ See: __init__() """
@@ -88,8 +95,8 @@ class ReRankingBasic():
 
         print ('RERANK_EQUATION', first_pass_eq_name, eq_name)
         
-        if eq_name in ranking_basic_equations:
-            eq = ranking_basic_equations[eq_name]
+        if eq_name in ranking_prebuilt_equations:
+            eq = ranking_prebuilt_equations[eq_name]
         else:
             eq = eq_name
         
@@ -112,7 +119,7 @@ class ReRankingBasic():
         self.aeval.symtable['np'] = np
         
             
-    def rerank(self, items, **kw):
+    def rerank(self, items, is_debug_mode = False, **kw):
         """
         Re-rank items according to new score output by `self.eq`.
         """
@@ -144,13 +151,23 @@ class ReRankingBasic():
         rrr = []
         
         for c,(new_score,item) in enumerate(sorted(rr, reverse = True)):
-            item['_score'], item['_old_score'] = new_score, item['_score']
+            item['_score'], item['score_old'] = new_score, item['_score']
+            
+            if is_debug_mode:
+                item['debug_info']['score_old'] = item['score_old']
+                
+                item['debug_info']['score_post_rerank'] = item['_score']
+                
+                item['debug_info'].update({('aes_' + x):y for x,y in item['_source'].get('aesthetics', {}).items()})
 
+            else:
+                item['_score'] = new_score
+                        
             if c <= 20:
                 #print ('RERANK', item['_old_score'], item['_source'].get('boosted'),item['_score'],item['_source'].get('native_id'),item['_source'].get('title'))
                 print ('RERANK',
                        'aes:', item['_source'].get('aesthetics', {}).get('score', None),
-                       'tfidf:', item['_old_score'],
+                       'tfidf:', item['score_old'],
                        'width:', item['_source'].get('max_width'), #item['_source'].get('sizes') and item['_source'].get('sizes')[0].get('width',0),
                        'final:', item['_score'],
                 )

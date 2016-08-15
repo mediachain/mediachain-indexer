@@ -1513,7 +1513,97 @@ def simple_schema_validate(record,
     
     print 'PASSED simple_schema_validate()'
         
+cc_license_names_to_words = {'zero':'CC0',
+                             #'?':'Public Domain',
+                             'by':'CC BY',
+                             'by-nc':'CC NC',
+                             'by-sa':'CC BY-SA',
+                             'by-nd':'CC BY-ND',
+                             'by-nc-sa':'CC BY-NC-SA',
+                             'by-nc-nd':'CC BY-NC-ND',
+                             }
     
+def normalize_flickr100mm(iter_json):
+    """
+    """
+
+    import datetime
+    
+    assert not hasattr(iter_json, 'next'), 'Should be function that returns iterator when called, to allow restarting.'
+    
+    cc_license_names_500px = dict([(8,'CC0'),
+                                   (7,'Public Domain'),
+                                   (4,'CC BY'),
+                                   (1,'CC NC'),
+                                   (6,'CC BY-SA'),
+                                   (5,'CC BY-ND'),
+                                   (3,'CC BY-NC-SA'),
+                                   (2,'CC BY-NC-ND'),
+                                   ])
+    
+    for jj_top in iter_json():
+
+        hh = {}
+        
+        jj = jj_top['source_record'] ## Ignore the minimal normalization we did initially. Look at source.
+        
+        hh['_id'] = make_id(jj_top['_id'])
+        
+        hh['native_id'] = jj_top['_id']
+        
+        hh['source_tags'] = ['flickr100mm']
+        
+        hh['source_dataset'] = 'flickr100mm'
+
+        hh['source'] = {'name':'flickr',
+                        'url':jj['page_url'],
+                        }
+        
+        hh['title'] = jj['title']
+        
+	hh['description'] = jj['description']
+        
+        hh['keywords'] = list(set(jj['user_tags'].split(',') + jj['machine_tags'].split(',')))
+        
+        nm = cc_license_names_to_words[jj_top['license']]
+        
+        hh['license_tags'] = [nm, 'Creative Commons']
+        
+        hh['licenses'] = [{'name_long':nm, 'name':nm}]
+        
+        hh['license_url'] = jj['license_url']
+        
+        hh['artist_name'] = jj['nickname']
+        
+        hh['origin'] = jj['page_url']
+
+        if jj['date_taken'] == 'null':
+            hh['date_created'] = None
+        else:
+            hh['date_created'] = datetime.datetime.strptime(jj['date_taken'].replace(':','').replace('-',''), "%Y%m%d %H%M%S.%f")
+
+        #print ('DATE_CREATED',hh['date_created'])
+        
+        st = get_image_stats(jj_top['img_data'])
+        
+        hh['aspect_ratio'] = st['aspect_ratio']
+        
+        hh['sizes'] = [{'content_type':st['mime'],      # Image mime-type
+                        'width':st['width'],            # pixel width
+                        'height':st['height'],          # pixel height
+                        }]
+        
+        hh['img_data'] = jj_top['img_data']             # Data URI of this version -- only for thumbnails.
+
+        #hh2 = hh.copy()
+        #del hh2['img_data']
+        #print ('hh', hh2)
+
+        #curl -XGET 'http://localhost:9200/getty_test/image/_mapping?pretty'
+
+        #('hh', {'origin': u'http://www.flickr.com/photos/50780602@N04/4691911354/', 'description': u'Naval War College Graduation Ceremony at the Naval War College in Newport, RI. The resident graduating class included 303 members of\nthe Navy, Marine Corps, Air Force, Army, Coast Guard, and civilian\ngovernment employees as well as 120 international students from 68\ncountries. Of the 1,042 College of Distance Education graduates\nthroughout the world, 108 traveled to Newport to participate in the\nceremony. (U.S. Navy photo by Mineman First Class Kenneth J Lopez)', 'source_tags': ['flickr100mm'], 'artist_name': u'Naval War College', 'licenses': [{'name': 'CC BY', 'name_long': 'CC BY'}], 'native_id': u'flickr100mm_4691911354', 'keywords': [u''], 'title': u'100611-N-4192L-067', 'sizes': [{'width': 500, 'content_type': 'image/jpeg', 'height': 357}], 'source_dataset': 'flickr100mm', 'source': {'url': u'http://www.flickr.com/photos/50780602@N04/4691911354/', 'name': 'flickr.com'}, 'license_tags': ['CC BY', 'Creative Commons'], 'license_url': u'http://creativecommons.org/licenses/by/2.0/', 'aspect_ratio': 1.4005602240896358, 'date_created': u'2010-06-11 09:42:19.0', '_id': '23aed6ffaa7babb787510bae680060d7'})
+        
+        yield hh
     
         
 def normalize_500px(iter_json):
@@ -1761,6 +1851,10 @@ normalizer_names = {'eyeem':{'func':normalize_eyeem,
                               'dir_compactsplit':'/datasets/datasets/compactsplit/500px',
                               'dir_cache':False,
                              },
+                    'flickr100mm':{'func':normalize_flickr100mm,
+                                   'dir_compactsplit':'/datasets/datasets/compactsplit/flickr100mm',
+                                   'dir_cache':False,
+                                   }
                     }
 
 
@@ -1819,6 +1913,11 @@ def apply_post_ingestion_normalizers(rr,
         if False:#'pexels_' in native_id:
             ii['_source']['source']['url'] = ii['url_shown_at']['url']
 
+        ##
+
+        if ii['_source'].get('source',{}).get('name') == 'flickr.com':
+            ii['_source']['source']['name'] = 'flickr'
+            
         ## license stuff:
         
         if 'pexels_' in native_id:
@@ -1839,6 +1938,9 @@ def apply_post_ingestion_normalizers(rr,
             ii['_source']['license_url'] = None
             ii['_source']['license_attribution'] = ii.get('artist_names') and ', '.join(ii['artist_names']) or None
             
+        if 'dpla_' in native_id:            
+            ii['_source']['source_tags'] = ['dp.la']
+            
         if 'getty_' in native_id:
             ii['_source']['source_tags'] = ['gettyimages.com']
             
@@ -1847,6 +1949,12 @@ def apply_post_ingestion_normalizers(rr,
             ii['_source']['license_name_long'] = "Getty Embed"
             ii['_source']['license_url'] = "http://www.gettyimages.com/Corporate/LicenseAgreements.aspx#RF"
             ii['_source']['license_attribution'] = ii.get('artist_names') and ', '.join(ii['artist_names']) or None
+            
+        if 'flickr' in native_id:
+            ii['_source']['source_tags'] = ['flickr.com']
+            
+        if '500px_' in native_id:
+            ii['_source']['source_tags'] = ['500px.com']
             
         if 'eyeem_' in native_id:
 
@@ -1932,450 +2040,6 @@ def apply_post_ingestion_normalizers(rr,
 
         if ii['_source'].get('sizes') and len(ii['_source'].get('sizes')):
             ii['_source']['max_width'] = max([x.get('width',0) for x in ii['_source']['sizes']])
-
-            
-def get_type_str(x):
-    s = str(type(x))
-    assert "<type '" in s,repr(s)
-    
-    r =  'TYPE=' + s.replace("<type '",'').replace("'>",'')
-
-    r = r.upper()
-    
-    if r == 'TYPE=STR':
-        return 'TYPE=UNICODE'
-    
-    if r == 'TYPE=NONETYPE':
-        return 'TYPE=NULL'
-    
-    return r
-
-
-def walk_json_shapes_types(hh, path = [], sort = True, leaves_as_types = True, include_falsy_leaves = True):
-    """
-    hh = {'z':{'a': '123',
-               'b': {'url': 234},
-               'c': [{'url': '567'}, 
-                     {'url': '8910'},
-                    ],
-              }
-         }
-    
-    walk_json_shapes_types(hh)
-    
-    -> [('TYPE=DICT', 'z', 'TYPE=DICT', 'a', 'TYPE=UNICODE'),
-        ('TYPE=DICT', 'z', 'TYPE=DICT', 'b', 'TYPE=DICT', 'url', 'TYPE=INT'),
-        ('TYPE=DICT', 'z', 'TYPE=DICT', 'c', 'TYPE=LIST', 'TYPE=DICT', 'url', 'TYPE=UNICODE'),
-        ('TYPE=DICT', 'z', 'TYPE=DICT', 'c', 'TYPE=LIST', 'TYPE=DICT', 'url', 'TYPE=UNICODE')]
-
-    walk_json_shapes_types({1:{2:{3:4}}}, leaves_as_types = False)
-
-    -> [('TYPE=DICT', 1, 'TYPE=DICT', 2, 'TYPE=DICT', 3, 4)]
-    
-    """
-        
-    path = path[:]
-    
-    v = hh
-    
-    if type(v) == dict:
-
-        if include_falsy_leaves:
-            if not v:
-                yield path + [get_type_str(v) if leaves_as_types else v]
-        
-        zz = v.iteritems()
-    
-        if sort:
-            zz = sorted(zz)
-        
-        for kk, vv in zz:            
-            for xx in walk_json_shapes_types(vv,
-                                             path + [get_type_str(v)] + [kk],
-                                             leaves_as_types = leaves_as_types,
-                                             ):
-                yield xx
-
-    elif hasattr(v, '__iter__'):
-        
-        if include_falsy_leaves:
-            if not v:
-                yield path + [get_type_str(v) if leaves_as_types else v]
-                
-        for xx in v:
-            for yy in walk_json_shapes_types(xx,
-                                             path + [get_type_str(v)],
-                                             leaves_as_types = leaves_as_types,
-                                             ):
-                yield yy
-
-    else:
-        yield tuple(path + [get_type_str(v) if leaves_as_types else v])
-
-
-
-def reproduce_json_from_shapes(path_list, verbose = False):
-    """
-    Stack-based rebuilding of flattened json shapes.
-    """
-
-    path_list = list(path_list)
-    
-    lookup = {('TYPE=DICT', 'ROOT'):[]}      ## {path:obj}
-
-    ## Flatten and add padding:
-    
-    path_list = [['TYPE=DICT'], ['TYPE=DICT', 'ROOT']] + path_list
-
-    done = set()
-    rr = []
-    for c,path in enumerate(path_list):
-        path = list(path)
-        if c > 1:
-            path = ['TYPE=DICT', 'ROOT'] + path
-
-        for x in xrange(1, len(path) + 1):
-
-            path = [(tuple(z) if type(z) == list else z) for z in path]
-            
-            y = tuple(path[:x])
-            if repr(y) not in done:
-                rr.append(y)
-            done.add(repr(y))
-    path_list = rr
-
-    if verbose:
-        print '===='
-        for x in path_list:
-            print x
-        print '===='
-
-    ## Main loop:
-        
-    for c,path in enumerate(path_list):
-
-        path = list(path)
-        
-        #print 'path',path
-        
-        ## CREATE OBJECTS:
-        
-        cur_node = path[-1]
-        
-        if tuple(path) not in lookup:
-            
-            if cur_node == 'TYPE=TUPLE':
-                lookup[tuple(path)] = [] ## switch to tuple later
-
-            elif cur_node == 'TYPE=DICT':
-                lookup[tuple(path)] = {}
-
-            elif cur_node == 'TYPE=LIST':
-                lookup[tuple(path)] = []
-            else:
-                assert not (isinstance(cur_node, basestring) and cur_node.startswith('TYPE=')), cur_node
-                lookup[tuple(path)] = cur_node
-                assert cur_node != 'TYPE=DICT'
-
-        if len(path) > 2:
-            ## APPEND OBJECTS DEFINED VIA 1 LAYER:
-            
-            prev_node = path[-2]
-
-            if prev_node == 'TYPE=TUPLE':
-                lookup[tuple(path[:-1])].append(lookup[tuple(path)])
-                assert lookup[tuple(path)] != 'TYPE=DICT'
-                
-            elif prev_node == 'TYPE=LIST':
-                lookup[tuple(path[:-1])].append(lookup[tuple(path)])
-                assert lookup[tuple(path)] != 'TYPE=DICT'
-
-            elif prev_node == 'TYPE=DICT':
-                pass
-
-            else:
-                #probably partially-built dict
-                pass
-
- 
-            ## APPEND OBJECTS DEFINED VIA 2 LAYERS:
-
-            prev_node_2 = path[-3]
-            
-            if prev_node_2 == 'TYPE=DICT':
-                #print 'ASSIGN',tuple(path[:-2]),'--',prev_node,'--',cur_node
-                lookup[tuple(path[:-2])][prev_node] = lookup[tuple(path)]
-        
-        #print '->this',lookup[tuple(path)]
-    
-    return lookup[('TYPE=DICT',)]['ROOT']
-
-    
-
-def dump_example_schemas(top_num = 50,
-                         max_num = 10000,
-                         max_leaf_string_length = 200,
-                         via_cli = False,
-                         ):
-    """
-    Create schema reports, including example schemas, from all compactsplit formatted datasets.
-    
-    Args:
-        top_num:                 Show top `top_num` examples for each field.
-        max_num:                 Number of documents to sample from each dataset. 0 for all documents.
-        max_leaf_string_length:  Cut field value strings that are longer than this length, for reading
-                                 brevity. 0 to ignore.
-    """
-    
-
-    def special_repr(x):
-        x = repr(x)
-        if x == 'True':
-            x = 'true'
-        elif x == 'False':
-            x = 'false'
-        elif x == 'None':
-            x = 'null'
-        return x
-    
-    from random import choice
-    from mc_datasets import iter_compactsplit
-    from collections import Counter
-    import json
-    from ast import literal_eval
-    
-    all_common_examples = {}
-
-    longest_paths = {} ## {short:long}
-    
-    for c,(name, nh) in enumerate(normalizer_names.iteritems()):
-        
-        print ('START', name)
-        
-        func = nh['func']
-        fn = nh['dir_compactsplit']
-        
-        for cc,rr in enumerate(func(lambda : iter_compactsplit(fn, max_num = max_num))):
-            
-            #print 'RR',c,cc,repr(rr)
-            
-            type_paths = list(walk_json_shapes_types(rr, leaves_as_types = False))
-            
-            for ccc,type_path in enumerate(type_paths):
-                
-                #print (c,cc,ccc,'type_path',type_path)
-                
-                #type_path = [repr(x) for x in type_path]
-
-                #if 'artist_names' in repr(type_path):
-                #    print type_path
-                
-                pth = tuple(type_path[:-1])
-                leaf = type_path[-1]
-
-                if max_leaf_string_length:
-                    if isinstance(leaf, basestring) and (len(leaf) > max_leaf_string_length):
-                        leaf = leaf[:max_leaf_string_length] + '...[CUT]'
-
-                leaf = repr(leaf) ## reversed later with literal_eval
-                    
-                if pth not in all_common_examples:
-                    all_common_examples[pth] = Counter()
-                all_common_examples[pth][leaf] += 1
-                
-                if len(all_common_examples[pth]) > 200:
-                    all_common_examples[pth] = Counter(dict(all_common_examples[pth].most_common(50)))
-
-                for x in xrange(1, len(pth) + 1):
-                    short = pth[:x]
-
-                    if len(longest_paths.get(short,[])) < len(pth):
-                        longest_paths[short] = pth
-
-
-    ## Now we've ignored short circuits caused by falsy types:
-    
-    rt = []
-    ro = []
-    for path in sorted(longest_paths.values()):
-
-        ## Show the top `top_num` examples, ignoring `null` unless it's the only option:
-        
-        zz = [special_repr(literal_eval(x)) for x,y in all_common_examples[path].most_common(top_num + 1)]
-
-        zz = [x for x in zz if x != 'null'][:top_num]
-
-        ex = 'EXAMPLES(' + (', '.join(zz)) + ')'
-
-        path_t = list(path) + [ex]
-        
-        print 'EX',path_t
-        
-        rt.append(path_t)
-
-        ## for top-1, choose randomly one of the top 5: 
-        
-        bb = [literal_eval(x) for x,y in all_common_examples[path].most_common(5) if x is not None]
-
-        path_o = list(path) + [choice(bb) if bb else None]
-
-        ro.append(path_o)
-
-    with open('/datasets/datasets/schema_example_top_%d.json' % top_num,'w') as ft:
-         ft.write(json.dumps(reproduce_json_from_shapes(rt), indent=4))
-                  
-    with open('/datasets/datasets/schema_example_single.json','w') as fo:
-        fo.write(json.dumps(reproduce_json_from_shapes(ro), indent=4))
-
-    print json.dumps(reproduce_json_from_shapes(rr), indent=4)
-
-
-def test_normalizers(max_num = 100,
-                     dump_schemas = True,
-                     exception_on_type_change = True,
-                     exception_on_byte_strings = False,
-                     via_cli = False,
-                     ):
-    """
-    Tests for:
-        1) Differences in record tree shapes / types for all records from the SAME normalizer.
-        2) Differences in record tree shapes / types for all records from ALL normalizers.
-    
-    Tests for, and raises exceptions on:
-        3) Exceptions thrown by the normalizer functions.
-        4) (exception_on_type_change) Presence of more than 1 type used for any node (excluding
-           null, and sometimes `[]` or `{}`).
-        5) (exception_on_byte_strings) Any non-unicode strings. TODO.
-    """
-    
-    with open('/datasets/datasets/schemas_all_paths.txt','w') as f_out:
-        
-        from mc_datasets import iter_compactsplit
-        from collections import Counter
-        
-        all_common_examples = {}
-        
-        all_common_all = set()
-        all_common_any = set()
-        all_common_schema = {} #{path:[type, ...], ...}
-        all_counts = Counter()
-        
-        for c,(name, nh) in enumerate(normalizer_names.iteritems()):
-
-            print ('START', name)
-
-            func = nh['func']
-            fn = nh['dir_compactsplit']
-
-            this_common_all = set()
-            this_common_any = set()
-            this_common_schema = {} #{path:[type, ...], ...}
-
-            counts = Counter()
-
-            nn = 0
-            for cc,rr in enumerate(func(lambda : iter_compactsplit(fn, max_num = max_num))):
-                nn += 1
-
-                #print 'RR',c,cc,repr(rr)
-
-                type_paths = list(walk_json_shapes_types(rr))
-
-                paths = [tuple(x[:-1]) for x in type_paths]
-
-                #print 'paths',paths
-                #raw_input_enter()
-
-                if c == 0:
-                    all_common_all.update(paths)
-                if cc == 0:
-                    this_common_all.update(paths)
-
-                this_common_all.intersection_update(paths)
-                this_common_any.update(paths)
-                all_common_all.intersection_update(paths)
-                all_common_any.update(paths)
-
-                for ccc,type_path in enumerate(type_paths):
-
-                    #print (c,cc,ccc,'type_path',type_path)
-
-                    pth = tuple(type_path[:-1])
-                    leaf = type_path[-1]
-
-                    assert 'TYPE=' in leaf,type_path
-
-                    counts[pth] += 1
-                    all_counts[pth] += 1
-
-                    if pth not in all_common_schema:
-                        all_common_schema[pth] = []
-
-                    if leaf not in all_common_schema[pth]:
-                        all_common_schema[pth].append(leaf)
-
-                    if pth not in this_common_schema:
-                        this_common_schema[pth] = []
-
-                    if leaf not in this_common_schema[pth]:
-                        this_common_schema[pth].append(leaf)
-
-                    if pth not in all_common_examples:
-                        all_common_examples[pth] = Counter()
-
-                    all_common_examples[pth][(repr(leaf), get_type_str(leaf))] += 1
-                    
-                    
-
-                #raw_input_enter()
-            print
-            print ('====COMMON_PATHS:',name)
-            for xx in sorted(this_common_all):
-                print space_pad(counts[xx],6),xx
-            print
-
-            print ('====DIFFS:',name)
-            for xx in sorted(this_common_any.difference(this_common_all)):
-                print space_pad(counts[xx],6),xx
-            print
-
-
-            print ('====COMMON_SCHEMA',name)
-            max_k = max([len(unicode(k)) for k,v in this_common_schema.items()])
-            for k,v in sorted(this_common_schema.items()):
-                print space_pad(k,max_k,ch=' '),v
-
-                #raw_input_enter()
-                
-            print ('DONE',name, nn)
-
-        print
-        print '====ALL_COMMON_SCHEMA'
-        ii = [(' -> '.join(k),v) for k,v in all_common_schema.items()]
-        max_k = max([len(k) for k,v in ii]) + 1
-        f_out.write(space_pad('SCHEMA_PATH',max_k,ch=' ') + 'LEAF_TYPE(S)' + '\n')
-        for k,v in sorted(ii):
-            print space_pad(k,max_k,ch=' '),u', '.join(v)
-            f_out.write((space_pad(k,max_k,ch=' ') + unicode(u', '.join(v))).encode('utf8') + '\n')
-        print
-
-        #print '====ALL_DIFFS:'
-        #for xx in sorted(all_common_any.difference(all_common_all)):
-        #    print space_pad(all_counts[xx],6),xx
-        #print
-        
-        print
-        print '====ALL_COMMON_EXAMPLES'        
-        ii = [(' -> '.join(k),v) for k,v in all_common_schema.items()]
-        max_k = max([len(k) for k,v in ii]) + 1
-        f_out.write(space_pad('SCHEMA_PATH',max_k,ch=' ') + 'LEAF_TYPE(S)' + '\n')
-        for k,v in sorted(ii):
-            print space_pad(k,max_k,ch=' '),u', '.join(v)
-            f_out.write((space_pad(k,max_k,ch=' ') + unicode(u', '.join(v))).encode('utf8') + '\n')
-        print
-        
-        print ('DONE_ALL')
-
 
 
     
@@ -2483,10 +2147,10 @@ def dump_normalized_schemas(dir_in = '/datasets/datasets/compactsplit/',
     
 from mc_generic import setup_main, raw_input_enter, space_pad
 
-functions=['test_normalizers',
-           'dump_normalized_schemas',
-           'dump_example_schemas',
+
+functions=['dump_normalized_schemas',
            ]
+
 
 def main():
 

@@ -58,7 +58,7 @@ import gzip
 ### Single-file compact sorted format:
 ##
 
-VERSION_COMPACTSPLIT = '0001'
+VERSION_COMPACTSPLIT = '0002'
 
 def worker_convert_to_compactsplit((hh, )):
     """
@@ -80,11 +80,11 @@ def convert_to_compactsplit(the_iter = False,
                             pre_split_num = 32,
                             max_num_per_split = 1000000,
                             num_digits = 4,
-                            delete_existing = True,
                             max_num = 0,
                             confirm_clear = True,
                             cache_images_now = False,
-                            n_jobs = 1,
+                            doing_run_num = False,
+                            doing_job_num = False,
                             via_cli = False,
                             ):
     """
@@ -104,45 +104,19 @@ def convert_to_compactsplit(the_iter = False,
         max_num_per_split:  If any of the splits have more than `max_num_per_split` records, then multiple files per split will 
                             be created.
         num_digits:         How much to zero-pad numbers in output. Should probably leave this at `4`.
-        delete_existing:    Delete any existing files in `dir_out` folder.
         max_num:            Terminate early after `max_num` records.
         confirm_clear:      Prompt for confirmation before clearing output directory.
-        n_jobs:             Number of parallel processing jobs.
     """
 
     from mc_ingest import cache_image, decode_image
     
     assert pre_split_num <= (10 ** num_digits - 1),(pre_split_num, num_digits)
     
-    if not the_iter:
-        
-        assert False('REQUIRED ARG: the_iter',)
-        
-        dir_out = 'getty_small_compactsplit'
-        
-        the_iter = iter_json_getty(getty_path = getty_path,
-                                   max_num = max_num,
-                                   )
+    assert the_iter,('REQUIRED_ARG: the_iter',)
     
     assert the_iter is not False
     assert dir_out is not False
-    
-    if exists(dir_out) and delete_existing:
-        xdd = listdir(dir_out)
         
-        for fn in xdd:
-            fn = join(dir_out, fn)
-            print ('UNLINK',fn)
-        
-        if len(xdd) and confirm_clear:
-            print ('CLEAR FILES FROM EXISTING OUTPUT DIRECTORY?',dir_out)
-            print ('PRESS ENTER TO CONFIRM',)
-            raw_input()
-            
-        for fn in xdd:
-            fn = join(dir_out, fn)
-            unlink(fn)
-    
     the_path, the_dir = split_path(dir_out)
     assert exists(the_path),('PATH_DOES_NOT_EXIST', the_path)
     assert the_dir,('SPECIFY_OUTPUT_DIR',the_dir)
@@ -151,12 +125,9 @@ def convert_to_compactsplit(the_iter = False,
     
     fn_out = join(dir_out, the_dir)
     
-    fn_out_temp = fn_out + '-tempfile' + str(randint(1,1000000000000))
+    fn_out_temp = fn_out + '-tempfile-' + str(doing_run_num) + ('-%03d' % doing_job_num) + '-' + str(randint(1,1000000000000))
     fn_out_temp_2 = fn_out_temp + '-2'
     fn_out_temp_3 = fn_out_temp + '-3'
-
-    if n_jobs != 1:
-        pp = multiprocessing.Pool(n_jobs)
     
     try:
         with open(fn_out_temp, 'w') as f:
@@ -249,8 +220,12 @@ def convert_to_compactsplit(the_iter = False,
                         if xx[0] is not False:
                             xx[0].close()
                         fn = fn_out + (('-compactsplit-v' + VERSION_COMPACTSPLIT + \
-                                        '-%0' + str(int(num_digits)) + 'd-%0' + \
-                                        str(int(num_digits)) + 'd.gz') % (xx[1], xx[2]))
+                                        '-%0' + str(int(num_digits)) + 'd' + \
+                                        '-%0' + str(int(num_digits)) + 'd' + \
+                                        '-%0' + str(int(num_digits)) + 'd.gz') % (doing_job_num,
+                                                                                  xx[1],
+                                                                                  xx[2],
+                                                                                  ))
                         print ('NEW_FILE',fn)
                         xx[0] = GzipFile(fn, 'w')
                         xx[2] += 1
@@ -277,8 +252,10 @@ def convert_to_compactsplit(the_iter = False,
         except: pass
         try: unlink(fn_out)
         except: pass
-
-
+    
+    
+    
+        
 def line_tailer(ff,
                 ending = '\n',
                 sleep_time = 1.0,
@@ -372,7 +349,11 @@ def line_tailer(ff,
 
 def iter_compactsplit(fn_in_glob,
                       do_tail = True,
+                      skip_num = 0,
                       max_num = 0,
+                      skip_callback = False,
+                      do_binary_search = False,
+                      do_fastforward = True,
                       ):
     """
     Iterate records from files of the format created by `convert_getty_to_compact`.
@@ -388,9 +369,11 @@ def iter_compactsplit(fn_in_glob,
     from glob import glob
     from ujson import loads
 
-    allow_tempfile = False
-    if '-tempfile' in fn_in_glob:
-        allow_tempfile = True
+    #allow_tempfile = False
+    #if '-tempfile' in fn_in_glob:
+    #    allow_tempfile = True
+
+    allow_tempfile = True
     
     fn_in_glob = expanduser(fn_in_glob)
     
@@ -399,6 +382,11 @@ def iter_compactsplit(fn_in_glob,
     assert lst,('NO_FILES_FOUND',fn_in_glob)
 
     nn = 0
+    tot_c = -1
+
+    got_any = False
+    
+    ffs = []
     
     for fn_in in lst:
         
@@ -407,32 +395,76 @@ def iter_compactsplit(fn_in_glob,
         else:
             fns = walk_files(fn_in)
         
-        for fn in fns:
+        for fn in list(fns):
 
             if not allow_tempfile:
                 if '-tempfile' in fn:
                     continue
             
-            if allow_tempfile:
+            if allow_tempfile and ('tempfile' in fn):
                 ctx = open
             else:
                 ctx = GzipFile
             
-            with ctx(fn) as f:
-                
-                if allow_tempfile and ('-tempfile' in fn) and do_tail: ## didn't add tailing support for gz files yet.
-                    f = line_tailer(f)
-                
-                for line in f:
-                    if nn % 100 == 0:
-                        print ('iter_compactsplit', nn, max_num)
-                    
-                    new_id, dd = line.strip('\n').split('\t', 1)
-                    yield loads(dd)
-                    nn += 1
+            #with ctx(fn) as f:
+            
+            f = ctx(fn)
+            
+            if do_tail:
+                f = line_tailer(f)
+            
+            ffs.append((fn, f))
 
-                    if max_num and (nn >= max_num):
-                        break
+    from time import time
+    t1 = time()
+    last_tot_c = 0
+    
+    while True:
+        
+        for cl, (fn, f) in enumerate(ffs[:]):
+            
+            try:
+                line = f.next()
+            except StopIteration as e:
+                del ffs[cl]
+                break
+            
+            tot_c += 1
+            
+            if (tot_c % 100 == 0):
+                print ('iter_compactsplit', 'tot_c', tot_c, 'nn', nn, 'max_num', max_num, 'per_sec', (tot_c - last_tot_c) / (time() - t1))
+                t1 = time()
+                last_tot_c = tot_c
+                
+            #continue
+                
+            if tot_c < skip_num:
+                continue
+            
+            #print ('CSLINE',line[:40])
+            new_id, dd = line.strip('\n').split('\t', 1)
+            try:
+                rec = loads(dd)
+            except:
+                raise
+                break
+            
+            if skip_callback is not False:
+                ## Return False to skip:
+                sk = skip_callback(rec)
+                if sk is False:
+                    ## todo re-add fastforward
+                    continue
+                got_any = True
+
+                yield sk, rec
+            else:
+                yield rec
+
+            nn += 1
+            
+            if max_num and (nn >= max_num):
+                break
                     
 
                 

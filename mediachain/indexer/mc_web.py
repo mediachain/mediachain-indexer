@@ -280,7 +280,9 @@ class handle_stats(BaseHandler):
         
         h = json.loads(d)
         
-        rh['stage_001_crawl'] = h
+        #rh['stage_001_crawl'] = h
+
+        rh.update(h)
         
         url = 'http://127.0.0.1:9200/getty_test/_count'
 
@@ -318,7 +320,7 @@ def post(self):
         
 from urllib import urlencode
 
-from mc_rerank import ReRankingBasic
+from mc_rerank import ReRankingBasic, ranking_prebuilt_equations
 
 try:
     from mc_crawlers import get_remote_search, get_enriched_tags
@@ -544,8 +546,11 @@ class handle_list_facets(BaseHandler):
 from mc_generic import consistent_json_hash
 import hashlib
 
-source_urls = ['gettyimages.com',
+source_urls = ['500px.com',
+               'flickr.com',
                'pexels.com',
+               'dp.la',
+               'gettyimages.com',
                'stock.tookapic.com',
                'unsplash.com',
                'pixabay.com',
@@ -563,7 +568,6 @@ source_urls = ['gettyimages.com',
                'picography.co',
                'startupstockphotos.com',
                'littlevisuals.co',
-               'gratisography.com',
                'spacex.com',
                'creativevix.com',
                'photos.oliur.com',
@@ -571,7 +575,6 @@ source_urls = ['gettyimages.com',
                'tinyography.com',
                'splashofrain.com',
                'commons.wikimedia.org',
-               'dp.la',
                ]
         
 sources = {x:{"id":x,
@@ -581,7 +584,21 @@ sources = {x:{"id":x,
            for x in source_urls
            }
 
-default_options = [{'name':'q',
+default_options = [{'name':'filter_licenses',
+                    'description':'List of zero-or-more allowable licenses. Select nothing or use "ALL" to allow all licenses.',
+                    'default':'Creative Commons',
+                    'type':'list-of-strings',
+                    'options':['Creative Commons','ALL'],
+                   },
+                   {'name':'filter_sources',
+                    'description':'List of zero-or-more allowable sources. Select nothing or use "ALL" to allow all licenses.',
+                    'default':'ALL',
+                    'type':['list-of-strings'],
+                    'options':['ALL'] + source_urls,
+                   },
+                   ]
+
+debug_options = [{'name':'q',
                   'description':'Query by text.',
                   'default':None,
                   'type':'text',
@@ -616,38 +633,36 @@ default_options = [{'name':'q',
                   'default':0,
                   'type':'number',
                   'options':[0, 1],
-                  },
-                   ]
-
-debug_options = [{'name':'include_docs',
+                 },
+                   {'name':'include_docs',
                   'description':'Return entire indexed docs, instead of just IDs.',
                   'default':1,
                   'type':'number',
-                  'options':['1', '0'],
+                  'options':[1, 0],
                   },
                  {'name':'pretty',
                   'description':'Indent and pretty-print JSON output.',
                   'default':1,
                   'type':'number',
-                  'options':['1','0'],
+                  'options':[1, 0],
                   },
                  {'name':'filter_incomplete',
                   'description':"Filter documents for which all features haven't been generated / ingested yet.",
                   'default':0,
                   'type':'number',
-                  'options':['0','1'],
+                  'options':[0, 1],
                   },
                  {'name':'allow_nsfw',
                   'description':'Include adult images.',
                   'default':0,
                   'type':'number',
-                  'options':['0','1'],
+                  'options':[0, 1],
                   },
                  {'name':'skip_query_cache',
                   'description':'Bypass the query cache.',
                   'default':0,
                   'type':'number',
-                  'options':['0','1']
+                  'options':[0, 1]
                   },
                  {'name':'schema_variant',
                   'description':'Select schema variant postprocessing version.',
@@ -659,26 +674,14 @@ debug_options = [{'name':'include_docs',
                   'description':'Name of reranking equation, or custom reranking equation string.',
                   'default':'aesthetics',
                   'type':'text',
-                  'options':['aesthetics', 'tfidf', 'boost_pexels',],
+                  'options':['aesthetics'] + [x for x in ranking_prebuilt_equations if x != 'aesthetics'],
                  },
                  {'name':'enrich_tags',
                   'description':'Use external API for tag enrichment on individual image pages.',
                   'default':1,
                   'type':'number',
-                  'options':['1','0'],
+                  'options':[1, 0],
                   },
-                 {'name':'filter_licenses',
-                  'description':'List of zero-or-more allowable licenses. Select nothing or use "ALL" to allow all licenses.',
-                  'default':['Creative Commons'],
-                  'type':'list-of-strings',
-                  'options':['Creative Commons','ALL'],
-                 },
-                 {'name':'filter_sources',
-                  'description':'List of zero-or-more allowable sources. Select nothing or use "ALL" to allow all licenses.',
-                  'default':[],
-                  'type':['list-of-strings'],
-                  'options':source_urls + ['ALL'],
-                 },
                  {'name':'token',
                   'description':'Token ID used to refer to previous search sessions.',
                   'default':[],
@@ -729,6 +732,8 @@ class handle_search(BaseHandler):
                 ]
             }
         """
+
+        tt0 = time()
         
         d = self.request.body
 
@@ -751,10 +756,9 @@ class handle_search(BaseHandler):
             return
 
         
-        is_debug_mode = intget(self.get_cookie('debug')) or intget(data.get('debug'))
-                
-        print ('DEBUG_MODE?', is_debug_mode, dict(self.request.cookies))
+        is_debug_mode = intget(self.get_cookie('debug')) or intget(data.get('debug')) or intget(self.get_argument('debug','0'))
         
+        print ('DEBUG_MODE?', is_debug_mode)
 
         if 'help' in data:
             ## TODO: switch to using the "options" further below instead:
@@ -785,6 +789,12 @@ class handle_search(BaseHandler):
         ## New method:
 
         the_input = {}
+
+        if is_debug_mode:
+            the_input['debug'] = 1
+        else:
+            the_input['debug'] = 0
+
         for arg in default_options + debug_options:
 
             if arg['type'] == 'number':
@@ -799,6 +809,9 @@ class handle_search(BaseHandler):
                     the_input[arg['name']] = [the_input[arg['name']]]
                     
 
+        if the_input['q']:
+            the_input['q'] = the_input['q'].strip()
+                    
         the_input['q_text'] = the_input['q'] ## for reverse compatibility.
 
         
@@ -851,7 +864,27 @@ class handle_search(BaseHandler):
         rr = False
 
         
+        ## New method:
+
+        query_args = the_input.copy()
+
+        for kk in ['limit','offset',]:
+            if kk in query_args:
+                del query_args[kk]
+
+        query_args['debug'] = intget(self.get_cookie('debug')) or intget(data.get('debug')) or intget(self.get_argument('debug','0'))
+
+        print ('QUERY_ARGS',query_args)
+
+        ## ignore those with default args:
+        for k,v in query_args.items():
+            if v is None:
+                del query_args[k]
+
+        
         if the_token:
+            assert 'debug' in the_input,the_input
+            
             rr = query_cache_lookup(the_token, skip_query_cache = the_input['skip_query_cache'])
 
             if rr is False:
@@ -862,27 +895,13 @@ class handle_search(BaseHandler):
                 return                
 
         else:
-            ## New method:
-            
-            query_args = the_input.copy()
-
-            for kk in ['limit','offset',]:
-                if kk in query_args:
-                    del query_args[kk]
-                
-            print ('QUERY_ARGS',query_args)
-
-            ## ignore those with default args:
-            for k,v in query_args.items():
-                if v is None:
-                    del query_args[k]
-            
             the_token = consistent_json_hash(query_args)
             
             rr = query_cache_lookup(the_token, skip_query_cache = the_input['skip_query_cache'])
-        
+            
         if rr is not False:
             print ('CACHE_OR_TOKEN_HIT_QUERY','offset:', the_input['offset'], 'limit:', the_input['limit'], 'len(results)',len(rr['results']))
+            
             
             results_count = len(rr['results'])
                                                 
@@ -902,7 +921,9 @@ class handle_search(BaseHandler):
             
             if is_debug_mode:
                 rr['debug_options'] = debug_options
-            
+
+            rr['query_info'] = {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
+                
             self.write_json(rr,
                             pretty = the_input['pretty'],
                             max_indent_depth = data.get('max_indent_depth', False),
@@ -943,7 +964,9 @@ class handle_search(BaseHandler):
             
             if is_debug_mode:
                 rr['debug_options'] = debug_options
-            
+
+            rr['query_info'] = {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
+
             self.write_json(rr)
             return
 
@@ -974,7 +997,7 @@ class handle_search(BaseHandler):
                 
                 model = mc_models.VECTORS_MODEL_NAMES['baseline']()
                 
-                if (the_input['q_id'].startswith(data_pat) or the_input['q_id'].startswith(data_pat_2)):
+                if the_input['q_id'] and  (the_input['q_id'].startswith(data_pat) or the_input['q_id'].startswith(data_pat_2)):
                     print ('GOT_DATA_URI')
                     terms = model.img_to_terms(img_data_uri = the_input['q_id'])
                 else:
@@ -1151,6 +1174,23 @@ class handle_search(BaseHandler):
                                   }
         
         
+        ## Debug info:
+        
+        if is_debug_mode:
+            for ii in rr:
+                
+                ## add debug info dict:
+            
+                ii['debug_info'] = {}
+                ii['debug_info_show'] = []
+            
+                ii['debug_info']['native_id'] = ii['_source'].get('native_id', False)                
+                ii['debug_info']['width'] = ii['_source'].get('sizes') and ii['_source'].get('sizes')[0].get('width', False)
+            print 'YES_DEBUG'
+        else:
+            print 'NO_DEBUG'
+                
+
         ## Add in frontend image cached preview images:
         ## Skip items without preview:
 
@@ -1160,20 +1200,19 @@ class handle_search(BaseHandler):
         
         r2 = []
         for ii in rr:
-            
-            ## From inline thumbnail:
 
+            ## From inline thumbnail:
+            
             urls = lookup_cached_image(_id = ii['_id'],
                                        do_sizes = ['1024x1024',],
                                        )
-
+            
             ii['_source']['url_direct_cache'] = {'url':urls['1024x1024']}
-
-
+            
             ## Tag enrichment, using the image cache URLs:
-
+            
             if the_input['enrich_tags'] and is_id_search and get_enriched_tags:
-
+                
                 etags = []
                 try:
                     etags = get_enriched_tags([urls['1024x1024']])[0]
@@ -1181,18 +1220,22 @@ class handle_search(BaseHandler):
                     raise
                 except:
                     print ('ENRICH_TAGS_FAILED - API KEYS?',)
-
+                
                 if not ii['_source'].get('keywords'):
                     ii['_source']['keywords'] = []
-
-                ii['_source']['keywords'].extend(etags)
-
+                
+                #ii['_source']['keywords'].extend(etags)
+                
+                if is_debug_mode:
+                    #ii['debug_info']['external_tags'] = [(a.strip(),b.strip()) for a,b in [x.split('@') for x in etags]]
+                    ii['debug_info']['external_tags'] = ', '.join(etags)
+                
             r2.append(ii)
 
             continue
         
         rr = r2
-
+        
         
         ## Apply post-ingestion normalizers, if there are any:
                 
@@ -1202,32 +1245,18 @@ class handle_search(BaseHandler):
         ## Re-rank:
         
         rrm = ReRankingBasic(eq_name = the_input['rerank_eq'])
-        rr = rrm.rerank(rr)
-
-        
-        ## AES for debug:
-
-        for ii in rr:
-
-            if not ii['_source'].get('keywords'):
-                ii['_source']['keywords'] = []
-
-            sc = ii['_source'].get('aesthetics', {}).get('score', False)
-
-            if sc is False:
-                ii['_source']['keywords'].append('aes=False')
-            else:
-                ii['_source']['keywords'].append('aes=%.4f' % sc)
-                            
-            ii['_source']['keywords'].append('ni=' + ii['_source'].get('native_id', 'False'))
-
-            ii['_source']['keywords'].append('width=' + str(ii['_source'].get('sizes') and ii['_source'].get('sizes')[0].get('width', False)))
+        rr = rrm.rerank(rr, is_debug_mode)
             
-            ii['_source']['keywords'].append('tfidf=%.4f' % ii['_old_score'])
-            ii['_source']['keywords'].append('score=%.4f' % ii['_score'])
         
         
         ## Note: swapping these for ES queries shortly:
+
+        if isinstance(the_input['filter_licenses'], basestring):
+            the_input['filter_licenses'] = [the_input['filter_licenses']]
+        if isinstance(the_input['filter_sources'], basestring):
+            the_input['filter_sources'] = [the_input['filter_sources']]
+
+        print ('filter_licenses_in',the_input['filter_licenses'])
         
         if the_input['filter_licenses'] and ('ALL' not in the_input['filter_licenses']):
             
@@ -1252,11 +1281,13 @@ class handle_search(BaseHandler):
             
             print ('FILTER_LICENSES', the_input['filter_licenses'], len(rr),'->',len(r2))
             rr = r2
-                    
-        if False: #the_input['filter_sources']:
+
+        print ('filter_sources_in',the_input['filter_sources'])
+
+        if the_input['filter_sources'] and ('ALL' not in the_input['filter_sources']):
             filter_sources_s = set(the_input['filter_sources'])
             r2 = []
-            for ii in rr:                
+            for ii in rr:
                 if filter_sources_s.intersection(ii['_source'].get('source_tags',[])):
                     r2.append(ii)
             
@@ -1308,6 +1339,8 @@ class handle_search(BaseHandler):
         if is_debug_mode:
             rr['debug_options'] = debug_options
         
+        rr['query_info'] = {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
+        
         self.write_json(rr,
                         pretty = the_input['pretty'],
                         max_indent_depth = data.get('max_indent_depth', False),
@@ -1355,14 +1388,14 @@ class handle_random_query(BaseHandler):
             aa, bb = self.rand_typeahead_mwe, self.rand_typeahead_mwe_total
         else:
             aa, bb = self.rand_typeahead, self.rand_typeahead_total
-
+        
         if choice([0, 0, 0, 0, 0, 1]):
             ## Sometimes weighted:
             q = weighted_choice(aa, bb)
         else:
             ## Sometimes totally random:
             q = choice(aa)[1]
-
+        
         print ('random_query', q, bb)
         
         if intget(self.get_argument('as_url', 0)):

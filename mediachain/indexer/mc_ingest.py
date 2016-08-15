@@ -85,26 +85,39 @@ def verify_img(buf):
     return True
 
 
-def shrink_and_encode_image(s, size = (1024, 1024), to_base64 = True):
+def shrink_and_encode_image(s,
+                            size = (1024, 1024),
+                            to_base64 = True,
+                            make_square = False,
+                            bytes_and_image = False
+                            ):
     """
     Resize image to small size & base64 encode it.
     """
     img = Image.open(StringIO(s))
-    
-    print ('shrink_and_encode_image',img.size,'->',size)
+
+    orig_size = img.size
     
     if (img.size[0] > size[0]) or (img.size[1] > size[1]):
         f2 = StringIO()
-        img.thumbnail(size, Image.ANTIALIAS)
+        if make_square:
+            img = img.resize(size, Image.ANTIALIAS)
+        else:
+            img.thumbnail(size, Image.ANTIALIAS)
         img.convert('RGB').save(f2, "JPEG")
         f2.seek(0)
         s = f2.read()
-    
+
+        print ('shrink_and_encode_image', orig_size,'->', size, '=>', img.size)
+
     else:
         ## Detect truncated and throw error:
         img.load()
 
-    if to_base64:        
+    if bytes_and_image:
+        return (s, img)
+    
+    elif to_base64:        
         return data_pat + base64.b64encode(s)
     
     else:
@@ -218,7 +231,7 @@ def get_image_cache_url(_id,
 
 
 def lookup_cached_image(_id,
-                        do_sizes = ['1024x1024','256x256'], #'original', 
+                        do_sizes = ['1024x1024'], #'256x256', 'original', 
                         return_as = 'urls',
                         check_exists = False,
                         image_hash_sha256 = False,
@@ -294,20 +307,97 @@ def lookup_cached_image(_id,
     return rh
 
 from random import randint
+import errno
+
+qqc = Queue()
+qqc_started = [False]
+
+def worker_cache_image():
+    while True:
+        try:
+            kw = qqc.get(timeout=1)
+        except Exception as e:
+            #print ('TIMEOUT worker_cache_image()', qqc.qsize())
+            continue
+        
+        _cache_image(**kw)
+
+
+def xx_cache_image(**kw):
+    """
+    Faster version.
+    """
+    if not qqc_started[0]:
+        qqc_started[0] = True
+        
+        for x in xrange(20):
+            t=Thread(target = worker_cache_image,
+                     )
+            t.daemon=True
+            t.start()
+
+    qqc.put(kw)
+
+    ## TODO - return output...
+    
+    #_cache_image(**kw)
+
 
 def cache_image(_id,
                 image_hash_sha256 = False,
                 image_func = False,
                 image_bytes = False,
-                do_sizes = ['1024x1024','256x256'], #'original', 
+                do_sizes = ['1024x1024',], #'original', '256x256'
                 return_as = 'urls',
                 image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
                 image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
+                true_if_exists = False,
                 ):
     """
-    NOTE: unfinished draft of an API shape, quickly sketched up at 3am. Consider this unfinished and untested.
-    Ping me before rewriting.
+    NOTE!!! - image must already be 1024x1024 and in a normalized encoding format.
+    """
     
+    assert tuple(do_sizes) == ('1024x1024',), do_sizes
+
+    #sz = Image.open(StringIO(image_bytes)).size
+    #assert sz[0] <= 1024, sz
+    #assert sz[1] <= 1024, sz
+    
+    size = '1024x1024'
+    
+    dr1 = image_cache_dir + 'hh_' + size + '/'
+    
+    dr2 = dr1 + _id[:3] + '/'
+    
+    fn_cache = dr2 + _id + '.jpg'
+    
+    for x in xrange(2):
+        try:
+            with open(fn_cache, 'w') as f:
+                f.write(image_bytes)
+        except OSError as exception:
+            if exception.errno != errno.EEXIST:
+                raise
+            #import sys
+            #exc_info = sys.exc_info()
+            makedirs(dr2)
+            continue
+        break
+    else:
+        raise
+    
+
+def old_cache_image(_id,
+                image_hash_sha256 = False,
+                image_func = False,
+                image_bytes = False,
+                do_sizes = ['1024x1024',], #'original', '256x256'
+                return_as = 'urls',
+                image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
+                image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
+                true_if_exists = False,
+                ):
+    """    
     Cache an image for later use by other stages of the pipeline.
     
     Uses plain files for now, because that's what works the best for HTTP serving of image files to the Frontend.
@@ -319,7 +409,7 @@ def cache_image(_id,
        image_func:     When called, returns an open file ready for reading. Used for lazy image retrieval.
        image_bytes:    Image content bytes.
        do_sizes:       Output resized versions with these sizes.
-       return_as:      'urls', 'filenames', 'bytes', 'base64'
+       return_as:      'urls', 'filenames', 'bytes', 'base64', 'images'
     
     Process:
        1) Check if hash of image file for this `_id` has changed.
@@ -342,7 +432,6 @@ def cache_image(_id,
     
     See also: `lookup_cached_image()`
     """
-    
     if '_' in _id:
         ## TODO: either md5 of native_id or not:
         print ('WARN: Should pass hashed IDs to `cache_image()`, so we get an even distribution between dirs.')
@@ -363,11 +452,15 @@ def cache_image(_id,
     ## Check previously recorded hash of input file for this ID, vs expected hash:
     
     dr1_b = image_cache_dir + 'hh_hash/'
+
+    dr1_c = dr1_b + _id[:3] + '/'
     
-    fn_h = dr1_b + _id + '.hash'
+    fn_h = dr1_c + _id + '.hash'
     
     current_cached = False
-    if exists(fn_h):
+    if False:#exists(fn_h):
+        if true_if_exists: ## don't check content or anything
+            return True
         with open(fn_h) as f:
             xx = f.read()
         xx = xx.split('\t')
@@ -399,22 +492,47 @@ def cache_image(_id,
         
         ## Check if file is cached, and has not changed for this ID:
         
-        if (not current_cached) or (not exists(fn_cache)):
+        if True:#(not current_cached) or (not exists(fn_cache)):
             
-            if not exists(dr1):
+            #if not exists(dr1):
+            try:
                 mkdir(dr1)
+            except OSError as exception:
+                if exception.errno != errno.EEXIST:
+                    raise
             
-            if not exists(dr1_b):
+            #if not exists(dr1_b):
+            try:
                 mkdir(dr1_b)
+            except OSError as exception:
+                if exception.errno != errno.EEXIST:
+                    raise
             
-            if not exists(dr2):
+            #if not exists(dr1_c):
+            try:
+                mkdir(dr1_c)
+            except OSError as exception:
+                if exception.errno != errno.EEXIST:
+                    raise
+            
+            #if not exists(dr2):
+            try:
                 mkdir(dr2)
+            except OSError as exception:
+                if exception.errno != errno.EEXIST:
+                    raise
+
 
             ## Retrieve image content from image_func, if needed:
             
             if (image_bytes is False) and (image_func is not False):                
                 ## TODO - crash hard here on failure? Expect image_func to manage retries?:
                 image_bytes = image_func().read()
+
+                if image_bytes is False:
+                    print ('FAILED_INVALID_IMAGE image_func() in cache_image',)
+                    return False
+                
             else:
                 assert image_bytes is not False
             
@@ -454,7 +572,10 @@ def cache_image(_id,
                     
         elif return_as == 'base64':
             rh[size] = data_pat + base64.b64encode(bytes_out)
-        
+            
+        elif return_as == 'images':
+            rh[size] = Image.open(StringIO(bytes_out))
+
         else:
             assert False,('TODO', return_as)
     
@@ -476,31 +597,196 @@ def cache_image(_id,
     return rh
 
 
+def fix_hh_hash(via_cli = False):
+
+    dir_in = '/datasets/datasets/indexer_cache/images/hh_hash/'
+
+    for c, fn in enumerate(listdir(dir_in)):
+        if not fn.endswith('.hash'):
+            #print ('??',fn)
+            continue
+        
+        dir_out = dir_in + fn[:3] + '/'
+        
+        try:
+            mkdir(dir_out)
+        except OSError as exception:
+            if exception.errno != errno.EEXIST:
+                raise
+
+        fn_out = dir_out + fn
+
+        if (c % 100) == 0:
+            print (c, dir_in + fn, '->', fn_out)
+
+        #sleep(1)
+        #continue
+        
+        rename(dir_in + fn,
+               fn_out,
+               )
+        
+    print ('DONE fix_hh_hash()',)
+
+
+def backfill_v2_vectors(fns_in = [],
+                        batch_size = 100,
+                        via_cli = False,
+                        ):
+    """
+    Backfill all ES-ingested docs with neural image and text vectors.
+
+    1. Read from compactsplit.
+    2. Get image, title, etc. for each metadata.
+    3. Compute image vectors in batches.
+    """
+    if via_cli:
+        print sys.argv
+        fns_in = sys.argv[2:]
+
+    if not fns_in:
+        print 'USAGE: ', sys.argv[0], sys.argv[1],'compactsplit_dir','compactsplit_dir','...'
+        exit(1)
+
+    print ('STARTING',fns_in)
+
+    ### 
+
+    ## https://github.com/ivendrov/order-embedding
+    
+    import tools, evaluation
+    model = tools.load_model('snapshots/order')
+    #evaluation.ranking_eval_5fold(model, split='test')
+
+    sentence_vectors = tools.encode_sentences(model, s, verbose=True)
+
+    import extract_cnn_features
+    
+    #Where im is a NumPy array of VGG features. Note that the VGG features were scaled to unit norm prior to training the models:
+    image_vectors = tools.encode_images(model, im) 
+
+
+
+    
+    ###
+
+    def get_fn_out(_id, mode = 'w'):
+        xid = hashlib.md5(_id).hexdigest()
+        dd = '/datasets3/datasets/vectors_images_out/' + xid[:3] + '/'
+        if mode == 'w':
+            if not exists(dd):
+                mkdir(dd)
+        return dd + xid + '.json'
+    
+    def iter_batches(size):
+        
+        for cfn, fn_in in enumerate(fns_in):
+            
+            def skip_callback(rec):
+                ## return False to skip:
+                fn_out = get_fn_out(rec['_id'], 'r')
+                if exists(fn_out):
+                    return False
+                return fn_out
+            
+            buf = []
+            for fn_out, rec in iter_compactsplit(fn_in,
+                                                 skip_callback = skip_callback,
+                                                 ):
+                
+                the_id = rec['_id']
+                
+                image_bytes = decode_image(rec['img_data'])
+                
+                img = verify_img(image_bytes)
+                
+                if img is False:
+                    continue
+
+                
+                
+                rec = {'_id':the_id,
+                       'data':img_bytes_out,
+                       'v':'1',
+                       }
+
+                buf.append(rec)
+                if len(buf) == size:
+                    print ('YIELD_BATCH',len(buf))
+                    yield buf[:]
+                    buf[:] = []
+            if buf:
+                print ('YIELD_BATCH',len(buf))
+                yield buf[:]
+
+        
+    print 'START_LOAD_BATCHES()'
+    #import traceback, sys
+    #traceback.print_stack(file=sys.stdout)
+
+    done_batches = []
+        
+    for batch in iter_batches(batch_size):
+        pass
+
+    
+    
+
+
 from collections import Counter
 
-def aes_backfill(batch_size = 100,
-                 index_name = mc_config.MC_INDEX_NAME,
-                 doc_type = mc_config.MC_DOC_TYPE,
-                 only_datasets = ['500px'],
-                 via_cli = False,
-                 ):
-
+def backfill_aesthetics(batch_size = 100,
+                        index_name = mc_config.MC_INDEX_NAME,
+                        doc_type = mc_config.MC_DOC_TYPE,
+                        only_datasets = ['flickr100mm'],
+                        via_cli = False,
+                        ):
+    """
+    Backfill all ES-ingested docs with aesthetics scores.
+    """
+    
     import ujson
     
     if mc_config.LOW_LEVEL:
         es = mc_neighbors.low_level_es_connect()    
 
         ## TODO: https://www.elastic.co/guide/en/elasticsearch/reference/current/breaking_21_search_changes.html
+
+        if only_datasets:
+            #query = {"query": {"constant_score": {"filter": [{"term": {"source_dataset": x}}
+            #                                                 for x
+            #                                                 in only_datasets
+            #                                                 ]
+            #                                      }
+            #                   }
+            #         }
+            
+            query = {"query": {"constant_score": {"filter": {"bool": {"must":[{"term": {"source_dataset": x}}
+                                                                             for x
+                                                                             in only_datasets
+                                                                             ] + \
+                                                                             [{"missing" : { "field" : "aesthetics" }}]
+                                                                     }
+                                                             }
+                                                  }
+                               }
+                     }
+            
+        else:
+            #query = {"query": {'match_all': {}}}
         
+            query = {"query": {"constant_score": {"filter": {"bool": {"must":[{"missing" : { "field" : "aesthetics" }}]
+                                                                     }
+                                                             }
+                                                  }
+                               }
+                     }
+            
         res = scan(client = es,
                    index = index_name,
                    doc_type = doc_type,
                    scroll = '100m', #TODO - hard coded.
-                   query = {"query": {'match_all': {}
-                                     },
-                           #'from':0,
-                           #'size':1,                           
-                           },
+                   query = query,
                    )
     else:
         nes = mc_neighbors.high_level_connect(index_name = index_name,
@@ -554,7 +840,7 @@ def aes_backfill(batch_size = 100,
     for c,hit in enumerate(res):
 
         doc_update = {}
-
+        
         native_id = hit['_source'].get('native_id') or hit['_id']
         
         assert '_' in native_id, hit
@@ -571,13 +857,28 @@ def aes_backfill(batch_size = 100,
         
         fn_aes = get_fn_out(native_id, 'r')
         
-        if not exists(fn_aes):
+        #if not exists(fn_aes):
+        #    skipped_prefixes[prefix] += 1
+        #    continue
+        
+        try:
+            with open(fn_aes) as f:
+                de = f.read()    
+        except IOError as e:
+            if e.errno != errno.ENOENT:
+                raise
             skipped_prefixes[prefix] += 1
             continue
         
-        with open(fn_aes) as f:
-            aes = ujson.loads(f.read())
-
+        try:
+            aes = ujson.loads(de)
+        except KeyboardInterrupt:
+            raise
+        except:
+            print ('EXCEPTION',fn_aes,de[:50])
+            sleep(0.1)
+            continue
+        
         #assert not '500px' in native_id,('2',native_id) ##TODO REMOVE
         
         doc_update['aesthetics'] = aes
@@ -620,6 +921,8 @@ def test_image_cache(via_cli = False):
     """
     Basic sanity check for image caching. TODO: more testing, instead of just running the code.
     """
+
+    assert False, 'OLD'
     
     image_base64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4"\
                    "//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
@@ -639,7 +942,7 @@ def test_image_cache(via_cli = False):
         
         for use_image_func in [True, False]:
             
-            rh1 = cache_image(_id,
+            rh1 = cache_image(_id = _id,
                               image_hash_sha256 = image_hash if use_image_func else False,
                               image_func = image_func if use_image_func else False,
                               image_bytes = image_bytes if not use_image_func else False,
@@ -664,7 +967,140 @@ def test_image_cache(via_cli = False):
                 assert rh1[k] == rh2[k],(k, rh1[k], rh2[k])
                 
     print ('FINISHED')
+
+
+
+def get_asset(hh):
+    from cStringIO import StringIO
+    from mediachain.reader.api import open_binary_asset
     
+    with open_binary_asset(hh['thumbnail']) as f:
+        image_bytes = f.read()
+    
+    rr = verify_img(image_bytes)
+
+    if rr is False:
+        return False
+
+    return StringIO(image_bytes)
+
+
+def ingest_worker(hh):
+    
+    import mc_models
+    vmodel = mc_models.VectorsBaseline()
+
+    do_lazy = False ## TODO: temporarily disabling lazy image retrieval, for datasets ingested without `image_hash_sha256`.
+    
+    try:
+
+        
+        if (('thumbnail' in hh) and (('image_hash_sha256' in hh) or (do_lazy is False))) or ('img_data' in hh):
+
+            t1 = time()
+
+            ## Mediachain metadata formatted 'thumbnail':
+            
+            if 'img_data' in hh:
+                dd = decode_image(hh['img_data'])
+                #try:
+                img_bytes, the_img = shrink_and_encode_image(dd,
+                                                             size = (1024, 1024),
+                                                             bytes_and_image = True,
+                                                             )
+                #except:
+                #    print ('BAD_IMAGE', dd)
+                #    return False
+            
+            elif do_lazy:
+                assert False, 'TODO - temporarily deprecated'
+                
+                the_bytes = cache_image(_id = hh['_id'],
+                                        image_hash_sha256 = hh['image_hash_sha256'],
+                                        image_func = lambda: get_asset(hh),
+                                        do_sizes = ['1024x1024',],#'256x256'
+                                        return_as = 'bytes',
+                                        )
+                if the_bytes is False:
+                    print ('skip do_lazy',)
+                    return False
+                
+                img_bytes = the_bytes['1024x1024']
+                the_img = Image.open(StringIO(img_bytes))
+
+            else:
+                
+                xx = get_asset(hh)
+                if xx is False:
+                    print ('ERROR COULD NOT get_asset()',)
+                    return False
+                
+                img_bytes = xx.read()
+                the_img = Image.open(StringIO(img_bytes))
+                
+            
+            ## Cache normalized images:
+
+            assert img_bytes
+            
+            the_bytes = cache_image(_id = hh['_id'],
+                                    image_bytes = img_bytes,
+                                    do_sizes = ['1024x1024',],#'256x256'
+                                    return_as = 'bytes',
+                                    true_if_exists = True,
+                                    )
+            
+            #if the_bytes is True:
+            #    #print ('CACHE_TIME', 1 / (time() - t1))
+            #    return False
+            
+            #if the_bytes is False:
+            #    print ('skip',)
+            #    return False
+                        
+            #print ('CACHE_TIME_1', 1000 *  (time() - t1), 'ms')
+            
+            ## Gen_dedupe_vectors:
+            
+            vv = vmodel.img_to_terms(img_bytes = img_bytes)
+            hh.update(vv)
+            
+            #print ('CACHE_TIME_2', 1000 *  (time() - t1), 'ms')
+            
+            ## Add aspect ratio for all images:
+            
+            hh['aspect_ratio'] = the_img.size[0] / float(the_img.size[1])
+
+            print ('CACHE_TIME_3', 1000 *  (time() - t1), 'ms')
+            
+        elif hh.get('img_data') == 'NO_IMAGE':
+            
+            print ('WARNING, SKIPPING: "NO_IMAGE"', hh.get('_id'), hh.get('native_id'))
+            return False
+
+            if 'aspect_ratio' not in hh:
+                hh['aspect_ratio'] = None
+
+        elif 'img_data' not in hh:
+            
+            print ('WARNING, SKIPPING: No thumbnail detected, and "NO_IMAGE" not used.', hh.get('_id'), hh.get('native_id'))
+            #assert False, ('No thumbnail detected, and "NO_IMAGE" not used.',hh.keys())
+            
+            return False
+    
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:
+        raise
+        #print ('EXCEPTION ingest_worker()',e)
+        return False
+    
+    ## Don't store image data to ES:
+    if 'img_data' in hh:
+        del hh['img_data']
+    
+    return hh
+
 
 def ingest_bulk(iter_json = False,
                 thread_count = 1,
@@ -706,10 +1142,6 @@ def ingest_bulk(iter_json = False,
     Examples:
         See `mc_test.py`
     """
-
-    if gen_dedupe_vectors:
-        import mc_models
-        vmodel = mc_models.VectorsBaseline()
     
     index_settings = {'settings': {'number_of_shards': mc_config.MC_NUMBER_OF_SHARDS_INT,
                                    'number_of_replicas': mc_config.MC_NUMBER_OF_REPLICAS_INT,                             
@@ -762,6 +1194,22 @@ def ingest_bulk(iter_json = False,
             
     print('INSERTING...')
 
+    import multiprocessing
+    from multiprocessing.pool import ThreadPool
+
+    ## iostat -x 1
+
+    batch_size = 10
+    
+    if False:
+        nj = multiprocessing.cpu_count()
+        nj = 16 
+        pool = multiprocessing.Pool(nj)
+    else:
+        pool = ThreadPool(batch_size)
+    
+    from mc_generic import igroup
+    
     def iter_wrap():
         # Put in parallel_bulk() format:
 
@@ -769,172 +1217,155 @@ def ingest_bulk(iter_json = False,
 
         t0 = time()
         
-        for hh in iter_json:
+        for cb, hh_batch in enumerate(igroup(iter_json, batch_size)):
             
-            if nnn % 100 == 0:
-                print 'YIELDING_FOR_INSERT','num:',nnn, 'index_name:',index_name, 'doc_type:',doc_type,'per_second:',nnn / (time() - t0)
+            #if cb < 100000:
+            #    continue
             
-            xdoc = {'_op_type': 'index',
-                    '_index': index_name,
-                    '_type': doc_type,
-                    }
+            print ('BATCH iter_wrap()', cb * batch_size)
             
-            hh.update(xdoc)
+            hh_batch = pool.imap_unordered(ingest_worker, hh_batch)
+            #hh_batch = [ingest_worker(x) for x in hh_batch]
             
-            assert '_id' in hh,hh.keys()
-            
-            do_lazy = False ## TODO: temporarily disabling lazy image retrieval, for datasets ingested without `image_hash_sha256`.
+            for hh in hh_batch:
 
-            try:
-                if (('thumbnail' in hh) and (('image_hash_sha256' in hh) or (do_lazy is False))) or ('img_data' in hh):
-                    
-                    ## Mediachain metadata formatted 'thumbnail':
-                    
-                    from cStringIO import StringIO
-                    
-                    def get_asset():
-                        from mediachain.reader.api import open_binary_asset
-                        with open_binary_asset(hh['thumbnail']) as f:
-                            return StringIO(f.read())
-
-                    if 'img_data' in hh:
-                        fns = cache_image(_id = hh['_id'],
-                                          image_bytes = decode_image(hh['img_data']),
-                                          do_sizes = ['1024x1024','256x256'],
-                                          return_as = 'filenames',
-                                          )
-
-                    elif do_lazy:
-                        fns = cache_image(_id = hh['_id'],
-                                          image_hash_sha256 = hh['image_hash_sha256'],
-                                          image_func = lambda: get_asset(),
-                                          do_sizes = ['1024x1024','256x256'],
-                                          return_as = 'filenames',
-                                          )
-
-                    else:
-                        
-                        print ('NON-LAZY_IMAGE_RETRIEVAL',)
-                        fns = cache_image(_id = hh['_id'],
-                                          image_bytes = get_asset().read(),
-                                          do_sizes = ['1024x1024','256x256'],
-                                          return_as = 'filenames',
-                                          )
-
-                    assert fns
-                    
-                    if gen_dedupe_vectors:
-                        fn = fns['256x256']
-                        with open(fn) as f:
-                            d = f.read()
-                        
-                        vv = vmodel.img_to_terms(img_bytes = d)
-
-                        print ('VECTORS',repr(vv)[:500])
-                        
-                        hh.update(vv)
-                    
-                    ## Add aspect ratio for all images:
-
-                    with open(fns['256x256']) as f:
-                        img = Image.open(f)
-                        hh['aspect_ratio'] = img.size[0] / float(img.size[1])
-
-
-                elif (hh.get('img_data') == 'NO_IMAGE') or (hh.get('image_thumb') == 'NO_IMAGE'):
-                    
-                    print ('WARNING, SKIPPING: "NO_IMAGE"', hh.get('_id'), hh.get('native_id'))
+                if hh is False:
                     continue
                 
-                    ## One-off ignoring of thumbnail generation via `NO_IMAGE`:
-
-                    if 'img_data' in hh:
-                        del hh['img_data']
-
-                    if 'image_thumb' in hh:
-                        del hh['image_thumb']
-
-                    ## Add aspect ratio for all images:
-
-                    if 'aspect_ratio' not in hh:
-                        hh['aspect_ratio'] = None
-
-                else:
-                    print ('WARNING, SKIPPING: No thumbnail detected, and "NO_IMAGE" not used.', hh.get('_id'), hh.get('native_id'))
-                    #assert False, ('No thumbnail detected, and "NO_IMAGE" not used.',hh.keys())
-                    continue
+                #if nnn % 100 == 0:
+                print ('ITER_WRAP','num:',nnn, 'index_name:',index_name, 'doc_type:',doc_type,'total_per_sec:',nnn / (time() - t0))
                 
-            except KeyboardInterrupt:
-                raise
-            except:
-                raise
-                ## TODO: a fix has been applied upstream of this step. This won't be needed
-                ## once the datasets are reprocessed.
-                print ('ERROR_RESIZING_IMAGE /datasets/datasets/error_record',)
-                #with open('/datasets/datasets/error_record','w') as f:
-                #    f.write(json.dumps(hh, indent=4))
-                #raw_input()
-                continue
-            
-            ## TODO: get dedupe to read from cache, because we're not saving `img_data` anymore?
-            if 'img_data' in hh:
-                del hh['img_data']
+                xdoc = {'_op_type': 'index',
+                        '_index': index_name,
+                        '_type': doc_type,
+                        }
+                
+                hh.update(xdoc)
+                
+                assert '_id' in hh,hh.keys()
 
-            chh = hh.copy()
-            if 'image_thumb' in chh:
-                del chh['image_thumb']
-            
-            nnn += 1
-            
-            yield hh
+                
+                nnn += 1
+
+                yield hh
     
     gen = iter_wrap()
+
+    from threading import current_thread,Thread
+    from Queue import Queue
+
+    qqw = Queue()
+    
+    def worker_parallel_background(buf_size = 25):
+        print ('START_WORKER_worker_parallel_background()', current_thread().name)
+        
+        import mc_models
+        vmodel = mc_models.VectorsBaseline()
+        
+        t1 = time()
+        
+        while True:
+
+            buf = []
+            while True:
+                try:
+                    buf.append(qqw.get(timeout=1))
+                except Exception as e:
+                    print ('TIMEOUT worker_parallel_background()', qqw.qsize())
+                    break
+                if len(buf) >= buf_size:
+                    break
+            
+            if not buf:
+                continue
+            
+            ii = parallel_bulk(es,
+                               buf,
+                               thread_count = 1,
+                               chunk_size = 100,
+                               max_chunk_bytes = 100 * 1024 * 1024, #100MB
+                               )
+            
+            for is_success, res in ii:
+                """
+                #FORMAT:
+                (True,
+                {u'index': {u'_id': u'getty_100113781',
+                            u'_index': u'getty_test',
+                            u'_shards': {u'failed': 0, u'successful': 1, u'total': 1},
+                            u'_type': u'image',
+                            u'_version': 1,
+                            u'status': 201}})
+                """
+                pass
+            
+            #print ('FAST_worker_parallel_background()', 'sent:', len(buf), 'per_sec:', len(buf) / (time() - t1),)
+            t1 = time()
     
     def non_parallel_bulk(es,
                           the_iter,
+                          do_threading = True,
                           *args, **kw):
         """
         Aggressive inserter that inserts & refreshes after every item.
         """
-        print 'USING: NON_PARALLEL_BULK'
+        print ('USING: NON_PARALLEL_BULK',)
+
+        if do_threading:
+            t=Thread(target = worker_parallel_background,
+                     )
+            t.daemon=True
+            t.start()
+
         
         for c,hh in enumerate(the_iter):
+                                    
+            if do_threading:
+
+                while qqw.qsize() > 100:
+                    while qqw.qsize() > 50:
+                        print ('BLOCKING, qqw:', qqw.qsize())
+                        sleep(1)
+                
+                qqw.put(hh)
+                res = 'BACKGROUND'
             
-            #print 'NON_PARALLEL_BULK',repr(hh)[:100],'...'
+            else:
+                
+                xaction = hh['_op_type']
+                xindex = hh['_index']
+                xtype = hh['_type']
+                xid = hh['_id']
+
+                for k,v in hh.items():
+                    if k.startswith('_'):
+                        del hh[k]
+
+                assert xaction == 'index',(xaction,)
+
+                ## Retry, ignoring likey-transient errors:
             
-            xaction = hh['_op_type']
-            xindex = hh['_index']
-            xtype = hh['_type']
-            xid = hh['_id']
-            
-            for k,v in hh.items():
-                if k.startswith('_'):
-                    del hh[k]
-            
-            assert xaction == 'index',(xaction,)
-            
-            #print 'BODY',hh
-            
-            ## Retry, ignoring likey-transient errors:
-            
-            while True:
-                try:
-                    res = es.index(index = xindex, doc_type = xtype, id = xid, body = hh) ## TODO - re-add batching
-                except elasticsearch.exceptions.ConnectionTimeout:
-                    print ('elasticsearch.exceptions.ConnectionTimeout',)
-                    sleep_loud(1)
-                    continue
-                except elasticsearch.exceptions.ConnectionError:
-                    print ('elasticsearch.exceptions.ConnectionError',)
-                    sleep_loud(1)
-                    continue
-                break
+                t1 = time()
+                while True:
+                    try:
+                        res = es.index(index = xindex, doc_type = xtype, id = xid, body = hh) ## TODO - re-add batching
+                    except elasticsearch.exceptions.ConnectionTimeout:
+                        print ('elasticsearch.exceptions.ConnectionTimeout',)
+                        sleep_loud(1)
+                        continue
+                    except elasticsearch.exceptions.ConnectionError:
+                        print ('elasticsearch.exceptions.ConnectionError',)
+                        sleep_loud(1)
+                        continue
+                    break
+                
+                print ('SLOW_INDEXED', 'per_sec?', 1.0 / (time() - t1),)
             
             #print 'DONE-NON_PARALLEL_BULK',xaction,xid
             
-            yield True,res
+            yield True, res
             
-            if (c > 0) and (c % 1000 == 0):
+            if (c > 0) and (c % 10000 == 0):
                 t1 = time()
                 print ('REFRESH-NON_PARALLEL_BULK',c)
                 try:
@@ -942,8 +1373,8 @@ def ingest_bulk(iter_json = False,
                 except KeyboardInterrupt:
                     raise
                 except:
-                    print 'REFRESH_ERROR'
-                print 'REFRESHED',time() - t1
+                    print ('REFRESH_ERROR')
+                print ('REFRESHED',time() - t1)
                 
                 if False:
                     try:
@@ -1477,7 +1908,8 @@ functions=['receive_blockchain_into_indexer',
            'config',
            'tail_blockchain',
            'test_image_cache',
-           'aes_backfill',
+           'backfill_aesthetics',
+           'fix_hh_hash',
            ]
 
 def main():
