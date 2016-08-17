@@ -738,183 +738,206 @@ from collections import Counter
 def backfill_aesthetics(batch_size = 100,
                         index_name = mc_config.MC_INDEX_NAME,
                         doc_type = mc_config.MC_DOC_TYPE,
-                        only_datasets = ['flickr100mm'],
+                        only_datasets = ['getty'],#'flickr100mm'
+                        do_models = [#('aesthetics','/datasets/datasets/aes_out/'),
+                                     ('aes_unsplash_out_v1','/datasets/datasets/aes_unsplash_out_v1/'),
+                                     ],
                         via_cli = False,
                         ):
     """
-    Backfill all ES-ingested docs with aesthetics scores.
+    Update top-level fields of ES-ingested docs with info from files in a directory, based on ID.
+    
+    TODO:
+    Collection (either the directory or ES) with higher percent of records to be backfilled should 
+    be scanned in the outer loop for efficiency. Perhaps make it possible to switch between these.
     """
-    
-    import ujson
-    
-    if mc_config.LOW_LEVEL:
-        es = mc_neighbors.low_level_es_connect()    
 
-        ## TODO: https://www.elastic.co/guide/en/elasticsearch/reference/current/breaking_21_search_changes.html
-
-        if only_datasets:
-            #query = {"query": {"constant_score": {"filter": [{"term": {"source_dataset": x}}
-            #                                                 for x
-            #                                                 in only_datasets
-            #                                                 ]
-            #                                      }
-            #                   }
-            #         }
-            
-            query = {"query": {"constant_score": {"filter": {"bool": {"must":[{"term": {"source_dataset": x}}
-                                                                             for x
-                                                                             in only_datasets
-                                                                             ] + \
-                                                                             [{"missing" : { "field" : "aesthetics" }}]
-                                                                     }
-                                                             }
-                                                  }
-                               }
-                     }
-            
-        else:
-            #query = {"query": {'match_all': {}}}
-        
-            query = {"query": {"constant_score": {"filter": {"bool": {"must":[{"missing" : { "field" : "aesthetics" }}]
-                                                                     }
-                                                             }
-                                                  }
-                               }
-                     }
-            
-        res = scan(client = es,
-                   index = index_name,
-                   doc_type = doc_type,
-                   scroll = '100m', #TODO - hard coded.
-                   query = query,
-                   )
-    else:
-        nes = mc_neighbors.high_level_connect(index_name = index_name,
-                                              doc_type = doc_type,
-                                              )
-        
-        res = nes.scan_all()
-        
-    def do_commit(rrr):
-        print ('COMMITTING BATCH...',len(rrr))
-        
-        if mc_config.LOW_LEVEL:
-            from elasticsearch.helpers import parallel_bulk, scan
-            
-            ii = parallel_bulk(es,
-                               rrr,
-                               thread_count = 1,
-                               chunk_size = 500,
-                               max_chunk_bytes = 100 * 1024 * 1024, #100MB
-                               )
-        else:
-            ii = nes.parallel_bulk(rrr)
-        
-        for is_success,res in ii:
-            #print ('COMMITTED',is_success,res)
-            pass
-        
-        rrr[:] = []
-        print ('COMMITTED')
+    print ('DO_MODELS',do_models)
+    #raw_input_enter()
     
-    def get_fn_out(_id, mode = 'w'):
-        #print ('get_fn_out', _id)
+    def get_fn_out(_id, the_task_dir, mode = 'w'):
+        assert '_' in '_id', ('EXPECTING_NATIVE_IDS',_id)
         xid = hashlib.md5(_id).hexdigest()
-        dd = '/datasets/datasets/aes_out/' + xid[:3] + '/'
+        dd = join(the_task_dir,  xid[:3])
         if mode == 'w':
             if not exists(dd):
-                mkdir(dd)
-        return dd + xid + '.json'
+                makedirs(dd)
+        xfn = join(dd, xid + '.json')
+        #print ('get_fn_out', xfn, _id, '->', xfn)
+        return xfn
     
-    ## Main loop:
-    
-    nn = 0
+    import ujson
 
-    rr = []
+    for field_name, task_dir in do_models:
 
-    common_prefixes = Counter()
-    skipped_prefixes = Counter()
+        assert '/' not in field_name, (field_name,)
+        
+        if mc_config.LOW_LEVEL:
+            es = mc_neighbors.low_level_es_connect()    
 
-    only_datasets = set(only_datasets)
-    
-    for c,hit in enumerate(res):
+            ## TODO: https://www.elastic.co/guide/en/elasticsearch/reference/current/breaking_21_search_changes.html
 
-        doc_update = {}
-        
-        native_id = hit['_source'].get('native_id') or hit['_id']
-        
-        assert '_' in native_id, hit
+            if only_datasets:
+                #query = {"query": {"constant_score": {"filter": [{"term": {"source_dataset": x}}
+                #                                                 for x
+                #                                                 in only_datasets
+                #                                                 ]
+                #                                      }
+                #                   }
+                #         }
 
-        prefix = native_id[:native_id.index('_')]
-        
-        common_prefixes[prefix] += 1
-        
-        if c % 1000 == 0:
-            print ('LOOP:', c, native_id, 'common:', common_prefixes.most_common(50), 'skipped:', skipped_prefixes.most_common(50))
-        
-        if only_datasets and (prefix not in only_datasets):
-            continue
-        
-        fn_aes = get_fn_out(native_id, 'r')
-        
-        #if not exists(fn_aes):
-        #    skipped_prefixes[prefix] += 1
-        #    continue
-        
-        try:
-            with open(fn_aes) as f:
-                de = f.read()    
-        except IOError as e:
-            if e.errno != errno.ENOENT:
+                query = {"query": {"constant_score": {"filter": {"bool": {"must":[{"term": {"source_dataset": x}}
+                                                                                 for x
+                                                                                 in only_datasets
+                                                                                 ] + \
+                                                                                 [{"missing" : { "field" : field_name }}]
+                                                                         }
+                                                                 }
+                                                      }
+                                   }
+                         }
+
+            else:
+                #query = {"query": {'match_all': {}}}
+
+                query = {"query": {"constant_score": {"filter": {"bool": {"must":[{"missing" : { "field" : field_name }}]
+                                                                         }
+                                                                 }
+                                                      }
+                                   }
+                         }
+
+            res = scan(client = es,
+                       index = index_name,
+                       doc_type = doc_type,
+                       scroll = '100m', #TODO - hard coded.
+                       query = query,
+                       )
+        else:
+            nes = mc_neighbors.high_level_connect(index_name = index_name,
+                                                  doc_type = doc_type,
+                                                  )
+
+            res = nes.scan_all()
+
+        def do_commit(rrr):
+            print ('COMMITTING BATCH...',len(rrr))
+
+            if mc_config.LOW_LEVEL:
+                from elasticsearch.helpers import parallel_bulk, scan
+
+                ii = parallel_bulk(es,
+                                   rrr,
+                                   thread_count = 1,
+                                   chunk_size = 500,
+                                   max_chunk_bytes = 100 * 1024 * 1024, #100MB
+                                   )
+            else:
+                ii = nes.parallel_bulk(rrr)
+
+            for is_success,res in ii:
+                #print ('COMMITTED',is_success,res)
+                pass
+
+            rrr[:] = []
+            print ('COMMITTED')
+
+
+        ## Main loop:
+
+        nn = 0
+
+        rr = []
+
+        common_prefixes = Counter()
+        skipped_prefixes = Counter()
+
+        only_datasets = set(only_datasets)
+
+        for c,hit in enumerate(res):
+
+            doc_update = {}
+
+            native_id = hit['_source'].get('native_id') or hit['_id']
+
+            assert '_' in native_id, hit
+            
+            prefix = native_id[:native_id.index('_')]
+
+            common_prefixes[prefix] += 1
+
+            if c % 1000 == 0:
+                print ('LOOP:', c, field_name, task_dir, native_id,
+                       'common:', common_prefixes.most_common(50), 'skipped:', skipped_prefixes.most_common(50),
+                       )
+            
+            if only_datasets and (prefix not in only_datasets):
+                continue
+            
+            fn_aes = get_fn_out(native_id,
+                                task_dir,
+                                'r',
+                                )
+            
+            #if not exists(fn_aes):
+            #    skipped_prefixes[prefix] += 1
+            #    continue
+
+            try:
+                with open(fn_aes) as f:
+                    de = f.read()    
+            except IOError as e:
+                if e.errno != errno.ENOENT:
+                    raise
+                skipped_prefixes[prefix] += 1
+                continue
+
+            try:
+                aes = ujson.loads(de)
+            except KeyboardInterrupt:
                 raise
-            skipped_prefixes[prefix] += 1
-            continue
-        
-        try:
-            aes = ujson.loads(de)
-        except KeyboardInterrupt:
-            raise
-        except:
-            print ('EXCEPTION',fn_aes,de[:50])
-            sleep(0.1)
-            continue
-        
-        #assert not '500px' in native_id,('2',native_id) ##TODO REMOVE
-        
-        doc_update['aesthetics'] = aes
-        
-        ## For now, only bother if there was an image:
-        
-        rr.append({'_op_type': 'update',
-                   '_index': index_name,
-                   '_type': doc_type,
-                   '_id': hit['_id'],
-                   'body': {'doc':doc_update},
-                   })
-        
-        if nn % 50 == 0:
-            print ('YES_AES', nn, 'of', c, hit['_source'].get('source_dataset'), aes)
-        
-        nn += 1
-        
-        #print ('ADD',c) #rr
-        
-        if len(rr) >= batch_size:
+            except:
+                print ('EXCEPTION',fn_aes,de[:50])
+                sleep(0.1)
+                #unlink(fn_aes)
+                continue
+
+            #assert not '500px' in native_id,('2',native_id) ##TODO REMOVE
+
+            doc_update[field_name] = aes
+
+            ## For now, only bother if there was an image:
+
+            rr.append({'_op_type': 'update',
+                       '_index': index_name,
+                       '_type': doc_type,
+                       '_id': hit['_id'],
+                       'body': {'doc':doc_update},
+                       })
+
+            if nn % 50 == 0:
+                print ('YES_AES', field_name, nn, 'of', c, hit['_source'].get('source_dataset'), aes, task_dir)
+            
+            nn += 1
+            
+            #print ('ADD',c) #rr
+            
+            if len(rr) >= batch_size:
+                do_commit(rr)
+
+        if rr:
             do_commit(rr)
-        
-    if rr:
-        do_commit(rr)
-    
-    print ('AES_ENRICHED',nn)
-    
-    if mc_config.LOW_LEVEL:
-        print ('REFRESHING', index_name)
-        es.indices.refresh(index = index_name)
-        print ('REFRESHED',)
-    else:
-        nes.refresh_index()
-    
-    print ('DONE_ALL', 'common:', common_prefixes.most_common(50), 'skipped:', skipped_prefixes.most_common(50))
+
+        print ('AES_ENRICHED',nn)
+
+        if mc_config.LOW_LEVEL:
+            print ('REFRESHING', index_name)
+            es.indices.refresh(index = index_name)
+            print ('REFRESHED',)
+        else:
+            nes.refresh_index()
+
+        print ('DONE_ALL', 'common:', common_prefixes.most_common(50), 'skipped:', skipped_prefixes.most_common(50))
 
 
 def test_image_cache(via_cli = False):

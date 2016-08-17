@@ -690,6 +690,38 @@ debug_options = [{'name':'q',
                  },
                  ]
 
+
+rating_options = [{"_id":"query_relevance",
+                   "name":"Query Relevance",
+                   "description":"Relevance of this image to the query.",
+                   "default":0,
+                   "is_ordinal":1,
+                   "options":[[1,''], [2,''], [3,''], [4,''], [5,''],],
+                   },
+                  {"_id":"general_relevance",
+                   "name":"General Image Quality",
+                   "description":"Quality of the image in general, ignoring the query.",
+                   "default":0,
+                   "is_ordinal":1,
+                   "options":[[1,'very bad'], [2,''], [3,''], [4,''], [5,''],],
+                   },
+                  {"_id":"is_bad",
+                   "name":"Image is Bad",
+                   "description":'Fill in if you selected "very bad" above.',
+                   "default":0,
+                   "is_ordinal":0,
+                   "options":[[1, "pure spam"], [2, "click stuffing"], [3, "wrong image for metadata"], [4, "other"],],
+                   },
+                  {"_id":"is_adult",
+                   "name":"Adult",
+                   "description":"Image contains adult material.",
+                   "default":0,
+                   "is_ordinal":1,
+                   "options":[[1, "safe"], [2, "risque"], [3, "explicit"]],
+                   },
+                  ]
+
+
 class handle_search(BaseHandler):
     
     #disable XSRF checking for this URL:
@@ -820,7 +852,7 @@ class handle_search(BaseHandler):
         the_input['index_name'] = data.get('index_name', mc_config.MC_INDEX_NAME)
         the_input['doc_type'] = data.get('doc_type', mc_config.MC_DOC_TYPE)
         the_input['include_thumb'] = False
-        the_input['full_limit'] = 300
+        the_input['full_limit'] = 600
         
         
         ## TODO: need multiple image upload support?:
@@ -921,7 +953,8 @@ class handle_search(BaseHandler):
             
             if is_debug_mode:
                 rr['debug_options'] = debug_options
-
+                rr['rating_options'] = rating_options
+                
             rr['query_info'] = {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
                 
             self.write_json(rr,
@@ -964,6 +997,7 @@ class handle_search(BaseHandler):
             
             if is_debug_mode:
                 rr['debug_options'] = debug_options
+                rr['rating_options'] = rating_options
 
             rr['query_info'] = {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
 
@@ -1211,6 +1245,8 @@ class handle_search(BaseHandler):
             
             ## Tag enrichment, using the image cache URLs:
             
+            the_input['enrich_tags'] = False ## TEMPORARILY DISABLE
+            
             if the_input['enrich_tags'] and is_id_search and get_enriched_tags:
                 
                 etags = []
@@ -1246,8 +1282,19 @@ class handle_search(BaseHandler):
         
         rrm = ReRankingBasic(eq_name = the_input['rerank_eq'])
         rr = rrm.rerank(rr, is_debug_mode)
-            
-        
+
+        if is_debug_mode:
+            for ii in rr:
+                sc = ii['_score']#ii['_source'].get('aes_unsplash_out_v1',{}).get('like_unsplash',-1)
+                xx = '%0.3f' % sc
+                if sc <= 0:
+                    xx = '(' + xx + ')'
+
+                sc2 = ii['score_old']
+                xx2 = '%0.3f' % sc2
+                if sc2 <= 0:
+                    xx2 = '(' + xx2 + ')'
+                ii['_source']['artist_name'] = 'Score: ' + xx + ' TFIDF: ' + xx2
         
         ## Note: swapping these for ES queries shortly:
 
@@ -1303,6 +1350,13 @@ class handle_search(BaseHandler):
                   for hit
                   in rr
                   ]
+
+        
+        ## Now safe to add rank_number:
+
+        for c, ii in enumerate(rr):
+            ii['rank'] = c
+        
         
         ## Cache:
         
@@ -1338,7 +1392,8 @@ class handle_search(BaseHandler):
         
         if is_debug_mode:
             rr['debug_options'] = debug_options
-        
+            rr['rating_options'] = rating_options
+
         rr['query_info'] = {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
         
         self.write_json(rr,
@@ -1420,12 +1475,12 @@ class handle_record_relevance(BaseHandler):
         
         Input - JSON POST body containing the following fields:
             user_id:        Random hex string used as user ID.
-            query:          Query args dict, as passed to `/search` endpoint.
+            query_info:     Copy from  the `query_info` key returned by the `/search` endpoint.
             data:           Annotation data dict.
             nonce:          Random nonce used to prevent accidential double-submits. Only hex characters allowed.
         
         Example:
-            $ curl "http://127.0.0.1:23456/record_relevance" -d '{"user_id":"012345", "data":{}, "query":{}}'
+            $ curl "http://127.0.0.1:23456/record_relevance" -d '{"user_id":"012345", "data":{}, "query_info":{}}'
         
         TODO:
         Million other features. Intentionally neglecting those features, because having anything here is far better
@@ -1445,8 +1500,8 @@ class handle_record_relevance(BaseHandler):
             
         d = self.request.body
         hh = json.loads(d)
-
-        diff = set(['user_id', 'query', 'data']).difference(hh.keys())
+        
+        diff = set(['query_info', 'data']).difference(hh.keys())
         
         if diff:
             self.set_status(500)
@@ -1456,10 +1511,16 @@ class handle_record_relevance(BaseHandler):
             return
         
         print ('RECORD_RELEVANCE', hh)
+
+        user_id = hh.get('user_id') or self.get_cookie('user_id','')
+        
+        if not user_id:
+            hh['user_id'] = uuid4().hex
+            self.set_cookie('user_id', hh['user_id'])
         
         user_id = hh['user_id']
         diff = set(user_id).difference('1234567890abcdef')
-        if diff:
+        if diff and (user_id != 'test'):
             self.set_status(500)
             self.write_json({'error':'INVALID_USER_ID',
                              'error_message':'user_id string must only contain hex characters (0-9 a-f). Got: ' + repr(user_id),
@@ -1468,7 +1529,7 @@ class handle_record_relevance(BaseHandler):
 
         nonce = hh.get('nonce') or uuid4().hex
         diff = set(nonce).difference('1234567890abcdef')
-        if diff:
+        if diff and (nonce != 'test'):
             self.set_status(500)
             self.write_json({'error':'INVALID_NONCE',
                              'error_message':'nonce string must only contain hex characters (0-9 a-f). Got: ' + repr(nonce),
