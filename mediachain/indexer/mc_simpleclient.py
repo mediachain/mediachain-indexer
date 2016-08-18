@@ -62,13 +62,15 @@ class SimpleTranslator(Translator):
     
     TODO: Support multiple attribution links (multiple artists.)
     """
-    
+
+    __version__ = "0.1"
+
     @staticmethod
     def translator_id():
-        return 'SimpleTranslator/0.1'
+        return 'SimpleTranslator'
     
-    @staticmethod
-    def translate(parsed_metadata):
+    @classmethod
+    def translate(cls, parsed_metadata):
         simple_json = parsed_metadata
 
         ## Create artist Entity
@@ -90,18 +92,13 @@ class SimpleTranslator(Translator):
 
         
         ## Create thumbnail object:
-            
-        thumb_uri = parsed_metadata['img_data']
 
+        data = simple_json
         data[u'thumbnail'] = {
             u'__mediachain_asset__': True,
-            u'uri': thumb_uri
         }
 
-        
         ## Pass through rest of metadata as-is:
-        
-        data = simple_json
 
         
         ## Finish creating chain:
@@ -109,7 +106,7 @@ class SimpleTranslator(Translator):
         artwork_artefact = {
             u'__mediachain_object__': True,
             u'type': u'artefact',
-            u'meta': {'data': data}
+            u'meta': {u'data': data}
         }
 
         chain = []
@@ -159,17 +156,16 @@ class SimpleIterator(DatasetIterator):
                     if 'img_data' in metadata:
                         ft.write(mc_ingest.decode_image(metadata['img_data']))
                         ft.flush()
-                        del metadata['img_data']
+                        del metadata[u'img_data']
+                        local_assets = {u'thumbnail': {u'__mediachain_asset__': True,
+                                                       u'uri': uri_temp
+                                                       }
+                                        }
                     else:
-                        assert False,('NO_IMG_DATA',)
-                    
+                        local_assets = {}
+
                     translated = self.translator.translate(metadata)
-                    
-                    local_assets = {'thumbnail': {'__mediachain_asset__': True,
-                                                  'uri': uri_temp
-                                                  }
-                                    }
-                    
+
                     yield {'parsed': metadata,
                            'translated': translated,
                            'raw_content': raw_source,

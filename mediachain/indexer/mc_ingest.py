@@ -997,8 +997,12 @@ def test_image_cache(via_cli = False):
 def get_asset(hh):
     from cStringIO import StringIO
     from mediachain.reader.api import open_binary_asset
-    
-    with open_binary_asset(hh['thumbnail']) as f:
+
+    asset = open_binary_asset(hh['thumbnail'])
+    if not asset:
+        return False
+
+    with asset as f:
         image_bytes = f.read()
     
     rr = verify_img(image_bytes)
@@ -1646,7 +1650,7 @@ def send_compactsplit_to_blockchain(path_glob = False,
     
     from mc_datasets import iter_compactsplit
     from mc_generic import set_console_title
-    from mc_normalize import apply_normalizer, normalizer_names
+    from mc_normalize import apply_normalizer_for_simpleclient, normalizer_names
     
     from mc_simpleclient import SimpleClient
     
@@ -1672,15 +1676,13 @@ def send_compactsplit_to_blockchain(path_glob = False,
     
     ## Simple:
 
-    the_iter = lambda : iter_compactsplit(path_glob, max_num = max_num)
-    
-    iter_json = apply_normalizer(iter_json,
-                                 normalizer_name,
-                                 )
-    
+    the_iter = lambda: iter_compactsplit(path_glob, max_num = max_num)
+    iter_json = apply_normalizer_for_simpleclient(the_iter, normalizer_name)
+
     cur = SimpleClient()
-    cur.write_artefacts(the_iter)        
-    
+    for x in cur.write_artefacts(iter_json):
+        print("Wrote artefact: ", x['canonical'])
+
     ## NOTE - May not reach here due to gRPC hang bug.
     
     print ('DONE ALL',)
