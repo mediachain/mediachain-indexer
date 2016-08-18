@@ -996,8 +996,12 @@ def test_image_cache(via_cli = False):
 def get_asset(hh):
     from cStringIO import StringIO
     from mediachain.reader.api import open_binary_asset
-    
-    with open_binary_asset(hh['thumbnail']) as f:
+
+    asset = open_binary_asset(hh['thumbnail'])
+    if not asset:
+        return False
+
+    with asset as f:
         image_bytes = f.read()
     
     rr = verify_img(image_bytes)
