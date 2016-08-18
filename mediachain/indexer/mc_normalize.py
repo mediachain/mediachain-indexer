@@ -1877,6 +1877,27 @@ def apply_normalizer(iter_json,
         yield x
 
 
+def apply_normalizer_for_simpleclient(iter_json,
+                                      normalizer_name,
+                                      ):
+    """
+    Apply the normalizer of a given name.
+    """
+
+    assert not hasattr(iter_json, 'next'), 'Should be function that returns iterator when called, to allow restarting.'
+
+    func = normalizer_names[normalizer_name]['func']
+
+    from json import dumps
+    for c, orig in enumerate(iter_json()):
+        x = func(lambda: iter([orig])).next()
+
+        if c <= 50:
+            simple_schema_validate(x)
+
+        yield {'raw': dumps(orig), 'metadata': x}
+
+
 def apply_post_ingestion_normalizers(rr,
                                      schema_variant = 'old',
                                      ):
