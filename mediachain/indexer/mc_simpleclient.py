@@ -11,7 +11,7 @@ TODO: Much of this should be pushed up to `mediachain.client`.
 import mc_config
 import mc_ingest
 
-from mc_generic import setup_main, consistent_json_dumper
+from mc_generic import setup_main, consistent_json_dumper, sleep_loud
 
 from os import mkdir, rename, unlink, listdir
 from os.path import exists, join, split, lexists
@@ -440,11 +440,23 @@ def test_blockchain(via_cli = False):
     raw_meta = consistent_json_dumper(original_meta)
     
     ## Write object:
+
+    tt = 1.5
     
-    blockchain_ids = cur.write_artefacts([{'metadata':original_meta,
-                                           'raw':raw_meta,
-                                           },
-                                          ])
+    for x in xrange(10):
+        try:
+            blockchain_ids = cur.write_artefacts([{'metadata':original_meta,
+                                                   'raw':raw_meta,
+                                                   },
+                                                  ])
+        except:
+            print ('ERROR: simpleclient.write_artefacts',)
+            sleep_loud(tt)
+            tt = tt ** 1.5
+            continue
+        break
+    else:
+        raise
 
     b_ids = list(blockchain_ids)
 

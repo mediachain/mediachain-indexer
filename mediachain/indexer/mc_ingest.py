@@ -1299,7 +1299,7 @@ def ingest_bulk(iter_json = False,
                 try:
                     buf.append(qqw.get(timeout=1))
                 except Exception as e:
-                    print ('TIMEOUT worker_parallel_background()', qqw.qsize())
+                    #print ('TIMEOUT worker_parallel_background()', qqw.qsize())
                     break
                 if len(buf) >= buf_size:
                     break
@@ -1552,14 +1552,15 @@ def receive_blockchain_into_indexer(last_block_ref = None,
         for obj_info in cur.get_artefacts(catchup_blockchain=catchup,
                                           last_known_block_ref=last_block_ref,
                                           force_exit = via_cli): ## Force exit after loop is complete, if CLI.
-            ref = obj_info['canonical_id']
-            art = obj_info['record']
-
-            # persist block ref for next run
-            block_ref = obj_info['prev_block_ref']
-            save_last_known_block_ref(block_ref)
 
             try:
+                ref = obj_info['canonical_id']
+                art = obj_info['record']
+
+                # persist block ref for next run
+                block_ref = obj_info['prev_block_ref']
+                save_last_known_block_ref(block_ref)
+
                 print 'GOT',art.get('type')
                 
                 if art['type'] != u'artefact':
@@ -1583,10 +1584,12 @@ def receive_blockchain_into_indexer(last_block_ref = None,
                 
                 rh['old_id'] = rh['_id']
                 
-                rh['_id'] = rh['canonical_id']
+                rh['_id'] = rh['canonical_id'] ## TODO, not sure about this
                 
                 if 'translated_at' in art['meta']:
                     rh['date_translated'] = date_parser.parse(art['meta']['translated_at'])
+
+                rh = stringify_refs(rh)
                 
                 rhc = rh.copy()
                 
@@ -1596,9 +1599,12 @@ def receive_blockchain_into_indexer(last_block_ref = None,
                 if 'thumbnail_base64' in rhc:
                     del rhc['thumbnail_base64']
                 
-                print 'INSERT',rhc
-                
-                yield stringify_refs(rh)
+                print ('INSERT',rhc)
+
+                #print ('OBJ_OUT',obj_info)
+                #raw_input_enter()
+
+                yield rh
                 
             except KeyboardInterrupt:
                 raise
@@ -1656,19 +1662,19 @@ def send_compactsplit_to_blockchain(path_glob = False,
     
     if via_cli: 
         if (len(sys.argv) < 4):
-            print ('Usage: mediachain-indexer-ingest' + sys.argv[1] + ' directory_containing_compactsplit_files [normalizer_name or auto]')
+            print ('Usage: mediachain-indexer-ingest' + sys.argv[1] + ' normalizer_name directory_containing_compactsplit_files')
             print ('Normalizer names:', normalizer_names.keys())
             exit(-1)
         
-        path_glob = sys.argv[2]
-
-        normalizer_name = sys.argv[3]
+        normalizer_name = sys.argv[2]
+        
+        path_glob = sys.argv[3]
 
         if normalizer_name not in normalizer_names:
             print ('INVALID:',normalizer_name)
             print ('Normalizer names:', normalizer_names.keys())
             exit(-1)
-
+        
         set_console_title(sys.argv[0] + ' ' + sys.argv[1] + ' ' + sys.argv[2] + ' ' + sys.argv[3] + ' ' + str(max_num))
     
     else:
@@ -1714,14 +1720,14 @@ def send_compactsplit_to_indexer(path_glob = False,
     
     if via_cli:
         if (len(sys.argv) < 4):
-            print ('Usage: mediachain-indexer-ingest'  + ' ' + sys.argv[1] + ' directory_containing_compactsplit_files [normalizer_name or auto]')
+            print ('Usage: mediachain-indexer-ingest'  + ' ' + sys.argv[1] + ' normalizer_name directory_containing_compactsplit_files')
             print ('Normalizer names:', normalizer_names.keys())
             exit(-1)
         
-        path_glob = sys.argv[2]
-
-        normalizer_name = sys.argv[3]
-
+        normalizer_name = sys.argv[2]
+        
+        path_glob = sys.argv[3]
+        
         if normalizer_name not in normalizer_names:
             print ('INVALID:',normalizer_name)
             print ('Normalizer names:', normalizer_names.keys())
@@ -1750,7 +1756,7 @@ def send_compactsplit_to_indexer(path_glob = False,
         mc_models.dedupe_reindex_all()
     else:
         print 'NOT AUTOMATICALLY RUNNING DEDUPE.'
-
+    
     return rr
 
 def send_gettydump_to_indexer(max_num = 0,
