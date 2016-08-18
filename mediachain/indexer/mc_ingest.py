@@ -738,9 +738,9 @@ from collections import Counter
 def backfill_aesthetics(batch_size = 100,
                         index_name = mc_config.MC_INDEX_NAME,
                         doc_type = mc_config.MC_DOC_TYPE,
-                        only_datasets = ['getty'],#'flickr100mm'
-                        do_models = [#('aesthetics','/datasets/datasets/aes_out/'),
-                                     ('aes_unsplash_out_v1','/datasets/datasets/aes_unsplash_out_v1/'),
+                        only_datasets = [],#'flickr100mm'
+                        do_models = [('aes_unsplash_out_v1','/datasets/datasets/aes_unsplash_out_v1/'),
+                                     ('aesthetics','/datasets/datasets/aes_out/'),
                                      ],
                         via_cli = False,
                         ):
@@ -898,8 +898,9 @@ def backfill_aesthetics(batch_size = 100,
                 raise
             except:
                 print ('EXCEPTION',fn_aes,de[:50])
-                sleep(0.1)
-                #unlink(fn_aes)
+                #sleep(0.1)
+                if not de:
+                    unlink(fn_aes)
                 continue
 
             #assert not '500px' in native_id,('2',native_id) ##TODO REMOVE

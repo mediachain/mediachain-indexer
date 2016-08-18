@@ -48,22 +48,24 @@ rsc
 #rsc *= ((item['_source'].get('native_id','').startswith('dpla') and 1 or 2))
 
 
-ranking_prebuilt_equations = {'tfidf':"item['_score']",
-                              #'harmonic_mean_score_comments':"(item['_score'] * item['num_comments']) / (item['_score'] + item['num_comments'])",
-                              'boost_pexels':"item['_score'] * (item['_source'].get('native_id','').startswith('pexels') and 2 or 1) * item['_source'].get('boosted', 0.1)",
-                              'aesthetics':aes_func,
-                              'aesthetics_pure':"item['_source'].get('aesthetics', {}).get('score', -1.0) + 1",
-                              'balance':"""(item['_source'].get('aesthetics', {}).get('balance', -1.0) + 1) """,
-                              'color_harmony':"""(item['_source'].get('aesthetics', {}).get('color_harmony', -1.0) + 1) """,
-                              'lighting':"""(item['_source'].get('aesthetics', {}).get('lighting', -1.0) + 1) """,
-                              'motion':"""(item['_source'].get('aesthetics', {}).get('motion_blur', -1.0) + 1) """,
-                              'repetition':"""(item['_source'].get('aesthetics', {}).get('repetition', -1.0) + 1) """,
-                              'vivid_color':"""(item['_source'].get('aesthetics', {}).get('vivid_color', -1.0) + 1) """,
-                              'symmetry':"""(item['_source'].get('aesthetics', {}).get('symmetry', -1.0) + 1) """,
-                              'uses_depth_of_field':"""(item['_source'].get('aesthetics', {}).get('depth_of_field', -1.0) + 1) """,
-                              'object_focus':"""(item['_source'].get('aesthetics', {}).get('object', -1.0) + 1) """,
-                              'aes_unsplash_out_v1':"""(item['_source'].get('aes_unsplash_out_v1', {}).get('like_unsplash', -1.0))""",
-                              }
+ranking_prebuilt_equations = {
+    'tfidf':"item['_score']",
+    #'harmonic_mean_score_comments':"(item['_score'] * item['num_comments']) / (item['_score'] + item['num_comments'])",
+    'boost_pexels':"item['_score'] * (item['_source'].get('native_id','').startswith('pexels') and 2 or 1) * item['_source'].get('boosted', 0.1)",
+    'aesthetics':aes_func,
+    'aesthetics_pure':"(item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'balance':"""(item['_source'].get('aesthetics', {}).get('balance', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    'color_harmony':"""(item['_source'].get('aesthetics', {}).get('color_harmony', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    'lighting':"""(item['_source'].get('aesthetics', {}).get('lighting', -1.0) + 1)  * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    'motion':"""(item['_source'].get('aesthetics', {}).get('motion_blur', -1.0) + 1)  * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    'repetition':"""(item['_source'].get('aesthetics', {}).get('repetition', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    'vivid_color':"""(item['_source'].get('aesthetics', {}).get('vivid_color', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    'symmetry':"""(item['_source'].get('aesthetics', {}).get('symmetry', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    'uses_depth_of_field':"""(item['_source'].get('aesthetics', {}).get('depth_of_field', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    'object_focus':"""(item['_source'].get('aesthetics', {}).get('object', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    'like_unsplash_v1':"""(item['_source'].get('aes_unsplash_out_v1', {}).get('like_unsplash', -1.0)) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    'like_flickr_v1':"""(item['_source'].get('aes_unsplash_out_v1', {}).get('like_flickr', -1.0)) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+}
 
 
 class ReRankingBasic():

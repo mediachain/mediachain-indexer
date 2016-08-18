@@ -1439,7 +1439,7 @@ class handle_random_query(BaseHandler):
         
         from urllib import quote
 
-        if intget(self.get_argument('only_mwe', 0)):
+        if intget(self.get_argument('only_mwe', 1)):
             aa, bb = self.rand_typeahead_mwe, self.rand_typeahead_mwe_total
         else:
             aa, bb = self.rand_typeahead, self.rand_typeahead_total
