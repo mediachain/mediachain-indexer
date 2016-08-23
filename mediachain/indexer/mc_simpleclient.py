@@ -194,6 +194,7 @@ class SimpleClient(object):
                  transactor_host = mc_config.MC_TRANSACTOR_HOST,
                  transactor_port = mc_config.MC_TRANSACTOR_PORT_INT,
                  use_ipfs = mc_config.MC_USE_IPFS_INT,
+                 ipfs_add_local = mc_config.MC_IPFS_ADD_LOCAL_INT,
                  ):
         """
         """
@@ -212,6 +213,7 @@ class SimpleClient(object):
         self.transactor_host = transactor_host
         self.transactor_port = transactor_port
         self.use_ipfs = use_ipfs
+        self.ipfs_add_local = ipfs_add_local
         
         self.transactor = TransactorClient(self.transactor_host,
                                            self.transactor_port,
@@ -264,6 +266,7 @@ class SimpleClient(object):
             
             writer = Writer(self.transactor,
                             download_remote_assets=False,
+                            local_ipfs_only=self.ipfs_add_local
                             )
 
             ## Broken TODO - How to get the blockchain IDs that were generated?:

@@ -49,6 +49,7 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
             'MC_IPFS_URL': ('localhost', 'IPFS host.'),
             'MC_IPFS_PORT_INT': ('5001', 'IPFS port.'),
             'MC_USE_IPFS_INT':(1, 'Use IPFS for image ingestion.'),
+            'MC_IPFS_ADD_LOCAL_INT':(0, 'Do not provide ingested IPFS files to the network.')
            },
        '4. REST API Settings':
            {'MC_QUERY_CACHE_DIR':('/datasets/datasets/query_cache/', 'Location of where to store query cache.'),
