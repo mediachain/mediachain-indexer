@@ -9,7 +9,8 @@ import fcntl, termios, struct
 import sys
 from time import time
 import os
-from os import system, walk, rename
+from os import system, rename
+from scandir import walk
 from os.path import join, exists
 import requests
 import hashlib

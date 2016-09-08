@@ -54,6 +54,7 @@ from subprocess import check_output
 from pipes import quote as pipes_quote
 import gzip
 
+
 ##
 ### Single-file compact sorted format:
 ##
@@ -428,7 +429,7 @@ def iter_compactsplit(fn_in_glob,
             except StopIteration as e:
                 del ffs[cl]
                 break
-            
+
             tot_c += 1
             
             if (tot_c % 100 == 0):

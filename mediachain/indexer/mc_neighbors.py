@@ -865,16 +865,19 @@ NearestNeighborsBaseAsync = fake_async_decorator(NearestNeighborsBase)
 
 
 
-def low_level_es_connect():
+def low_level_es_connect(hosts = ['10.99.0.44'],
+                         ):
     """
     Central point for creating new index-backend connections.
     
     Note: Only hyper-parameter optimization should use this low-level interface now.
           Everything else should use `high_level_connect`.
+    
+    10.99.0.44 -> 54.87.157.158
     """
     
-    print ('LOW_LEVEL_CONNECTING...')
-    es = Elasticsearch()
+    print ('LOW_LEVEL_CONNECTING...', hosts)
+    es = Elasticsearch(hosts = hosts)
     print ('LOW_LEVEL_CONNECTED')
     return es
 

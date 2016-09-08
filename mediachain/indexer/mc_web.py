@@ -30,7 +30,12 @@ TODO:
 
 """
 
+DO_FORWARDING = True
+
+print (DO_FORWARDING and 'FORWARDING_ENABLED' or 'FORWARDING_DISABLED')
+
 import json
+import ujson
 import tornado.ioloop
 import tornado.web
 from time import time
@@ -66,6 +71,7 @@ class Application(tornado.web.Application):
         handlers = [(r'/',handle_front,),
                     (r'/ping',handle_ping,),
                     (r'/stats',handle_stats,),
+                    (r'/stats_annotation',handle_stats_annotation,),
                     (r'/search',handle_search,),
                     (r'/list_facets',handle_list_facets),
                     (r'/get_embed_url',handle_get_embed_url,),
@@ -107,7 +113,7 @@ class BaseHandler(tornado.web.RequestHandler):
     @property
     def es(self):
         if not hasattr(self.application,'es'):
-            self.application.es = ESConnection("localhost", 9200)
+            self.application.es = ESConnection("10.99.0.44", 9200)
         return self.application.es
     
     @property
@@ -131,14 +137,19 @@ class BaseHandler(tornado.web.RequestHandler):
                     score, query, _ = line.split('\t')
                     score = int(score)
 
-                    if c < 1000:
+                    if c < 10000:
                         rr.append((score, query))
                         total += score
 
                     if ' ' in query:
                         rr_mwe.append((score, query))
                         total_mwe += score
-                    
+
+            if order_model:
+                print ('USE_WORDDICT',)
+                rr = [(1.0, x) for x in order_model['worddict'].keys()]
+                rr_mwe = rr
+                        
             self.application.rand_typeahead_total = total
             self.application.rand_typeahead = rr
             
@@ -264,6 +275,109 @@ class handle_ping(BaseHandler):
         self.write_json({'results':rr})
 
 
+class handle_stats_annotation(BaseHandler):
+    @tornado.gen.coroutine
+    def get(self):
+        """
+        Annotation stats.
+
+        """
+        
+        dir_in = '/datasets/datasets/annotate/search_relevance/'
+        
+        rh = {'users':{}}
+
+        from collections import Counter
+
+        qc = Counter()
+
+        uq = set() #set([(uname,query)])
+        
+        for fn in listdir(dir_in):
+
+            if fn.startswith('test_'):
+                continue
+            
+            fn = join(dir_in, fn)
+
+            try:
+                with open(fn) as f:
+                    d = f.read()
+                h = json.loads(d)
+            except:
+                print ('BAD',fn)
+                continue
+
+            
+            #h['data']['query_info']:
+            #{u'query_args': {u'doc_type': u'image', u'skip_query_cache': 0, u'allow_nsfw': 0, u'include_docs': 1, u'schema_variant': u'new', u'q_text': u'women in tech', u'index_name': u'getty_test', u'canonical_id': 0, u'enrich_tags': 1, u'filter_incomplete': 0, u'debug': 1, u'filter_licenses': [u'Creative Commons'], u'full_limit': 200, u'pretty': 1, u'include_thumb': False, u'rerank_eq': u'neural_hybrid', u'q': u'women in tech', u'token': u'5d70d87058a8349e910b7dbda1eda85b', u'filter_sources': u'ALL'}, u'query_elapsed_ms': 5, u'query_time': 1472230434}
+
+            
+            #print fn, len(h['data']['data'])
+            the_query = h['data']['query_info']['query_args'].get('q')
+            
+            qc[the_query] += 1
+                        
+            #{u'ratings': [{u'rating': 1, u'_id': u'Overall'}, {u'rating': 0, u'_id': u'is_bad_nsfw'}, {u'rating': 0, u'_id': u'is_bad_spam'}, {u'rating': 0, u'_id': u'is_bad_watermarks'}], u'id': u'adc4f1634f448095757559005be2d1ab'}
+            
+            uname = h['user_ip']
+            
+            uname = uu.get(uname, uname)
+            
+            if uname not in rh['users']:
+                rh['users'][uname] = {'num_tasks':0,
+                                      'num_images':0,
+                                      'num_queries':0,
+                                      'queries':[],
+                                      'num_bad':0,
+                                      }            
+
+            if not the_query:
+                rh['users'][uname]['num_bad'] += 1
+                continue
+            
+            rh['users'][uname]['queries'] = list(sorted(set(rh['users'][uname]['queries'] + [the_query])))
+            #if uname == 'tg':
+            #    print ('tg', fn)
+            
+            """
+            h['data']['data'][0] =
+              {u'id': u'b2e8bf36899934df9b57841a722b3556',
+               u'ratings': [{u'_id': u'Overall', u'rating': 1},{u'_id': u'is_bad_nsfw', u'rating': 0},{u'_id': u'is_bad_spam', u'rating': 0},{u'_id': u'is_bad_watermarks', u'rating': 0}]}
+            """
+            for answers_set in h['data']['data']:
+                
+                ratings = answers_set['ratings']
+                
+                overall = [x for x in ratings if x['_id'] == 'Overall']
+
+                if overall:
+                    overall = overall[0]['rating']
+                else:
+                    overall = -1
+                
+                if overall < 1:
+                    continue
+                    
+                rh['users'][uname]['num_images'] += 1
+            
+            if not rh['users'][uname]['num_images']:
+                ## ignore tasks with 0 images rated.
+                continue
+
+            rh['users'][uname]['num_tasks'] += 1
+
+            k = (uname,the_query)
+            if k not in uq:
+                rh['users'][uname]['num_queries'] += 1
+            uq.add(k)
+
+        print qc.most_common()
+        
+        self.write_json(rh)
+        
+
+        
 from tornado.httpclient import AsyncHTTPClient
 
 class handle_stats(BaseHandler):
@@ -284,7 +398,7 @@ class handle_stats(BaseHandler):
 
         rh.update(h)
         
-        url = 'http://127.0.0.1:9200/getty_test/_count'
+        url = 'http://10.99.0.44:9200/getty_test/_count'
 
         h2 = {'error':'ES_CONNECTION_ERROR',
               'message':url,
@@ -330,6 +444,19 @@ except:
     get_remote_search = False
     get_enriched_tags = False
 
+try:
+    from mc_crawlers import get_neural_relevance, init_order_model
+except Exception as e:
+    print ('IMPORT_ERROR',e)
+    get_neural_relevance = False
+
+print ('get_neural_relevance',get_neural_relevance)
+
+order_model = False
+
+if get_neural_relevance:# and (not DO_FORWARDING):
+    order_model = init_order_model()
+
 
 class handle_get_embed_url(BaseHandler):
     #disable XSRF checking for this URL:
@@ -362,14 +489,14 @@ class handle_get_embed_url(BaseHandler):
             except KeyboardInterrupt:
                 raise
             except:
-                self.set_status(500)
+                #self.set_status(500)
                 self.write_json({'error':'JSON_PARSE_ERROR',
                                  'error_message':'Could not parse JSON request.',
                                 })
                 return
 
             if not data.get('image_url'):
-                self.set_status(500)
+                #self.set_status(500)
                 self.write_json({'error':'MISSING ARGUMENT',
                                  'error_message':'required: image_url',
                                 })
@@ -385,7 +512,7 @@ class handle_get_embed_url(BaseHandler):
             raise
         except:
             raise
-            self.set_status(500)
+            #self.set_status(500)
             self.write_json({'error':'INTERNAL_ERROR',
                              'error_message':'Internal error.',
                             })
@@ -401,7 +528,7 @@ from time import time
 
    
 def query_cache_lookup(key,
-                       max_age = 60 * 60, # 1 hour
+                       max_age = 60 * 60 * 12, # 12 hours
                        query_cache_dir = mc_config.MC_QUERY_CACHE_DIR,
                        skip_query_cache = False,
                        allow_skip_query_cache = mc_config.MC_ALLOW_SKIP_QUERY_CACHE_INT,
@@ -409,7 +536,7 @@ def query_cache_lookup(key,
     """
     Simple file-based cache.
     """
-    
+
     if skip_query_cache and allow_skip_query_cache:
         print ('!!!SKIP_QUERY_CACHE',)
         return False
@@ -434,6 +561,8 @@ def query_cache_lookup(key,
 
         rh['data']['cache_hit'] = True
         
+        #assert rh['data']['query_info']['query_args'].get('q'), rh['data']['query_info']['query_args'].keys()
+        
         return rh['data']
     
     return False
@@ -446,6 +575,8 @@ def query_cache_save(key,
     """
     Simple file-based cache.
     """
+
+    #assert hh['query_info']['query_args'].get('q'), hh['query_info']['query_args'].keys()
     
     dir_out_2 = join(query_cache_dir,
                      ('/'.join(key[:4])) + '/',
@@ -672,7 +803,7 @@ debug_options = [{'name':'q',
                   },
                  {'name':'rerank_eq',
                   'description':'Name of reranking equation, or custom reranking equation string.',
-                  'default':'aesthetics',
+                  'default':'neural_hybrid',#'aesthetics',
                   'type':'text',
                   'options':['aesthetics'] + [x for x in ranking_prebuilt_equations if x != 'aesthetics'],
                  },
@@ -688,38 +819,79 @@ debug_options = [{'name':'q',
                   'type':'text',
                   'options':None,
                  },
+                 {'name':'show_default_options',
+                  'description':'Include these options in JSON response.',
+                  'default':0,
+                  'type':'number',
+                  'options':[0, 1],
+                 }
                  ]
 
+from mc_generic import space_pad
 
-rating_options = [{"_id":"query_relevance",
-                   "name":"Query Relevance",
+rating_options = [{"_id":"Overall",
+                   "name":"Overall (1-5)",
+                   "description":"Overall relevance rating.",
+                   "default":0,
+                   "is_ordinal":1,
+                   "options":[[1,''], [2,''], [3,''], [4,''], [5,''],],
+                   },
+                  {"_id":"query_relevance",
+                   "name":"Relevance (1-5)",
                    "description":"Relevance of this image to the query.",
                    "default":0,
                    "is_ordinal":1,
                    "options":[[1,''], [2,''], [3,''], [4,''], [5,''],],
                    },
-                  {"_id":"general_relevance",
-                   "name":"General Image Quality",
+                  {"_id":"aesthetics",
+                   "name":"Aesthetics (1-5)",
                    "description":"Quality of the image in general, ignoring the query.",
                    "default":0,
                    "is_ordinal":1,
                    "options":[[1,'very bad'], [2,''], [3,''], [4,''], [5,''],],
                    },
-                  {"_id":"is_bad",
-                   "name":"Image is Bad",
-                   "description":'Fill in if you selected "very bad" above.',
+                  #{"_id":"is_bad",
+                  # "name":"Report Image",
+                  # "description":'Fill in if you selected "very bad" above.',
+                  # "default":0,
+                  # "is_ordinal":0,
+                  # "options":[[1, "pure spam"], [2, "keyword stuffing"], [3, "nsfw"], [4, "other"],],
+                  # },
+                  {"_id":"is_bad_nsfw",
+                   "name":"NSFW (n/y)",
+                   "description":'',
                    "default":0,
                    "is_ordinal":0,
-                   "options":[[1, "pure spam"], [2, "click stuffing"], [3, "wrong image for metadata"], [4, "other"],],
+                   "options":[[0, "no"], [1, "yes"]],
                    },
-                  {"_id":"is_adult",
-                   "name":"Adult",
-                   "description":"Image contains adult material.",
+                  {"_id":"is_bad_spam",
+                   "name":"Spam (n/y)",
+                   "description":'',
                    "default":0,
-                   "is_ordinal":1,
-                   "options":[[1, "safe"], [2, "risque"], [3, "explicit"]],
+                   "is_ordinal":0,
+                   "options":[[0, "no"], [1, "yes"]],
                    },
+                  {"_id":"is_bad_watermarks",
+                   "name":"Watermark (n/y)",
+                   "description":'',
+                   "default":0,
+                   "is_ordinal":0,
+                   "options":[[0, "no"], [1, "yes"]],
+                   },
+                  #{"_id":"is_adult",
+                  # "name":"Adult",
+                  # "description":"Image contains adult material.",
+                  # "default":0,
+                  # "is_ordinal":1,
+                  # "options":[[1, "safe"], [2, "risque"], [3, "explicit"]],
+                  # },
                   ]
+
+for xx in rating_options:
+    aa = xx['name'][:xx['name'].index('(')].strip()
+    bb = xx['name'][xx['name'].index('('):].strip()
+    xx['name'] = space_pad(aa.upper(), ch='_', n=15) + bb
+    xx['name'] = xx['name'].replace('WATERMARK___' ,'WATERMARK')
 
 
 class handle_search(BaseHandler):
@@ -764,24 +936,42 @@ class handle_search(BaseHandler):
                 ]
             }
         """
-
+        
         tt0 = time()
         
         d = self.request.body
-
+        
         if d.startswith('{'):
             print ('OLD PARAMETERS FORMAT',d[:20])
             
         else:
             print ('NEW PARAMETERS FORMAT',)
             d = self.get_argument('json','{}')            
-                
+
+        if DO_FORWARDING:
+            forward_url = 'http://10.99.0.44:23456/search'
+            print ('FORWARDING', len(d), forward_url)
+            response = yield AsyncHTTPClient().fetch(forward_url,
+                                                     method = 'POST',
+                                                     connect_timeout = 30,
+                                                     request_timeout = 30,
+                                                     body = d,
+                                                     #allow_nonstandard_methods = True,
+                                                     )
+            d2 = response.body
+            h2 = json.loads(d2)
+            print ('FORWARDING_RECEIVED', len(d2))
+            #self.write(d2)
+            #self.finish()
+            self.write_json(h2)
+            return
+        
         try:
             data = json.loads(d)
         except KeyboardInterrupt:
             raise
         except:
-            self.set_status(500)
+            #self.set_status(500)
             self.write_json({'error':'JSON_PARSE_ERROR',
                              'error_message':'Could not parse JSON request.',
                             })
@@ -811,7 +1001,7 @@ class handle_search(BaseHandler):
 
         diff = set(data).difference([x['name'] for x in default_options + debug_options])
         if diff:
-            self.set_status(500)
+            #self.set_status(500)
             self.write_json({'error':'UNKNOWN_ARGS',
                              'error_message':repr(list(diff)),
                             })
@@ -823,17 +1013,31 @@ class handle_search(BaseHandler):
         the_input = {}
 
         if is_debug_mode:
-            the_input['debug'] = 1
+            the_input['debug'] = is_debug_mode
         else:
-            the_input['debug'] = 0
+            the_input['debug'] = is_debug_mode
 
+
+                    
         for arg in default_options + debug_options:
+            
+            the_default = arg['default']
+
+            ## Override some defaults for debug mode:
+            
+            if (is_debug_mode == 1) and (arg['name'] == 'rerank_eq'):
+                the_default = 'annotation_mode'
+            
+            ## Do it:
 
             if arg['type'] == 'number':
-                the_input[arg['name']] = intget(data.get(arg['name'], 'BAD'), arg['default'])
+                the_input[arg['name']] = intget(data.get(arg['name'], 'BAD'), the_default)
             else:
-                the_input[arg['name']] = data.get(arg['name'], arg['default'])
-
+                the_input[arg['name']] = data.get(arg['name'], the_default)
+            
+            if arg['name'] == 'rerank_eq':
+                print ('---------DEBUG_MODE_RANKING', the_input[arg['name']])
+                
             ## For convenience:
             
             if arg['type'] == 'list-of-strings':
@@ -869,7 +1073,7 @@ class handle_search(BaseHandler):
             pass
         
         if q_id_file and the_input['q_id']:
-            self.set_status(500)
+            #self.set_status(500)
             self.write_json({'error':'PARAMS',
                              'error_message':'Use either q_id or HTTP image upload, but not both.',
                              })
@@ -907,7 +1111,7 @@ class handle_search(BaseHandler):
         query_args['debug'] = intget(self.get_cookie('debug')) or intget(data.get('debug')) or intget(self.get_argument('debug','0'))
 
         print ('QUERY_ARGS',query_args)
-
+        
         ## ignore those with default args:
         for k,v in query_args.items():
             if v is None:
@@ -920,7 +1124,7 @@ class handle_search(BaseHandler):
             rr = query_cache_lookup(the_token, skip_query_cache = the_input['skip_query_cache'])
 
             if rr is False:
-                self.set_status(500)
+                #self.set_status(500)
                 self.write_json({'error':'EXPIRED_TOKEN',
                                  'error_message':the_token,
                                  })
@@ -930,8 +1134,15 @@ class handle_search(BaseHandler):
             the_token = consistent_json_hash(query_args)
             
             rr = query_cache_lookup(the_token, skip_query_cache = the_input['skip_query_cache'])
+
             
         if rr is not False:
+            
+            # [u'query_info', u'results_count', u'results', 'cache_hit']
+            print ('QUERY_CACHE_LOOKUP', rr.keys())#['query_info']['query_args'])
+            #return
+            #raw_input()
+
             print ('CACHE_OR_TOKEN_HIT_QUERY','offset:', the_input['offset'], 'limit:', the_input['limit'], 'len(results)',len(rr['results']))
             
             
@@ -949,20 +1160,32 @@ class handle_search(BaseHandler):
 
             rr['results'] = rr['results'][the_input['offset']:the_input['offset'] + the_input['limit']]
 
-            rr['default_options'] = default_options
+            if the_input['show_default_options']:
+                rr['default_options'] = default_options
             
-            if is_debug_mode:
+            if is_debug_mode == 2:
                 rr['debug_options'] = debug_options
+
+            if is_debug_mode:                
                 rr['rating_options'] = rating_options
-                
-            rr['query_info'] = {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
-                
+            
+            #rr['query_info'] = {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
+
+            #assert (the_input['q_text'] or the_input['q_id'] or q_id_file or the_input['canonical_id']), ('NO QUERY?', the_input)
+            #assert (rr['query_info']['query_args']['q_text'] or rr['query_info']['query_args']['q_id'] or q_id_file or rr['query_info']['query_args']['canonical_id']), ('NO QUERY?', rr['query_info']['query_args'])
+            
+            print ('TOP_LEVEL_KEYS_1',rr.keys(), rr['query_info']['query_args'].get('q'))
             self.write_json(rr,
                             pretty = the_input['pretty'],
                             max_indent_depth = data.get('max_indent_depth', False),
                             )
             
             return
+
+        if rr:
+            print ('ZZZ',rr['query_info'])
+        
+            #assert (rr['query_info']['query_args']['q_text'] or rr['query_info']['query_args']['q_id'] or q_id_file or rr['query_info']['query_args']['canonical_id']), ('NO QUERY?', rr['query_info']['query_args'])
 
         is_id_search = False
         
@@ -979,7 +1202,7 @@ class handle_search(BaseHandler):
             rr = json.loads(rr.body)
 
             if 'error' in rr:
-                self.set_status(500)
+                #self.set_status(500)
                 self.write_json({'error':'ELASTICSEARCH_ERROR',
                                  'error_message':repr(rr)[:1000],
                                  })
@@ -993,20 +1216,24 @@ class handle_search(BaseHandler):
                   'results_count':('{:,}'.format(the_input['full_limit'])) + '+',
                   }
             
-            rr['default_options'] = default_options
+            if the_input['show_default_options']:
+                rr['default_options'] = default_options
             
-            if is_debug_mode:
+            if is_debug_mode == 2:
                 rr['debug_options'] = debug_options
+
+            if is_debug_mode:
                 rr['rating_options'] = rating_options
 
             rr['query_info'] = {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
 
+            print ('TOP_LEVEL_KEYS_2',rr.keys(), rr['query_info']['query_args'].get('q'))
             self.write_json(rr)
             return
 
         
         if (the_input['q_text'] and the_input['q_id']):
-            self.set_status(500)
+            #self.set_status(500)
             self.write_json({'error':'BAD_QUERY',
                              'error_message':'Simultaneous `q` and `q_id` not yet implemented.',
                              })
@@ -1051,7 +1278,7 @@ class handle_search(BaseHandler):
                 rr = json.loads(rr.body)
                 
                 if 'error' in rr:
-                    self.set_status(500)
+                    #self.set_status(500)
                     self.write_json({'error':'ELASTICSEARCH_ERROR',
                                      'error_message':repr(rr)[:1000],
                                      })
@@ -1100,14 +1327,14 @@ class handle_search(BaseHandler):
             except KeyboardInterrupt:
                 raise
             except:
-                self.set_status(500)
+                #self.set_status(500)
                 self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
                                  'error_message':'Elasticsearch down or timeout? - ' + repr(hh)[:1000],
                                  })
                 return
 
             if 'error' in hh:
-                self.set_status(500)
+                #self.set_status(500)
                 self.write_json({'error':'ELASTICSEARCH_ERROR',
                                  'error_message':repr(hh)[:1000],
                                  })
@@ -1145,14 +1372,14 @@ class handle_search(BaseHandler):
         except KeyboardInterrupt:
             raise
         except:
-            self.set_status(500)
+            #self.set_status(500)
             self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
                              'error_message':'Elasticsearch down or timeout? - ' + repr(hh)[:1000],
                              })
             return
         
         if 'error' in hh:
-            self.set_status(500)
+            #self.set_status(500)
             self.write_json({'error':'ELASTICSEARCH_ERROR',
                              'error_message':repr(hh)[:1000],
                              })
@@ -1210,7 +1437,7 @@ class handle_search(BaseHandler):
         
         ## Debug info:
         
-        if is_debug_mode:
+        if is_debug_mode == 2:
             for ii in rr:
                 
                 ## add debug info dict:
@@ -1220,9 +1447,9 @@ class handle_search(BaseHandler):
             
                 ii['debug_info']['native_id'] = ii['_source'].get('native_id', False)                
                 ii['debug_info']['width'] = ii['_source'].get('sizes') and ii['_source'].get('sizes')[0].get('width', False)
-            print 'YES_DEBUG'
+            print ('YES_DEBUG', is_debug_mode)
         else:
-            print 'NO_DEBUG'
+            print ('NO_DEBUG', is_debug_mode)
                 
 
         ## Add in frontend image cached preview images:
@@ -1277,24 +1504,86 @@ class handle_search(BaseHandler):
                 
         mc_normalize.apply_post_ingestion_normalizers(rr, schema_variant = the_input['schema_variant'])
 
+        frontend_required = [('artist_name',None),
+                             ('keywords',[]),
+                             #('id',None),
+                             ('license',None),
+                             ('title',None),
+                             ('source',None),
+                             ('sizes',{}),
+                             ('image_url',None)
+                             ]
         
+        for ii in rr:
+            for k,v in frontend_required:
+                if k not in ii['_source']:
+                    print ('ADDED_FOR_FRONTEND',k,'=',v)
+                    ii['_source'][k] = v
+        
+
+        ## Neural query relevance model:
+
+        neural_rel_scores = False
+        
+        try:
+            if (get_neural_relevance is not False) and the_input['q_text']: #is_debug_mode and 
+                neural_rel_scores = get_neural_relevance(the_input['q_text'],
+                                                         rr,
+                                                         )
+                
+                for c, xx in enumerate(neural_rel_scores['result_scores']):
+                    rr[c]['_neural_rel_score'] = xx
+                
+        except Exception as e2:
+            raise
+            print ('ERROR_NERUAL_RELEVANCE_OUTER',e2)
+            
         ## Re-rank:
+        
+        for ii in rr:
+            ii['_source']['artist_name_orig'] = ii['_source']['artist_name'] ## Back this up
         
         rrm = ReRankingBasic(eq_name = the_input['rerank_eq'])
         rr = rrm.rerank(rr, is_debug_mode)
+    
+        
+        ## Diversity penalty:
 
-        if is_debug_mode:
+        if the_input['rerank_eq'] != 'annotation_mode':
+            
+            print ('------DIVERSITY_PENALTY',the_input['rerank_eq'])
+            
+            seen_artists = set()
+            r2 = []
+            for cc, ii in enumerate(rr):
+                xx = ii['_source']['artist_name_orig']
+                if xx in seen_artists:
+                    #print ('DIVERSITY_PENALTY', cc, xx)
+                    ii['_score'] *=  0.5
+                seen_artists.add(xx)
+                r2.append((ii['_score'], ii))
+
+            rr = [y for x,y in sorted(r2, reverse = True)]
+        
+        ## Debug stats on frontend:
+        
+        if is_debug_mode == 2:
             for ii in rr:
                 sc = ii['_score']#ii['_source'].get('aes_unsplash_out_v1',{}).get('like_unsplash',-1)
-                xx = '%0.3f' % sc
-                if sc <= 0:
-                    xx = '(' + xx + ')'
+                if sc is None:
+                    xx = 'None'
+                else:
+                    xx = '%0.3f' % sc
+                    if sc <= 0:
+                        xx = '(' + xx + ')'
 
                 sc2 = ii['score_old']
                 xx2 = '%0.3f' % sc2
                 if sc2 <= 0:
                     xx2 = '(' + xx2 + ')'
                 ii['_source']['artist_name'] = 'Score: ' + xx + ' TFIDF: ' + xx2
+
+
         
         ## Note: swapping these for ES queries shortly:
 
@@ -1361,11 +1650,14 @@ class handle_search(BaseHandler):
         ## Cache:
         
         results_count = len(rr)
+
+        #assert 'q' in query_args, query_args.keys()
         
         rr = {'results':rr,
               'results_count':(results_count >= the_input['full_limit'] * 0.8) and \
                                (('{:,}'.format(the_input['full_limit'])) + '+') or \
                                ('{:,}'.format(results_count)),
+              'query_info': {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
               }
         
         query_cache_save(the_token, rr)
@@ -1388,21 +1680,25 @@ class handle_search(BaseHandler):
         
         ## Output:
 
-        rr['default_options'] = default_options
+        if the_input['show_default_options']:
+            rr['default_options'] = default_options
         
-        if is_debug_mode:
+        if is_debug_mode == 2:
             rr['debug_options'] = debug_options
+
+        if is_debug_mode:
             rr['rating_options'] = rating_options
 
-        rr['query_info'] = {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
-        
+        #rr['query_info'] = {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
+
+        print ('TOP_LEVEL_KEYS_3',rr.keys(), rr['query_info']['query_args'].get('q'))
         self.write_json(rr,
                         pretty = the_input['pretty'],
                         max_indent_depth = data.get('max_indent_depth', False),
                         )
 
 
-from random import uniform, randint, choice
+from random import uniform, randint, choice, random
 
 def weighted_choice(choices, total):
     while True:
@@ -1431,7 +1727,7 @@ class handle_random_query(BaseHandler):
         """
         
         if not exists(mc_config.MC_TYPEAHEAD_TSV_PATH):
-            self.set_status(500)
+            #self.set_status(500)
             self.write_json({'error':'TSV_FILE_NOT_FOUND',
                              'error_message':'Please correct MC_TYPEAHEAD_TSV_PATH: ' + repr(mc_config.MC_TYPEAHEAD_TSV_PATH),
                              })
@@ -1439,25 +1735,33 @@ class handle_random_query(BaseHandler):
         
         from urllib import quote
 
-        if intget(self.get_argument('only_mwe', 1)):
-            aa, bb = self.rand_typeahead_mwe, self.rand_typeahead_mwe_total
-        else:
-            aa, bb = self.rand_typeahead, self.rand_typeahead_total
+        bb = False
         
-        if choice([0, 0, 0, 0, 0, 1]):
-            ## Sometimes weighted:
-            q = weighted_choice(aa, bb)
+        if False:
+            q = choice(['technology', 'design', 'social media', 'privacy', 'bitcoin', 'internet of things', 'self driving cars', 'movies', 'television', 'music', 'gaming', 'politics', 'government', '2016 election', 'business', 'finance', 'economics', 'investing', 'creativity', 'ideas', 'humor', 'future', 'inspiration', 'travel', 'photography', 'architecture', 'art', 'climate change', 'transportation', 'sustainability', 'energy', 'health', 'mental health', 'psychology', 'science', 'education', 'history', 'space', 'virtual reality', 'artificial intelligence', 'feminism', 'women in tech', 'sports', 'nba', 'nfl', 'life lessons', 'productivity', 'self improvement', 'parenting', 'advice', 'startup', 'venture capital', 'entrepreneurship', 'leadership', 'culture', 'fashion', 'life', 'reading', 'relationships', 'this happened to me', 'diversity', 'racism', 'lgbtq', 'blacklivesmatter', 'fiction', 'books', 'poetry', 'satire', 'short story', 'food', 'future of food', 'cooking', 'writing', 'innovation', 'journalism'])
+
         else:
-            ## Sometimes totally random:
-            q = choice(aa)[1]
+            if intget(self.get_argument('only_mwe', 0)):
+                aa, bb = self.rand_typeahead_mwe, self.rand_typeahead_mwe_total
+            else:
+                aa, bb = self.rand_typeahead, self.rand_typeahead_total
+
+            if False:#choice([0, 0, 0, 0, 0, 1]):
+                ## Sometimes weighted:
+                q = weighted_choice(aa, bb)
+            else:
+                ## Sometimes totally random:
+                q = choice(aa)[1]
         
         print ('random_query', q, bb)
         
         if intget(self.get_argument('as_url', 0)):
             ## TODO: temporary for convenience:
-            self.redirect('http://images.mediachainlabs.com/search/' + quote(q), permanent = False)
+            self.redirect('http://images.mediachainlabs.com/search/' + quote(q) + '&q=' + quote(q) + '?rerank_eq=' + choice(['neural_relevance','tfidf','neural_hybrid','aesthetics']), permanent = False)
         else:
-            self.write_json({'query':q})
+            self.write_json({'query':q,
+                             'rerank_eq':choice(['neural_relevance','tfidf','neural_hybrid','aesthetics']),
+                             })
         
         
 from uuid import uuid4
@@ -1504,7 +1808,7 @@ class handle_record_relevance(BaseHandler):
         diff = set(['query_info', 'data']).difference(hh.keys())
         
         if diff:
-            self.set_status(500)
+            #self.set_status(500)
             self.write_json({'error':'MISSING_ARGS',
                              'error_message':repr(list(diff)),
                              })
@@ -1512,6 +1816,8 @@ class handle_record_relevance(BaseHandler):
         
         print ('RECORD_RELEVANCE', hh)
 
+        #assert hh['query_info']['query_args'].get('q'), ('NO_QUERY?',hh['query_info']['query_args'].keys())
+        
         user_id = hh.get('user_id') or self.get_cookie('user_id','')
         
         if not user_id:
@@ -1519,20 +1825,20 @@ class handle_record_relevance(BaseHandler):
             self.set_cookie('user_id', hh['user_id'])
         
         user_id = hh['user_id']
-        diff = set(user_id).difference('1234567890abcdef')
+        diff = set(user_id).difference('1234567890abcdef-')
         if diff and (user_id != 'test'):
-            self.set_status(500)
+            #self.set_status(500)
             self.write_json({'error':'INVALID_USER_ID',
-                             'error_message':'user_id string must only contain hex characters (0-9 a-f). Got: ' + repr(user_id),
+                             'message':'user_id string must only contain hex characters (0-9 a-f). Got: ' + repr(user_id),
                              })
             return
 
         nonce = hh.get('nonce') or uuid4().hex
-        diff = set(nonce).difference('1234567890abcdef')
+        diff = set(nonce).difference('1234567890abcdef-')
         if diff and (nonce != 'test'):
-            self.set_status(500)
+            #self.set_status(500)
             self.write_json({'error':'INVALID_NONCE',
-                             'error_message':'nonce string must only contain hex characters (0-9 a-f). Got: ' + repr(nonce),
+                             'message':'nonce string must only contain hex characters (0-9 a-f). Got: ' + repr(nonce),
                              })
             return
 
@@ -1541,9 +1847,9 @@ class handle_record_relevance(BaseHandler):
                       )
 
         if exists(fn_out):
-            self.set_status(500)
+            #self.set_status(500)
             self.write_json({'error':'NONCE_USED',
-                             'error_message':'Already recorded a response under provided nonce. Accidental double submit?',
+                             'message':'Already recorded a response under provided nonce. Accidental double submit?',
                              })
             return
 
@@ -1563,6 +1869,7 @@ class handle_record_relevance(BaseHandler):
         
         self.write_json({'success':True,
                          'fn':fn_out,
+                         'message':'Success.'
                          })
 
 

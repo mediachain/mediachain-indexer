@@ -739,8 +739,9 @@ def backfill_aesthetics(batch_size = 100,
                         index_name = mc_config.MC_INDEX_NAME,
                         doc_type = mc_config.MC_DOC_TYPE,
                         only_datasets = [],#'flickr100mm'
-                        do_models = [('aes_unsplash_out_v1','/datasets/datasets/aes_unsplash_out_v1/'),
+                        do_models = [#('order_model','/datasets/datasets/order_model/'), ## TOO BIG
                                      ('aesthetics','/datasets/datasets/aes_out/'),
+                                     #('aes_unsplash_out_v1','/datasets/datasets/aes_unsplash_out_v1/'),
                                      ],
                         via_cli = False,
                         ):
@@ -817,9 +818,9 @@ def backfill_aesthetics(batch_size = 100,
             nes = mc_neighbors.high_level_connect(index_name = index_name,
                                                   doc_type = doc_type,
                                                   )
-
+            
             res = nes.scan_all()
-
+        
         def do_commit(rrr):
             print ('COMMITTING BATCH...',len(rrr))
 
@@ -1312,6 +1313,7 @@ def ingest_bulk(iter_json = False,
                                thread_count = 1,
                                chunk_size = 100,
                                max_chunk_bytes = 100 * 1024 * 1024, #100MB
+                               request_timeout=120,
                                )
             
             for is_success, res in ii:
@@ -1686,9 +1688,10 @@ def send_compactsplit_to_blockchain(path_glob = False,
     iter_json = apply_normalizer_for_simpleclient(the_iter, normalizer_name)
 
     cur = SimpleClient()
-    for x in cur.write_artefacts(iter_json):
-        print("Wrote artefact: ", x['canonical'])
-
+    
+    for c,x in enumerate(cur.write_artefacts(iter_json)):
+        print("Wrote artefact: ", c, x['canonical'])
+    
     ## NOTE - May not reach here due to gRPC hang bug.
     
     print ('DONE ALL',)
