@@ -30,9 +30,6 @@ TODO:
 
 """
 
-DO_FORWARDING = True
-
-print (DO_FORWARDING and 'FORWARDING_ENABLED' or 'FORWARDING_DISABLED')
 
 import json
 import ujson
@@ -62,6 +59,10 @@ import mc_normalize
 
 data_pat = 'data:image/jpeg;base64,'
 data_pat_2 = 'data:image/png;base64,'
+
+DO_FORWARDING = mc_config.MC_DO_FORWARDING_INT
+
+print (DO_FORWARDING and 'FORWARDING_ENABLED' or 'FORWARDING_DISABLED')
 
 
 class Application(tornado.web.Application):
@@ -282,6 +283,12 @@ class handle_stats_annotation(BaseHandler):
         Annotation stats.
 
         """
+        uu = {
+            "172.56.34.204": 'dennis', 
+            "67.244.113.119": 'jesse', 
+            "95.111.63.140": 'tg',
+            "75.98.195.186": 'dennis2',
+        }
         
         dir_in = '/datasets/datasets/annotate/search_relevance/'
         
@@ -878,6 +885,13 @@ rating_options = [{"_id":"Overall",
                    "is_ordinal":0,
                    "options":[[0, "no"], [1, "yes"]],
                    },
+                  #{"_id":"amateur_hour",
+                  # "name":"Amateur Hour (1-5)",
+                  # "description":"Looks like an amateur made it.",
+                  # "default":0,
+                  # "is_ordinal":1,
+                  # "options":[[1,''], [2,''], [3,''], [4,''], [5,''],],
+                  # },
                   #{"_id":"is_adult",
                   # "name":"Adult",
                   # "description":"Image contains adult material.",
@@ -892,6 +906,136 @@ for xx in rating_options:
     bb = xx['name'][xx['name'].index('('):].strip()
     xx['name'] = space_pad(aa.upper(), ch='_', n=15) + bb
     xx['name'] = xx['name'].replace('WATERMARK___' ,'WATERMARK')
+
+
+def do_beam(graph, max_beam = 5):
+    """
+    Example:
+    
+        do_beam([[(5,'a'), (4, 'b'), (3, 'c')], [(5,'d'), (4, 'e'), (3, 'f')], [(5,'g'), (4, 'h'), (3, 'i')],])
+
+        -> [(125, ['a', 'd', 'g']), (100, ['a', 'e', 'g']), (100, ['a', 'd', 'h']), (80, ['a', 'e', 'h']), (75, ['a', 'f', 'g'])]
+    """
+    
+    longest_path = 0.0
+    
+    w0 = 1
+    p0 = []
+    for xx in graph:
+        w0 *= xx[0][0]
+        p0.append(xx[0][1])
+    
+    keep = [(w0, p0)]
+
+    #print ('START_KEEP',keep)
+    
+    graph = [list(sorted(x, reverse=True)) for x in graph]
+    
+    queue = [(graph[0][x][0], 0, [graph[0][x][1]]) for x in xrange(len(graph[0]))]
+    
+    while queue:
+        
+        zz = queue.pop(0)
+        
+        #print ('POP',zz)
+        
+        (cur_weight, c, path) = zz
+        
+        if c + 1 == len(graph):
+            continue
+        
+        for c2, (cur2_weight, cur2_obj) in enumerate(graph[c + 1]): #[:max_depth]
+
+            #print ('VIS',c + 1, c2)
+            
+            new_weight = cur_weight * cur2_weight
+            new_path = path + [cur2_obj]
+            longest_path = max(float(len(new_path)), longest_path)
+
+            if len(new_path) == len(graph):
+                keep.append((new_weight, new_path))
+
+            queue.append((new_weight, c + 1, new_path))
+        
+        q2 = [(longest_path / len(x[-1]), x) for x in queue]
+        
+        q2 = list(sorted(q2, reverse=True))[:max_beam]
+
+        queue = [y for x,y in q2]
+
+        keep.sort(reverse = True)
+        keep = keep[:max_beam]
+    
+    return keep
+
+
+
+def query_correct(query, num = 4, cutoff = 0.5):
+    """
+    Query correction.
+    
+    TODO, substantial performance increases are possible here, via methods including:
+    - Inform probabilities based on a real language model.
+    - Word segmentation based on a language model.
+    - Vector-space suggestions of more frequent synonyms for rare words.
+    
+    input:
+         'brown hotdog'
+
+    Output:    
+        [{"query":"brown hotdog", highlighted":[["brown ", 1],  ["hotdog ", 1], ]}]
+    """
+    
+    from difflib import get_close_matches
+    from editdistance import eval as eval_dist
+    
+    if not order_model:
+        return []
+    
+    word_dict = order_model['worddict']
+    
+    in_orig = []
+    cand = []
+    num_found = 0
+
+    #query_s = special_split(query)
+    query_s = query.split()
+    
+    for w in query_s:
+        if w in word_dict:
+            in_orig.append(0)
+            cand.append([(1.0, w)])
+            num_found += 1
+        else:
+            in_orig.append(1)
+            cand.append([(max(0,(100.0 - eval_dist(w, w2))) / 100.0, w2) for w2 in get_close_matches(w, word_dict, n = num, cutoff = cutoff)] \
+                        # + [(0.0000001, w)]
+                        )
+    
+    if num_found == len(query_s):
+        print ('YES_FOUND_ALL',query_s)
+        return []
+
+    print ('NOT_FOUND_ALL',query_s, cand)
+    
+    rr = do_beam(cand, max_beam = num)
+
+    yy3 = []
+    for xx,yy in rr:
+        yy2 = []
+        for c, x in enumerate(yy):
+            if c != len(yy) - 1:
+                x += ' '
+            yy2.append(x)
+        yy3.append((xx, yy2))
+    rr = yy3
+    
+    print ('SUGGEST',in_orig, rr)
+
+    r2 = [{'query':' '.join(y), 'highlighted':zip(in_orig, y)} for x, y in rr]
+    
+    return r2
+
 
 
 class handle_search(BaseHandler):
@@ -949,8 +1093,8 @@ class handle_search(BaseHandler):
             d = self.get_argument('json','{}')            
 
         if DO_FORWARDING:
-            forward_url = 'http://10.99.0.44:23456/search'
-            print ('FORWARDING', len(d), forward_url)
+            forward_url = mc_config.MC_DO_FORWARDING_URL
+            print ('FORWARDING', len(d), '->', forward_url)
             response = yield AsyncHTTPClient().fetch(forward_url,
                                                      method = 'POST',
                                                      connect_timeout = 30,
@@ -1049,7 +1193,6 @@ class handle_search(BaseHandler):
             the_input['q'] = the_input['q'].strip()
                     
         the_input['q_text'] = the_input['q'] ## for reverse compatibility.
-
         
         ## Disallow user modification of these, for now:
         
@@ -1299,7 +1442,7 @@ class handle_search(BaseHandler):
         
         
         elif the_input['q_text']:
-
+            
             #text-based search:
             query = {"query": {"multi_match": {"query":    the_input['q_text'],
                                                "fields": [ "*" ],
@@ -1581,7 +1724,16 @@ class handle_search(BaseHandler):
                 xx2 = '%0.3f' % sc2
                 if sc2 <= 0:
                     xx2 = '(' + xx2 + ')'
-                ii['_source']['artist_name'] = 'Score: ' + xx + ' TFIDF: ' + xx2
+
+                #ii['_source']['artist_name'] = 'Score: ' + xx + ' TFIDF: ' + xx2
+
+                yy = []
+                for nm, kk in [('tfidf','_norm_score'), ('neur_rel','_norm_neural_rel_score'), ('aes','_norm_aesthetics_score')]:
+                    yy.append(nm + (': %.3f' % ii.get(kk,-100)))
+                yy = ', '.join(yy)
+
+                ii['_source']['artist_name'] = yy
+                    
 
 
         
@@ -1659,6 +1811,11 @@ class handle_search(BaseHandler):
                                ('{:,}'.format(results_count)),
               'query_info': {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
               }
+
+        if the_input['q_text']:
+            rr['query_suggestions'] = query_correct(the_input['q_text'])
+        else:
+            rr['query_suggestions'] = []
         
         query_cache_save(the_token, rr)
         

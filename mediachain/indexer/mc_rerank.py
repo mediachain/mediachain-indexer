@@ -206,8 +206,8 @@ class ReRankingBasic():
                 new_min = 0.0
 
                 ## less important:
-                if score_key != '_aesthetics_score':
-                    new_min = 0.5
+                #if score_key != '_aesthetics_score':
+                #    new_min = 0.5
                 
                 if item[score_key] == 'EMPTY':
                     item[score_key] = 0 #min_tfidf
@@ -220,7 +220,7 @@ class ReRankingBasic():
                     item['_norm' + score_key] = (((item[score_key] - min_tfidf) * (new_max - new_min)) / (max_tfidf - min_tfidf)) + min_tfidf
 
         for item in items:
-            print ('CC', [(score_key, item[score_key]) for score_key in ['_score', '_neural_rel_score', '_aesthetics_score']])
+            #print ('CC', [(score_key, item[score_key]) for score_key in ['_score', '_neural_rel_score', '_aesthetics_score']])
             item['_total_rel'] = max(item['_norm_score'], item['_norm_neural_rel_score'])
                     
                     
