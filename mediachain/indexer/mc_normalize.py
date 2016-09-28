@@ -1913,7 +1913,7 @@ def apply_post_ingestion_normalizers(rr,
         Do both pre-ingestion and post-ingestion normalization?
     """
 
-    print ('schema_variant',schema_variant)
+    #print ('schema_variant',schema_variant)
     
     for ii in rr:
         native_id = ''

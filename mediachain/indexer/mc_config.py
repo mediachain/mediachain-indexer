@@ -49,12 +49,13 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
             'MC_IPFS_URL': ('localhost', 'IPFS host.'),
             'MC_IPFS_PORT_INT': ('5001', 'IPFS port.'),
             'MC_USE_IPFS_INT':(1, 'Use IPFS for image ingestion.'),
-            'MC_IPFS_ADD_LOCAL_INT':(0, 'Do not provide ingested IPFS files to the network.')
+            'MC_IPFS_ADD_LOCAL_INT':(0, 'Do not provide ingested IPFS files to the network.'),
+            'MC_ES_HOSTS':('127.0.0.1','Hosts.'),
            },
        '4. REST API Settings':
            {'MC_QUERY_CACHE_DIR':('/datasets/datasets/query_cache/', 'Location of where to store query cache.'),
             'MC_IMAGE_CACHE_DIR':('/datasets/datasets/indexer_cache/images/', 'Location of where to store cached images, for serving to frontend.'),
-            'MC_IMAGE_CACHE_HOST':('http://api.mediachain.io/images/', 'Image host, for serving cached images to frontend.'),
+            'MC_IMAGE_CACHE_HOST':('http://cdn.mediachainlabs.com/images/', 'Image host, for serving cached images to frontend.'),
             'MC_ALLOW_SKIP_QUERY_CACHE_INT':('1', 'Allow Indexer `skip_cache` arg.'),
             'MC_FILTER_INCOMPLETE_INT':('0', ["Temporary - ",
                                               "Set to \"1\" filter out image results for which we don't have a high-res image. ",
@@ -75,6 +76,10 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
        '7. Annotation Settings':
            {'MC_ANNOTATE_DIR':('/datasets/datasets/annotate/', 'Location for query relevance annotation.'),
             'MC_TYPEAHEAD_TSV_PATH':('/datasets/work/typeahead_v2.tsv', 'Typeahead queries location, used for `/random_query` endpoint.'),
+            },
+       '8. Slack API Settings':
+           {'MC_SLACK_WEBHOOK':('','Slack API key for logging.'),
+            'MC_SLACK_CHANNEL':('','Slack channel for logging.'),
             },
        }
 

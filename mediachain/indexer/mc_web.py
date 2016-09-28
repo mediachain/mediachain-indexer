@@ -92,6 +92,8 @@ class Application(tornado.web.Application):
         self.DOC_TYPE = mc_config.MC_DOC_TYPE
 
 
+from mc_alerts import MCAlerts
+
 class BaseHandler(tornado.web.RequestHandler):
     
     def __init__(self, application, request, **kwargs):
@@ -110,13 +112,27 @@ class BaseHandler(tornado.web.RequestHandler):
         
     def get_current_user(self,):
         return self._current_user
+
+    @property
+    def order_model_cache(self):
+        if not hasattr(self.application,'order_model_cache'):
+            self.application.order_model_cache = init_order_model()
+        return self.application.order_model_cache
     
     @property
     def es(self):
         if not hasattr(self.application,'es'):
-            self.application.es = ESConnection("10.99.0.44", 9200)
+            ## TODO: multiple hosts:
+            self.application.es = ESConnection(mc_config.MC_ES_HOSTS.split(',')[0], 9200)
         return self.application.es
-    
+
+
+    @property
+    def alerts(self):
+        if not hasattr(self.application, 'alerts'):
+            self.application.alerts = MCAlerts()
+        return self.application.alerts
+
     @property
     def rand_typeahead(self):
         if not hasattr(self.application,'rand_typeahead'):
@@ -129,7 +145,7 @@ class BaseHandler(tornado.web.RequestHandler):
             
             with open(mc_config.MC_TYPEAHEAD_TSV_PATH) as f:
                 for c, line in enumerate(f):
-                    if c >= 10000:
+                    if c >= 20000:
                         break
                     
                     if not line:
@@ -138,15 +154,15 @@ class BaseHandler(tornado.web.RequestHandler):
                     score, query, _ = line.split('\t')
                     score = int(score)
 
-                    if c < 10000:
+                    if c < 20000:
                         rr.append((score, query))
                         total += score
 
-                    if ' ' in query:
+                    if query.count(' ') > 1:
                         rr_mwe.append((score, query))
                         total_mwe += score
 
-            if order_model:
+            if False:#order_model:
                 print ('USE_WORDDICT',)
                 rr = [(1.0, x) for x in order_model['worddict'].keys()]
                 rr_mwe = rr
@@ -266,15 +282,14 @@ class handle_front(BaseHandler):
 class handle_ping(BaseHandler):
     
     @tornado.gen.coroutine
-    def post(self):
+    def get(self):
         """
-        Minimal ping of ES or other backend indexes. For more comprehensive system stats, see `/stats`.
         """
         
-        rr = yield self.es.ping()
+        #rr = yield self.es.ping()
+        #self.write_json({'results':rr})
         
-        self.write_json({'results':rr})
-
+        self.write_json({'pong':1})
 
 class handle_stats_annotation(BaseHandler):
     @tornado.gen.coroutine
@@ -290,6 +305,7 @@ class handle_stats_annotation(BaseHandler):
             "75.98.195.186": 'dennis2',
         }
         
+        dir_in = '/datasets/datasets/annotate/search_relevance_001/'
         dir_in = '/datasets/datasets/annotate/search_relevance/'
         
         rh = {'users':{}}
@@ -452,18 +468,22 @@ except:
     get_enriched_tags = False
 
 try:
-    from mc_crawlers import get_neural_relevance, init_order_model
+    import mc_crawlers
+    from mc_crawlers import get_neural_relevance, init_order_model, relevance_ann_query_to_concepts
 except Exception as e:
     print ('IMPORT_ERROR',e)
     get_neural_relevance = False
+    relevance_ann_query_to_concepts = False
 
 print ('get_neural_relevance',get_neural_relevance)
 
 order_model = False
 
 if get_neural_relevance:# and (not DO_FORWARDING):
-    order_model = init_order_model()
-
+    #omc = init_order_model()
+    #assert mc_crawlers.order_model_cache[0]
+    #order_model = omc.get('order_model', False)
+    pass
 
 class handle_get_embed_url(BaseHandler):
     #disable XSRF checking for this URL:
@@ -742,6 +762,18 @@ debug_options = [{'name':'q',
                   'type':'text',
                   'options':None,
                   },
+                 {'name':'exclusive_to_ann',
+                  'description':'Return only results that were exclusively found by the ANN method.',
+                  'default':0,
+                  'type':'number',
+                  'options':[0, 1],
+                  },
+                 {'name':'exclusive_to_text',
+                  'description':'Return only results that were exclusively found by the textual method.',
+                  'default':0,
+                  'type':'number',
+                  'options':[0, 1],
+                  },
                  {'name':'q_id',
                   'description':'Query by media. See Media Identifiers.',
                   'default':None,
@@ -869,21 +901,21 @@ rating_options = [{"_id":"Overall",
                    "description":'',
                    "default":0,
                    "is_ordinal":0,
-                   "options":[[0, "no"], [1, "yes"]],
+                   "options":[[1, "no"], [2, "yes"]],
                    },
                   {"_id":"is_bad_spam",
                    "name":"Spam (n/y)",
                    "description":'',
                    "default":0,
                    "is_ordinal":0,
-                   "options":[[0, "no"], [1, "yes"]],
+                   "options":[[1, "no"], [2, "yes"]],
                    },
                   {"_id":"is_bad_watermarks",
                    "name":"Watermark (n/y)",
                    "description":'',
                    "default":0,
                    "is_ordinal":0,
-                   "options":[[0, "no"], [1, "yes"]],
+                   "options":[[1, "no"], [2, "yes"]],
                    },
                   #{"_id":"amateur_hour",
                   # "name":"Amateur Hour (1-5)",
@@ -916,6 +948,9 @@ def do_beam(graph, max_beam = 5):
 
         -> [(125, ['a', 'd', 'g']), (100, ['a', 'e', 'g']), (100, ['a', 'd', 'h']), (80, ['a', 'e', 'h']), (75, ['a', 'f', 'g'])]
     """
+    
+    if (not graph) or (not graph[0]):
+        return []
     
     longest_path = 0.0
     
@@ -970,7 +1005,7 @@ def do_beam(graph, max_beam = 5):
 
 
 
-def query_correct(query, num = 4, cutoff = 0.5):
+def query_correct(query, order_model, num = 4, cutoff = 0.5):
     """
     Query correction.
     
@@ -1003,11 +1038,11 @@ def query_correct(query, num = 4, cutoff = 0.5):
     
     for w in query_s:
         if w in word_dict:
-            in_orig.append(0)
+            in_orig.append(1)
             cand.append([(1.0, w)])
             num_found += 1
         else:
-            in_orig.append(1)
+            in_orig.append(0)
             cand.append([(max(0,(100.0 - eval_dist(w, w2))) / 100.0, w2) for w2 in get_close_matches(w, word_dict, n = num, cutoff = cutoff)] \
                         # + [(0.0000001, w)]
                         )
@@ -1091,15 +1126,87 @@ class handle_search(BaseHandler):
         else:
             print ('NEW PARAMETERS FORMAT',)
             d = self.get_argument('json','{}')            
+        
+        data = json.loads(d)
+        
+        is_debug_mode = intget(self.get_cookie('debug')) or intget(data.get('debug')) or intget(self.get_argument('debug','0'))
+        
+        if data.get('reconcile_task'):#data.get('rerank_eq', '').endswith('|RECONCILE_TASK'):
+            
+            #tt = data['rerank_eq']
+            #tt = tt[:-len('|RECONCILE_TASK')]
+            #ht = json.loads(tt)
 
+            #print ('AAA',data['reconcile_task'])
+            
+            ht = json.loads(data['reconcile_task'])
+            
+            #{'queryk':queryk, 'rating_type':rating_type, 'user_id':user_id}
+            
+            
+            print ('RECONCILE_TASK', ht)
+            
+            with open('/datasets/datasets/annotate/search_relevance_002/phase002_2-way.json') as f:
+                hr = json.loads(f.read())
+            
+            qq = json.loads(ht['queryk'])
+
+            task_images = hr[ht['user_id']][ht['queryk']][ht['rating_type']]
+
+            print ('task_images',task_images)
+            
+            #{u'next_page': None, u'prev_page': None, u'query_info': {u'query_args': {u'doc_type': u'image', u'skip_query_cache': 0, u'allow_nsfw': 0, u'pretty': 1, u'q_text': u'donalds', u'rerank_eq': u'annotation_mode', u'index_name': u'getty_test', u'schema_variant': u'new', u'enrich_tags': 1, u'filter_incomplete': 0, u'include_thumb': False, u'canonical_id': 0, u'full_limit': 600, u'include_docs': 1, u'debug': 1, u'show_default_options': 1, u'q': u'donalds', u'token': [], u'filter_licenses': [u'Creative Commons'], u'filter_sources': u'ALL'}, u'query_elapsed_ms': 119, u'query_time': 1473322887}, u'results_count': u'RECONCILE: ITERATION 1', u'results': [{u'_source': {u'license': None, u'title': u'RECONCILE', u'sizes': {}, u'artist_name': None, u'source': None, u'image_url': None, u'keywords': []}, u'_score': -1.0, u'title': u'Previous: 1d37f4afa8124d2584957a7892dff48a=1, 7754d70c-9edc-4b30-9ae7-ca55508823a9=2', u'_previous_ratings': [[u'1d37f4afa8124d2584957a7892dff48a', 1], [u'7754d70c-9edc-4b30-9ae7-ca55508823a9', 2]], u'_id': u'f745d5493075b0d93ce1b25934a94cef', u'_has_conflict': False}, {u'_source': {u'license': None, u'title': u'RECONCILE', u'sizes': {}, u'artist_name': None, u'source': None, u'image_url': None, u'keywords': []}, u'_score': -1.0, u'title': u'Previous: 1d37f4afa8124d2584957a7892dff48a=1, 7754d70c-9edc-4b30-9ae7-ca55508823a9=3', u'_previous_ratings': [[u'1d37f4afa8124d2584957a7892dff48a', 1], [u'7754d70c-9edc-4b30-9ae7-ca55508823a9', 3]], u'_id': u'a076583d36107460cfd304a1728de6b1', u'_has_conflict': False}], u'default_options': [], u'reconcile_info': {u'min_voters': 2, u'queryk': u'{"q": "nba"}', u'set_key': u'2_1171821989289380032_Overall_1d37f4afa8124d2584957a7892dff48a', u'iteration': 1, u'rating_type': u'Overall'}, u'debug_options': []}
+
+            """
+            1) get images for i_id's
+            2) add debug_info for all relevant debug types
+            """
+
+            if False:
+                assert False, 'TODO: would need to add more info into the images for this to work.'
+                
+                xrr = yield self.es.search(index = mc_config.MC_INDEX_NAME,
+                                          type = mc_config.MC_DOC_TYPE,
+                                          source = {"query":{ "ids": { "values": task_images['results'] } } },
+                                          )
+
+                xrr = json.loads(rr.body)
+
+                if 'error' in xrr:
+                    #self.set_status(500)
+                    self.write_json({'error':'ELASTICSEARCH_ERROR',
+                                     'error_message':repr(xrr)[:1000],
+                                     })
+                    return
+
+                task_images['results'] = xrr['hits']['hits']
+
+            #####
+            
+            if is_debug_mode == 2:
+                task_images['debug_options'] = debug_options
+
+            #print ('MMM',ht['rating_type'], rating_options)
+            
+            task_images['rating_options'] = [x for x in rating_options if x['_id'] == ht['rating_type']]
+            
+            #######
+            
+            self.write_json(task_images)
+            
+            return
+
+        
+            
         if DO_FORWARDING:
             forward_url = mc_config.MC_DO_FORWARDING_URL
-            print ('FORWARDING', len(d), '->', forward_url)
+            print ('FORWARDING', len(d), '->', forward_url,'headers:',dict(self.request.headers))
             response = yield AsyncHTTPClient().fetch(forward_url,
                                                      method = 'POST',
                                                      connect_timeout = 30,
                                                      request_timeout = 30,
                                                      body = d,
+                                                     headers = dict(self.request.headers),
                                                      #allow_nonstandard_methods = True,
                                                      )
             d2 = response.body
@@ -1122,10 +1229,31 @@ class handle_search(BaseHandler):
             return
 
         
-        is_debug_mode = intget(self.get_cookie('debug')) or intget(data.get('debug')) or intget(self.get_argument('debug','0'))
+        #is_debug_mode = intget(self.get_cookie('debug')) or intget(data.get('debug')) or intget(self.get_argument('debug','0'))
         
         print ('DEBUG_MODE?', is_debug_mode)
+        
+        ###
 
+        if 'pingdom' not in self.request.headers.get("User-Agent",'').lower():
+            
+            ak = {'0_endpoint':'/search',
+                  '1_query': data.get('q'),
+                  '2_real_ip':self.request.headers.get('X-Real-Ip'),
+                  '4_api-key':self.request.headers.get('API-KEY'),
+                  }
+            msg = ak.copy()
+            msg['3_connecting_ip'] = self.request.remote_ip
+            msg['5_headers'] = dict(self.request.headers)
+            msg = 'API_CALL:\n' + json.dumps(msg, indent=4, sort_keys=True)
+            tornado.ioloop.IOLoop.current().spawn_callback(self.alerts.send_alert_tornado,
+                                                           message = msg,
+                                                           alert_key = ak,
+                                                           )
+        
+        ###
+        
+        
         if 'help' in data:
             ## TODO: switch to using the "options" further below instead:
             ## Plain-text help:
@@ -1143,7 +1271,7 @@ class handle_search(BaseHandler):
         #                            'pretty',
         #                            ])
 
-        diff = set(data).difference([x['name'] for x in default_options + debug_options])
+        diff = set(data).difference([x['name'] for x in default_options + debug_options + [{'name':'reconcile_task'}]])
         if diff:
             #self.set_status(500)
             self.write_json({'error':'UNKNOWN_ARGS',
@@ -1443,14 +1571,19 @@ class handle_search(BaseHandler):
         
         elif the_input['q_text']:
             
-            #text-based search:
-            query = {"query": {"multi_match": {"query":    the_input['q_text'],
+            the_q_text = the_input['q_text']
+
+            #the_q_text = ' '.join([x for x in the_q_text.split() if not x.startswith('xann')])
+            
+            ## text-based search:
+            
+            query = {"query": {"multi_match": {"query":    the_q_text,
                                                "fields": [ "*" ],
                                                "type":     "cross_fields"
                                                },
                                },
                      }
-
+        
         remote_hits = []
         
         #assert remote_ids,remote_ids
@@ -1469,10 +1602,10 @@ class handle_search(BaseHandler):
                 hh = json.loads(rr.body)
             except KeyboardInterrupt:
                 raise
-            except:
+            except Exception as e:
                 #self.set_status(500)
                 self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
-                                 'error_message':'Elasticsearch down or timeout? - ' + repr(hh)[:1000],
+                                 'error_message':'Elasticsearch down or timeout? - ' + repr(rr.body)[:1000],
                                  })
                 return
 
@@ -1494,7 +1627,70 @@ class handle_search(BaseHandler):
                 
             for xx in remote_hits:
                 assert xx['_source']['boosted'] == 1
+
+
+        xann_hits = []
         
+        if the_input['q_text'] and (not the_input['exclusive_to_text']):
+
+            ## enrich for image content-based search:
+
+            #assert mc_crawlers.order_model_cache[0], 'BAD_DDD'
+
+            wd = self.order_model_cache['order_model']['worddict']
+
+            xann_any_good = False
+            the_q_text_2 = False
+            
+            for w in the_input['q_text'].split():
+                if w.startswith('xann'):
+                    xann_any_good = True
+                if w in wd:
+                    xann_any_good = True
+            
+
+            if xann_any_good:
+                the_q_text_2 = relevance_ann_query_to_concepts(the_input['q_text'],
+                                                               the_order_model_cache = self.order_model_cache,
+                                                               )
+                
+                #the_q_text_2 = the_q_text_2.split() + [x for x in the_input['q_text'].split() if x.startswith('xann')]
+            
+            if the_q_text_2:
+                query2 = {"query": {"multi_match": {"query": the_q_text_2,
+                                                   "fields": [ "xann" ],
+                                                   "type":   "most_fields"
+                                                   },
+                                   },
+                          "size": 300,
+                         }
+
+
+                t1 = time()
+                rr = yield self.es.search(index = the_input['index_name'],
+                                          type = the_input['doc_type'],
+                                          source = query2,
+                                          )
+                
+                try:
+                    hh = json.loads(rr.body)
+                except KeyboardInterrupt:
+                    raise
+                except Exception as e:
+                    #self.set_status(500)
+                    self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
+                                     'error_message':'Elasticsearch down or timeout? - ' + repr(rr.body)[:1000],
+                                     })
+                    return
+                
+                xann_hits = hh['hits']['hits']
+
+                for ii in xann_hits:
+                    ii['_score'] *= 0.1
+                
+                print ('XANN_GOT','time:',time() - t1, repr(rr.body)[:100])
+
+                
         query['from'] = the_input['offset']
         query['size'] = the_input['full_limit']
         
@@ -1507,17 +1703,17 @@ class handle_search(BaseHandler):
                                   )
         
         print ('GOT','time:',time() - t1, repr(rr.body)[:100])
-
+        
         hh = False
         
         try:
             hh = json.loads(rr.body)
         except KeyboardInterrupt:
             raise
-        except:
+        except Exception as e:
             #self.set_status(500)
             self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
-                             'error_message':'Elasticsearch down or timeout? - ' + repr(hh)[:1000],
+                             'error_message':'Elasticsearch down or timeout? - ' + repr(rr.body)[:1000],
                              })
             return
         
@@ -1530,21 +1726,28 @@ class handle_search(BaseHandler):
         
         rr = hh['hits']['hits']
 
+        if the_input['exclusive_to_ann']:
+            rr = xann_hits
+        else:
+            rr = xann_hits + remote_hits + rr
+
+        print ('HITS_A', len(rr))
         
         ## NSFW filtering:
-        
-        if not the_input['allow_nsfw']:
 
-            r2 = []
-            for xx in rr:
-                if not xx['_source'].get('nsfw'):
-                    r2.append(xx)
-            rr = r2
+        if not is_id_search:
+            if not the_input['allow_nsfw']:
+
+                r2 = []
+                for xx in rr:
+                    if not xx['_source'].get('nsfw'):
+                        r2.append(xx)
+                rr = r2
+
+        print ('HITS_B', len(rr))
 
         
         ## Prepend remote hits, filter ID dupes:
-        
-        rr = remote_hits + rr
 
         done = set()
         r2 = []
@@ -1557,7 +1760,9 @@ class handle_search(BaseHandler):
             done.add(xx['_id'])
             r2.append(xx)
         rr = r2
-        
+
+        print ('HITS_D', len(rr))
+
         ## Remove inline thumbnail data URIs:
         if not the_input['include_thumb']:
             for x in rr:
@@ -1642,6 +1847,7 @@ class handle_search(BaseHandler):
         
         rr = r2
         
+        print ('HITS_E', len(rr))
         
         ## Apply post-ingestion normalizers, if there are any:
                 
@@ -1664,14 +1870,44 @@ class handle_search(BaseHandler):
                     ii['_source'][k] = v
         
 
+        ## Filter to only those exclusive to ann:
+                    
+        if the_input['exclusive_to_ann']:
+            print ('EXCLUSIVE_TO_ANN', len(rr))
+            
+            ann_tags = set(x.replace('xann','') for x in the_input['q_text'].split() if x.startswith('xann'))
+
+            print ('ANN_TAGS', ann_tags)
+            
+            r2 = []
+            for ii in rr:
+                if ann_tags.intersection([x.lower() for x in ii['_source']['keywords']]):
+                    continue
+                if ann_tags.intersection((ii['_source']['title'] or '').lower().split()):
+                    continue
+                if ann_tags.intersection((ii['_source']['artist_name'] or '').lower().split()):
+                    continue
+                if ann_tags.intersection((ii['_source'].get('description') or '').lower().split()):
+                    continue
+                r2.append(ii)
+            
+            rr = r2
+
+            the_input['q_text'] = ' '.join([(x.startswith('xann') and x.replace('xann','') or x) for x in the_input['q_text'].split()])
+            
+        print ('HITS_C', len(rr))
+
         ## Neural query relevance model:
 
         neural_rel_scores = False
         
         try:
-            if (get_neural_relevance is not False) and the_input['q_text']: #is_debug_mode and 
+            if (get_neural_relevance is not False) and the_input['q_text']: #is_debug_mode and
+                #assert mc_crawlers.order_model_cache[0], 'BAD_CCC'
+                xx = self.order_model_cache
                 neural_rel_scores = get_neural_relevance(the_input['q_text'],
                                                          rr,
+                                                         order_model = xx['order_model'],
                                                          )
                 
                 for c, xx in enumerate(neural_rel_scores['result_scores']):
@@ -1680,19 +1916,27 @@ class handle_search(BaseHandler):
         except Exception as e2:
             raise
             print ('ERROR_NERUAL_RELEVANCE_OUTER',e2)
-            
-        ## Re-rank:
+
+        ## Add xann to keywords:
         
         for ii in rr:
-            ii['_source']['artist_name_orig'] = ii['_source']['artist_name'] ## Back this up
+            if 'xann' in ii['_source']:
+                ii['_source']['keywords'].extend(ii['_source'].get('xann',[]))
         
-        rrm = ReRankingBasic(eq_name = the_input['rerank_eq'])
-        rr = rrm.rerank(rr, is_debug_mode)
+        ## Re-rank:
+
+        if not is_id_search:
+            
+            for ii in rr:
+                ii['_source']['artist_name_orig'] = ii['_source']['artist_name'] ## Back this up
+
+            rrm = ReRankingBasic(eq_name = the_input['rerank_eq'])
+            rr = rrm.rerank(rr, is_debug_mode)
     
         
         ## Diversity penalty:
 
-        if the_input['rerank_eq'] != 'annotation_mode':
+        if (the_input['rerank_eq'] != 'annotation_mode') and (not is_id_search):
             
             print ('------DIVERSITY_PENALTY',the_input['rerank_eq'])
             
@@ -1746,7 +1990,7 @@ class handle_search(BaseHandler):
 
         print ('filter_licenses_in',the_input['filter_licenses'])
         
-        if the_input['filter_licenses'] and ('ALL' not in the_input['filter_licenses']):
+        if the_input['filter_licenses'] and ('ALL' not in the_input['filter_licenses']) and (not is_id_search):
             
             filter_licenses_s = set(the_input['filter_licenses'])
             r2 = []
@@ -1772,7 +2016,7 @@ class handle_search(BaseHandler):
 
         print ('filter_sources_in',the_input['filter_sources'])
 
-        if the_input['filter_sources'] and ('ALL' not in the_input['filter_sources']):
+        if the_input['filter_sources'] and ('ALL' not in the_input['filter_sources']) and (not is_id_search):
             filter_sources_s = set(the_input['filter_sources'])
             r2 = []
             for ii in rr:
@@ -1809,11 +2053,15 @@ class handle_search(BaseHandler):
               'results_count':(results_count >= the_input['full_limit'] * 0.8) and \
                                (('{:,}'.format(the_input['full_limit'])) + '+') or \
                                ('{:,}'.format(results_count)),
-              'query_info': {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
+              'query_info': {'query_args':query_args,
+                             'query_time':int(tt0),
+                             'query_elapsed_ms': int((time() - tt0) * 1000),
+                             }
               }
 
         if the_input['q_text']:
-            rr['query_suggestions'] = query_correct(the_input['q_text'])
+            xx = self.order_model_cache
+            rr['query_suggestions'] = query_correct(the_input['q_text'], xx['order_model'])
         else:
             rr['query_suggestions'] = []
         
@@ -1855,7 +2103,7 @@ class handle_search(BaseHandler):
                         )
 
 
-from random import uniform, randint, choice, random
+from random import uniform, randint, choice, random, shuffle
 
 def weighted_choice(choices, total):
     while True:
@@ -1881,7 +2129,93 @@ class handle_random_query(BaseHandler):
         Query Args:
             as_url:      Redirect to a URL instead of returning JSON, if "1".
             only_mwe:    Only multi-word queries, if "1",
+            user_id:     User id for reconciliation mode.
         """
+
+        from urllib import quote
+        
+        user_id = self.get_argument('user_id', False)
+        
+        if False:#user_id:
+
+            print ('YES_USER_ID', user_id)
+            
+            fn = '/datasets/datasets/annotate/search_relevance_002/phase002_2-way.json'# % user_id
+            
+            has_f = False
+            try:
+                with open(fn) as f:
+                    d = f.read()
+                has_f = True
+            except:
+                pass
+            
+            if not has_f:
+                print ('RECONCILE_MODE_NO')
+                                
+            else:
+                print ('RECONCILE_MODE_YES')
+                
+                hh = json.loads(d)
+
+                
+                if user_id not in hh:
+                    print ('USER_NOT_KNOWN', user_id, hh.keys())
+
+                else:
+                    
+                    print ('USER_IS_KNOWN', user_id)
+                    
+                    has_any = False
+                    the_task = False
+                    
+                    for queryk, rating_type_results_set in hh[user_id].iteritems():
+
+                        xitems = rating_type_results_set.items()
+                        shuffle(xitems)
+
+                        print ('PENDING_TASKS',len(xitems))
+                        
+                        for rating_type, results_set in xitems:
+                            
+                            the_task = {'queryk':queryk, 'rating_type':rating_type, 'user_id':user_id}
+                            
+                            set_key = results_set['reconcile_info']['set_key']
+                            
+                            fn_3 = '/datasets/datasets/annotate/search_relevance_004/phase004_done_%s.json' % set_key
+                            
+                            if not exists(fn_3):
+                                has_any = True
+                                break
+                        
+                        if has_any:
+                            break
+                    
+                    if has_any:
+
+                        the_query = json.loads(queryk)['q']
+
+                        #the_query = set_key
+                        
+                        print ('FOUND_RECONCILE_TASK', set_key, the_query)
+                                                
+                        if intget(self.get_argument('as_url', 0)):
+
+                            #args = 'reconcile_task=' + quote(json.dumps(the_task))
+                            
+                            self.redirect('http://images.mediachainlabs.com/search/' + quote(the_query) \
+                                           + '?debug=1&rerank_eq=' + json.dumps(the_task) + '|RECONCILE_TASK',
+                                          permanent = False,
+                                          )
+
+                        else:
+
+                            self.write_json({'q':the_query,
+                                             'reconcile_task':json.dumps(the_task),
+                                             })
+
+                        return
+                    
         
         if not exists(mc_config.MC_TYPEAHEAD_TSV_PATH):
             #self.set_status(500)
@@ -1898,9 +2232,11 @@ class handle_random_query(BaseHandler):
             q = choice(['technology', 'design', 'social media', 'privacy', 'bitcoin', 'internet of things', 'self driving cars', 'movies', 'television', 'music', 'gaming', 'politics', 'government', '2016 election', 'business', 'finance', 'economics', 'investing', 'creativity', 'ideas', 'humor', 'future', 'inspiration', 'travel', 'photography', 'architecture', 'art', 'climate change', 'transportation', 'sustainability', 'energy', 'health', 'mental health', 'psychology', 'science', 'education', 'history', 'space', 'virtual reality', 'artificial intelligence', 'feminism', 'women in tech', 'sports', 'nba', 'nfl', 'life lessons', 'productivity', 'self improvement', 'parenting', 'advice', 'startup', 'venture capital', 'entrepreneurship', 'leadership', 'culture', 'fashion', 'life', 'reading', 'relationships', 'this happened to me', 'diversity', 'racism', 'lgbtq', 'blacklivesmatter', 'fiction', 'books', 'poetry', 'satire', 'short story', 'food', 'future of food', 'cooking', 'writing', 'innovation', 'journalism'])
 
         else:
-            if intget(self.get_argument('only_mwe', 0)):
+            if intget(self.get_argument('only_mwe', 1)):
+                print ('YES_MWE')
                 aa, bb = self.rand_typeahead_mwe, self.rand_typeahead_mwe_total
             else:
+                print ('NO_MWE')
                 aa, bb = self.rand_typeahead, self.rand_typeahead_total
 
             if False:#choice([0, 0, 0, 0, 0, 1]):
@@ -1916,12 +2252,15 @@ class handle_random_query(BaseHandler):
             ## TODO: temporary for convenience:
             self.redirect('http://images.mediachainlabs.com/search/' + quote(q) + '&q=' + quote(q) + '?rerank_eq=' + choice(['neural_relevance','tfidf','neural_hybrid','aesthetics']), permanent = False)
         else:
-            self.write_json({'query':q,
-                             'rerank_eq':choice(['neural_relevance','tfidf','neural_hybrid','aesthetics']),
+            self.write_json({'q':q,
+                             #'rerank_eq':choice(['neural_relevance','tfidf','neural_hybrid','aesthetics']),
                              })
         
         
 from uuid import uuid4
+
+def annotation_create_phase_2_tasks(via_cli = False):
+    pass
 
 class handle_record_relevance(BaseHandler):
     
@@ -1941,13 +2280,7 @@ class handle_record_relevance(BaseHandler):
             nonce:          Random nonce used to prevent accidential double-submits. Only hex characters allowed.
         
         Example:
-            $ curl "http://127.0.0.1:23456/record_relevance" -d '{"user_id":"012345", "data":{}, "query_info":{}}'
-        
-        TODO:
-        Million other features. Intentionally neglecting those features, because having anything here is far better
-        than nothing. Goal is just to have a basic evaluation test and to record the results, instead of repeatedly
-        doing it all mentally.
-        
+            $ curl "http://127.0.0.1:23456/record_relevance" -d '{"user_id":"test", "data":{}, "query_info":{}}'
         """
         
         ## TODO: Switch to real auth system:
@@ -1955,7 +2288,7 @@ class handle_record_relevance(BaseHandler):
         dir_out = join(mc_config.MC_ANNOTATE_DIR,
                        'search_relevance',
                        )
-
+        
         if not exists(dir_out):
             makedirs(dir_out)
             

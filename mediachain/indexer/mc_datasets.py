@@ -245,14 +245,15 @@ def convert_to_compactsplit(the_iter = False,
         print ('DONE',dir_out)
     
     finally:
-        try: unlink(fn_out_temp)
-        except: pass
-        try: unlink(fn_out_temp_2)
-        except: pass
-        try: unlink(fn_out_temp_3)
-        except: pass
-        try: unlink(fn_out)
-        except: pass
+        pass
+        #try: unlink(fn_out_temp)
+        #except: pass
+        #try: unlink(fn_out_temp_2)
+        #except: pass
+        #try: unlink(fn_out_temp_3)
+        #except: pass
+        #try: unlink(fn_out)
+        #except: pass
     
     
     
@@ -260,7 +261,7 @@ def convert_to_compactsplit(the_iter = False,
 def line_tailer(ff,
                 ending = '\n',
                 sleep_time = 1.0,
-                confirm_time = 60,
+                confirm_time = 60 * 60 * 5,
                 confirm_min_attempts = 5,
                 verbose = True,
                 ):

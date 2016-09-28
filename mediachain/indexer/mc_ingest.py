@@ -48,7 +48,7 @@ import base58
 
 import numpy as np
 
-import imagehash
+#import imagehash
 import itertools
 
 import hashlib
@@ -598,7 +598,10 @@ def old_cache_image(_id,
 
 
 def fix_hh_hash(via_cli = False):
+    """[OLD] Moved hh_hash into nested directories"""
 
+    assert False, 'old'
+    
     dir_in = '/datasets/datasets/indexer_cache/images/hh_hash/'
 
     for c, fn in enumerate(listdir(dir_in)):
@@ -735,29 +738,36 @@ def backfill_v2_vectors(fns_in = [],
 
 from collections import Counter
 
-def backfill_aesthetics(batch_size = 100,
-                        index_name = mc_config.MC_INDEX_NAME,
-                        doc_type = mc_config.MC_DOC_TYPE,
-                        only_datasets = [],#'flickr100mm'
-                        do_models = [#('order_model','/datasets/datasets/order_model/'), ## TOO BIG
-                                     ('aesthetics','/datasets/datasets/aes_out/'),
-                                     #('aes_unsplash_out_v1','/datasets/datasets/aes_unsplash_out_v1/'),
-                                     ],
-                        via_cli = False,
-                        ):
-    """
-    Update top-level fields of ES-ingested docs with info from files in a directory, based on ID.
-    
-    TODO:
-    Collection (either the directory or ES) with higher percent of records to be backfilled should 
-    be scanned in the outer loop for efficiency. Perhaps make it possible to switch between these.
-    """
+def backfill_aesthetics(via_cli = False):
+    """Backfill ES with aesthetics model outputs."""
+    _backfill_es_inner(do_models = [('aesthetics','json','/datasets/datasets/aes_out/')])
 
+
+def backfill_xann(via_cli = False):
+    """Backfill ES with concept tokens for content-based ANN search."""
+    _backfill_es_inner(do_models = [('xann','lmdb','/zdrive/xann.lmdb')]) ## ann_words.lmdb
+
+
+def _backfill_es_inner(do_models = [#('aesthetics','json','/datasets/datasets/aes_out/'),
+                                    #('xann','lmdb','/datasets/datasets/ann_words.lmdb'),
+                                    #('order_model','json','/datasets/datasets/order_model/'), ## TOO BIG
+                                    #('aes_unsplash_out_v1','json','/datasets/datasets/aes_unsplash_out_v1/'),
+                                    ],
+                       batch_size = 100,
+                       index_name = mc_config.MC_INDEX_NAME,
+                       doc_type = mc_config.MC_DOC_TYPE,
+                       only_datasets = [u'flickr100mm'],#'flickr100mm', u'500px'
+                       via_cli = False,
+                       ):
+    """
+    Update top-level fields of ES-ingested docs with info from files in a directory / lmdb, based on ID.
+    """
+    
     print ('DO_MODELS',do_models)
     #raw_input_enter()
     
     def get_fn_out(_id, the_task_dir, mode = 'w'):
-        assert '_' in '_id', ('EXPECTING_NATIVE_IDS',_id)
+        assert '_' in _id, ('EXPECTING_NATIVE_IDS', _id)
         xid = hashlib.md5(_id).hexdigest()
         dd = join(the_task_dir,  xid[:3])
         if mode == 'w':
@@ -768,180 +778,238 @@ def backfill_aesthetics(batch_size = 100,
         return xfn
     
     import ujson
-
-    for field_name, task_dir in do_models:
-
-        assert '/' not in field_name, (field_name,)
+    
+    for field_name, input_type, task_dir in do_models:
         
-        if mc_config.LOW_LEVEL:
-            es = mc_neighbors.low_level_es_connect()    
-
-            ## TODO: https://www.elastic.co/guide/en/elasticsearch/reference/current/breaking_21_search_changes.html
-
-            if only_datasets:
-                #query = {"query": {"constant_score": {"filter": [{"term": {"source_dataset": x}}
-                #                                                 for x
-                #                                                 in only_datasets
-                #                                                 ]
-                #                                      }
-                #                   }
-                #         }
-
-                query = {"query": {"constant_score": {"filter": {"bool": {"must":[{"term": {"source_dataset": x}}
-                                                                                 for x
-                                                                                 in only_datasets
-                                                                                 ] + \
-                                                                                 [{"missing" : { "field" : field_name }}]
-                                                                         }
-                                                                 }
-                                                      }
-                                   }
-                         }
-
-            else:
-                #query = {"query": {'match_all': {}}}
-
-                query = {"query": {"constant_score": {"filter": {"bool": {"must":[{"missing" : { "field" : field_name }}]
-                                                                         }
-                                                                 }
-                                                      }
-                                   }
-                         }
-
-            res = scan(client = es,
-                       index = index_name,
-                       doc_type = doc_type,
-                       scroll = '100m', #TODO - hard coded.
-                       query = query,
-                       )
-        else:
-            nes = mc_neighbors.high_level_connect(index_name = index_name,
-                                                  doc_type = doc_type,
-                                                  )
+        try:
             
-            res = nes.scan_all()
-        
-        def do_commit(rrr):
-            print ('COMMITTING BATCH...',len(rrr))
+            if input_type == 'lmdb':
+                import lmdb
+                assert exists(task_dir), (task_dir,)
+                print ('OPENING_LMDB', task_dir)
+                env_in = lmdb.open(task_dir)
+                txn_in = env_in.begin(write = False)
+                cur_in = txn_in.cursor()
+            
+            assert '/' not in field_name, (field_name,)
 
             if mc_config.LOW_LEVEL:
-                from elasticsearch.helpers import parallel_bulk, scan
+                es = mc_neighbors.low_level_es_connect()    
 
-                ii = parallel_bulk(es,
-                                   rrr,
-                                   thread_count = 1,
-                                   chunk_size = 500,
-                                   max_chunk_bytes = 100 * 1024 * 1024, #100MB
-                                   )
+                ## TODO: https://www.elastic.co/guide/en/elasticsearch/reference/current/breaking_21_search_changes.html
+
+                if only_datasets:
+                    #query = {"query": {"constant_score": {"filter": [{"term": {"source_dataset": x}}
+                    #                                                 for x
+                    #                                                 in only_datasets
+                    #                                                 ]
+                    #                                      }
+                    #                   }
+                    #         }
+
+                    query = {"query": {"constant_score": {"filter": {"bool": {"must":[{"term": {"source_dataset": x}}
+                                                                                     for x
+                                                                                     in only_datasets
+                                                                                     ] + \
+                                                                                     [{"missing" : { "field" : field_name }}]
+                                                                             }
+                                                                     }
+                                                          }
+                                       }
+                             }
+
+                else:
+                    #query = {"query": {'match_all': {}}}
+
+                    query = {"query": {"constant_score": {"filter": {"bool": {"must":[{"missing" : { "field" : field_name }}]
+                                                                             }
+                                                                     }
+                                                          }
+                                       }
+                             }
+
+                res = scan(client = es,
+                           index = index_name,
+                           doc_type = doc_type,
+                           scroll = '100m', #TODO - hard coded.
+                           query = query,
+                           )
             else:
-                ii = nes.parallel_bulk(rrr)
+                nes = mc_neighbors.high_level_connect(index_name = index_name,
+                                                      doc_type = doc_type,
+                                                      )
 
-            for is_success,res in ii:
-                #print ('COMMITTED',is_success,res)
-                pass
+                res = nes.scan_all()
 
-            rrr[:] = []
-            print ('COMMITTED')
+            def do_commit(rrr):
+                print ('COMMITTING BATCH...',len(rrr))
+
+                if mc_config.LOW_LEVEL:
+                    from elasticsearch.helpers import parallel_bulk, scan
+
+                    ii = parallel_bulk(es,
+                                       rrr,
+                                       thread_count = 1,
+                                       chunk_size = 500,
+                                       max_chunk_bytes = 100 * 1024 * 1024, #100MB
+                                       )
+                else:
+                    ii = nes.parallel_bulk(rrr)
+
+                for is_success,res in ii:
+                    #print ('COMMITTED',is_success,res)
+                    pass
+
+                rrr[:] = []
+                print ('COMMITTED')
 
 
-        ## Main loop:
+            ## Main loop:
 
-        nn = 0
+            nn = 0
 
-        rr = []
+            rr = []
 
-        common_prefixes = Counter()
-        skipped_prefixes = Counter()
+            common_prefixes = Counter()
+            done_prefixes = Counter()
+            skipped_prefixes = Counter()
 
-        only_datasets = set(only_datasets)
+            only_datasets = set(only_datasets)
 
-        for c,hit in enumerate(res):
-
-            doc_update = {}
-
-            native_id = hit['_source'].get('native_id') or hit['_id']
-
-            assert '_' in native_id, hit
+            t00 = time()
+            done_hits = -1
             
-            prefix = native_id[:native_id.index('_')]
+            for c,hit in enumerate(res):
 
-            common_prefixes[prefix] += 1
+                done_hits += 1
+                
+                doc_update = {}
 
-            if c % 1000 == 0:
-                print ('LOOP:', c, field_name, task_dir, native_id,
-                       'common:', common_prefixes.most_common(50), 'skipped:', skipped_prefixes.most_common(50),
-                       )
-            
-            if only_datasets and (prefix not in only_datasets):
-                continue
-            
-            fn_aes = get_fn_out(native_id,
-                                task_dir,
-                                'r',
-                                )
-            
-            #if not exists(fn_aes):
-            #    skipped_prefixes[prefix] += 1
-            #    continue
+                native_id = hit['_source'].get('native_id') or hit['_id']
 
-            try:
-                with open(fn_aes) as f:
-                    de = f.read()    
-            except IOError as e:
-                if e.errno != errno.ENOENT:
+                assert '_' in native_id, hit
+
+                prefix = native_id[:native_id.index('_')]
+
+                common_prefixes[prefix] += 1
+                
+                if c % 1000 == 0:
+                    print ('LOOP:', c,
+                           field_name, input_type, task_dir,
+                           native_id,
+                           'done:', done_prefixes.most_common(50), 'skipped:', skipped_prefixes.most_common(50),
+                           'per_sec:', done_hits / (time() - t00),
+                           )
+
+                if only_datasets and (prefix not in only_datasets):
+                    assert False, 'query_not_working?'
+                    continue
+
+                if input_type == 'json':
+                    fn_aes = get_fn_out(native_id,
+                                        task_dir,
+                                        'r',
+                                        )
+
+                    #if not exists(fn_aes):
+                    #    skipped_prefixes[prefix] += 1
+                    #    continue
+
+                    try:
+                        with open(fn_aes) as f:
+                            de = f.read()    
+                    except IOError as e:
+                        if e.errno != errno.ENOENT:
+                            raise
+                        skipped_prefixes[prefix] += 1
+                        continue
+
+
+                elif input_type == 'lmdb':
+                    
+                    assert '_' in native_id, ('EXPECTING_NATIVE_IDS', native_id)
+                    xid = hashlib.md5(native_id).hexdigest()
+                    de = cur_in.get(xid, False)
+                    
+                    if de is False:
+                        skipped_prefixes[prefix] += 1
+                        continue
+                    
+                else:
+                    assert False, (input_type,)
+                
+                try:
+                    rh = ujson.loads(de)
+                except KeyboardInterrupt:
                     raise
-                skipped_prefixes[prefix] += 1
-                continue
+                except:
+                    print ('EXCEPTION_LOADING', de[:50], (input_type == 'json') and fn_aes or xid) #fn_aes
+                    #sleep(0.1)
+                    if (not de) and (input_type == 'json'):
+                        unlink(fn_aes)
+                    continue
+                
+                if field_name == 'xann':
+                    #rh = [y for x, y in rh] ## just do the keywords, for this one??
+                    #rh =  [y for xc, (x, y) in enumerate(rh) if (xc < 5) or (y < 0.35)]
+                    rh = ['xann' + y for x,y in rh[:5]] ## just top 5...
+                
+                #assert not '500px' in native_id,('2',native_id) ##TODO REMOVE
+                
+                doc_update[field_name] = rh
+                
+                ## For now, only bother if there was an image:
+                
+                rr.append({'_op_type': 'update',
+                           '_index': index_name,
+                           '_type': doc_type,
+                           '_id': hit['_id'],
+                           'body': {'doc':doc_update},
+                           })
 
-            try:
-                aes = ujson.loads(de)
-            except KeyboardInterrupt:
-                raise
-            except:
-                print ('EXCEPTION',fn_aes,de[:50])
-                #sleep(0.1)
-                if not de:
-                    unlink(fn_aes)
-                continue
+                done_prefixes[prefix] += 1
+                
+                if nn % 50 == 0:
+                    print ('YES', field_name, nn, 'of', c, hit['_source'].get('source_dataset'), rh, task_dir)
+                
+                nn += 1
+                
+                #print ('ADD',c) #rr
+                
+                if len(rr) >= batch_size:
+                    do_commit(rr)
 
-            #assert not '500px' in native_id,('2',native_id) ##TODO REMOVE
-
-            doc_update[field_name] = aes
-
-            ## For now, only bother if there was an image:
-
-            rr.append({'_op_type': 'update',
-                       '_index': index_name,
-                       '_type': doc_type,
-                       '_id': hit['_id'],
-                       'body': {'doc':doc_update},
-                       })
-
-            if nn % 50 == 0:
-                print ('YES_AES', field_name, nn, 'of', c, hit['_source'].get('source_dataset'), aes, task_dir)
-            
-            nn += 1
-            
-            #print ('ADD',c) #rr
-            
-            if len(rr) >= batch_size:
+            if rr:
                 do_commit(rr)
 
-        if rr:
-            do_commit(rr)
+            print ('DONE_LOOP',nn)
 
-        print ('AES_ENRICHED',nn)
+            if mc_config.LOW_LEVEL:
+                print ('REFRESHING', index_name)
+                es.indices.refresh(index = index_name)
+                print ('REFRESHED',)
+            else:
+                nes.refresh_index()
 
-        if mc_config.LOW_LEVEL:
-            print ('REFRESHING', index_name)
-            es.indices.refresh(index = index_name)
-            print ('REFRESHED',)
-        else:
-            nes.refresh_index()
-
-        print ('DONE_ALL', 'common:', common_prefixes.most_common(50), 'skipped:', skipped_prefixes.most_common(50))
-
-
+            print ('DONE', field_name, input_type, task_dir,
+                   #'common:', common_prefixes.most_common(50),
+                   'done:', done_prefixes.most_common(50),
+                   'skipped:', skipped_prefixes.most_common(50),
+                   )
+            
+        finally:
+            
+            if input_type == 'lmdb':
+                try: txn_in.close()
+                except: pass
+                
+                try: cur_in.close()
+                except: pass
+                
+                try: env_in.close()
+                except: pass
+            
+            
 def test_image_cache(via_cli = False):
     """
     Basic sanity check for image caching. TODO: more testing, instead of just running the code.
@@ -1172,15 +1240,15 @@ def ingest_bulk(iter_json = False,
         See `mc_test.py`
     """
     
-    index_settings = {'settings': {'number_of_shards': mc_config.MC_NUMBER_OF_SHARDS_INT,
-                                   'number_of_replicas': mc_config.MC_NUMBER_OF_REPLICAS_INT,                             
+    index_settings = {'settings': {'number_of_shards': 64,#mc_config.MC_NUMBER_OF_SHARDS_INT,
+                                   'number_of_replicas': 1,#mc_config.MC_NUMBER_OF_REPLICAS_INT,                             
                                    },
                       'mappings': {doc_type: {'properties': {'title':{'type':'string'},
                                                              'artist':{'type':'string'},
                                                              'collection_name':{'type':'string'},
                                                              'caption':{'type':'string'},
                                                              'editorial_source':{'type':'string'},
-                                                             'keywords':{'type':'string', 'index':'not_analyzed'},
+                                                             'keywords':{'type':'string'}, #, 'index':'not_analyzed'
                                                              'created_date':{'type':'date'},
                                                              'image_thumb':{'type':'string', 'index':'no'},
                                                              'dedupe_hsh':{'type':'string', 'index':'not_analyzed'},
@@ -1943,8 +2011,9 @@ functions=['receive_blockchain_into_indexer',
            'config',
            'tail_blockchain',
            'test_image_cache',
-           'backfill_aesthetics',
            'fix_hh_hash',
+           'backfill_aesthetics',
+           'backfill_xann',
            ]
 
 def main():

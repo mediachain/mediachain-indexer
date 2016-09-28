@@ -865,7 +865,7 @@ NearestNeighborsBaseAsync = fake_async_decorator(NearestNeighborsBase)
 
 
 
-def low_level_es_connect(hosts = ['10.99.0.44'],
+def low_level_es_connect(hosts = mc_config.MC_ES_HOSTS.split(','),
                          ):
     """
     Central point for creating new index-backend connections.
