@@ -116,7 +116,7 @@ class BaseHandler(tornado.web.RequestHandler):
     @property
     def order_model_cache(self):
         if not hasattr(self.application,'order_model_cache'):
-            self.application.order_model_cache = init_order_model()
+            self.application.order_model_cache = init_order_model(mc_config.MC_NEURAL_MODEL_NAME)
         return self.application.order_model_cache
     
     @property
@@ -1072,6 +1072,7 @@ def query_correct(query, order_model, num = 4, cutoff = 0.5):
     return r2
 
 
+DO_XANN = False
 
 class handle_search(BaseHandler):
     
@@ -1115,6 +1116,8 @@ class handle_search(BaseHandler):
                 ]
             }
         """
+
+        the_query_seg = ''
         
         tt0 = time()
         
@@ -1631,7 +1634,7 @@ class handle_search(BaseHandler):
 
         xann_hits = []
         
-        if the_input['q_text'] and (not the_input['exclusive_to_text']):
+        if DO_XANN and the_input['q_text'] and (not the_input['exclusive_to_text']):
 
             ## enrich for image content-based search:
 
@@ -1905,10 +1908,10 @@ class handle_search(BaseHandler):
             if (get_neural_relevance is not False) and the_input['q_text']: #is_debug_mode and
                 #assert mc_crawlers.order_model_cache[0], 'BAD_CCC'
                 xx = self.order_model_cache
-                neural_rel_scores = get_neural_relevance(the_input['q_text'],
-                                                         rr,
-                                                         order_model = xx['order_model'],
-                                                         )
+                neural_rel_scores, the_query_seg = get_neural_relevance(the_input['q_text'],
+                                                                        rr,
+                                                                        order_model = xx['order_model'],
+                                                                        )
                 
                 for c, xx in enumerate(neural_rel_scores['result_scores']):
                     rr[c]['_neural_rel_score'] = xx
@@ -2048,11 +2051,16 @@ class handle_search(BaseHandler):
         results_count = len(rr)
 
         #assert 'q' in query_args, query_args.keys()
+
+        rct = (results_count >= the_input['full_limit'] * 0.8) and \
+                               (('{:,}'.format(the_input['full_limit'])) + '+') or \
+                               ('{:,}'.format(results_count))
+
+        if True: #is_debug_mode:
+            rct += the_query_seg
         
         rr = {'results':rr,
-              'results_count':(results_count >= the_input['full_limit'] * 0.8) and \
-                               (('{:,}'.format(the_input['full_limit'])) + '+') or \
-                               ('{:,}'.format(results_count)),
+              'results_count':rct,
               'query_info': {'query_args':query_args,
                              'query_time':int(tt0),
                              'query_elapsed_ms': int((time() - tt0) * 1000),
@@ -2378,7 +2386,7 @@ def web(port = 23456,
                                  xheaders=True,
                                  )
         http_server.bind(port)
-        http_server.start(0) # Forks multiple sub-processes
+        http_server.start(1) # Forks multiple sub-processes
         tornado.ioloop.IOLoop.instance().set_blocking_log_threshold(0.5)
         IOLoop.instance().start()
         

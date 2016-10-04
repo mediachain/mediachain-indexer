@@ -63,6 +63,7 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
                                               ]),
             'MC_DO_FORWARDING_INT':('0', 'Quick hack - forwards search queries to cluster.'),
             'MC_DO_FORWARDING_URL':('http://10.99.0.44:23456/search', 'URL to forward search queries to, if forwarding is enabled.'),
+            'MC_NEURAL_MODEL_NAME':('order_model', 'Choices: "order_model", "order_model_2"'),
             },
        '5. Settings for Automated Tests':
            {'MC_TEST_WEB_HOST':('http://127.0.0.1:23456', ''),
