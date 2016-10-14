@@ -27,6 +27,7 @@ class MCAlerts:
                            channel = mc_config.MC_SLACK_CHANNEL,
                            slack_webhook_url = mc_config.MC_SLACK_WEBHOOK,
                            ):
+        
         print ('PREPARING_ALERT', slack_webhook_url, '->', channel)
 
         alert_key = json.dumps(alert_key, sort_keys=True)
@@ -50,9 +51,8 @@ class MCAlerts:
               "icon_emoji": ":ghost:",
               }
 
-        if '95.111' in repr(hh):
-            return
-
+        repr_hh = repr(hh)
+        
         body = urllib.urlencode({'payload': json.dumps(hh)}).encode('utf8')
 
         print ('SENDING_ALERT', body)

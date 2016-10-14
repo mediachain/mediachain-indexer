@@ -45,33 +45,44 @@ rsc *= (item['_source'].get('max_width', 0) > 300) and 10 or 1
 rsc
 """
 
-#rsc *= ((item['_source'].get('native_id','').startswith('dpla') and 1 or 2))
-
-
 ranking_prebuilt_equations = {
     'tfidf':"item['_score']",
     #'harmonic_mean_score_comments':"(item['_score'] * item['num_comments']) / (item['_score'] + item['num_comments'])",
     'boost_pexels':"item['_score'] * (item['_source'].get('native_id','').startswith('pexels') and 2 or 1) * item['_source'].get('boosted', 0.1)",
     'aesthetics':aes_func,
-    'aesthetics_pure':"(item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
-    'balance':"""(item['_source'].get('aesthetics', {}).get('balance', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
-    'color_harmony':"""(item['_source'].get('aesthetics', {}).get('color_harmony', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
-    'lighting':"""(item['_source'].get('aesthetics', {}).get('lighting', -1.0) + 1)  * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
-    'motion':"""(item['_source'].get('aesthetics', {}).get('motion_blur', -1.0) + 1)  * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
-    'repetition':"""(item['_source'].get('aesthetics', {}).get('repetition', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
-    'vivid_color':"""(item['_source'].get('aesthetics', {}).get('vivid_color', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
-    'symmetry':"""(item['_source'].get('aesthetics', {}).get('symmetry', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
-    'uses_depth_of_field':"""(item['_source'].get('aesthetics', {}).get('depth_of_field', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
-    'object_focus':"""(item['_source'].get('aesthetics', {}).get('object', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    'pure_object':"(item['_source'].get('aesthetics', {}).get('object', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_balance':"(item['_source'].get('aesthetics', {}).get('balance', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_color_harmony':"(item['_source'].get('aesthetics', {}).get('color_harmony', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_content':"(item['_source'].get('aesthetics', {}).get('content', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_depth_of_field':"(item['_source'].get('aesthetics', {}).get('depth_of_field', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_lighting':"(item['_source'].get('aesthetics', {}).get('lighting', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_motion_blur':"(item['_source'].get('aesthetics', {}).get('motion_blur', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_repetition':"(item['_source'].get('aesthetics', {}).get('repetition', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_rule_of_thirds':"(item['_source'].get('aesthetics', {}).get('rule_of_thirds', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_symmetry':"(item['_source'].get('aesthetics', {}).get('symmetry', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_vivid_color':"(item['_source'].get('aesthetics', {}).get('vivid_color', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_aesthetics':"(item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    #'balance':"""(item['_source'].get('aesthetics', {}).get('balance', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    #'color_harmony':"""(item['_source'].get('aesthetics', {}).get('color_harmony', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    #'lighting':"""(item['_source'].get('aesthetics', {}).get('lighting', -1.0) + 1)  * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    #'motion':"""(item['_source'].get('aesthetics', {}).get('motion_blur', -1.0) + 1)  * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    #'repetition':"""(item['_source'].get('aesthetics', {}).get('repetition', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    #'vivid_color':"""(item['_source'].get('aesthetics', {}).get('vivid_color', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    #'symmetry':"""(item['_source'].get('aesthetics', {}).get('symmetry', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    #'uses_depth_of_field':"""(item['_source'].get('aesthetics', {}).get('depth_of_field', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
+    #'object_focus':"""(item['_source'].get('aesthetics', {}).get('object', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
     'like_unsplash_v1':"""(item['_source'].get('aes_unsplash_out_v1', {}).get('like_unsplash', -1.0)) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
     'like_flickr_v1':"""(item['_source'].get('aes_unsplash_out_v1', {}).get('like_flickr', -1.0)) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
     'neural_relevance':"""item.get('_neural_rel_score', 0)""",
     'neural_hybrid':"""(item.get('_neural_rel_score', 0) * ((item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) / 2.0)) / (item.get('_neural_rel_score', 0) * 0.5 + ((item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) / 2.0) + 0.0000001) + (item['_score'] / 50)""",
+    'neural_hybrid_switch':"""(item['_switch_score'] * ((item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) / 2.0)) / (item.get('_switch_score', 0) * 1.0 + ((item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) / 2.0) + 0.0000001)""",
     'neural_hybrid_2':"""(item['_norm_score'] * item['_norm_neural_rel_score'] * item['_norm_aesthetics_score']) / ( item['_norm_score'] + item['_norm_neural_rel_score'] + item['_norm_aesthetics_score'] + 0.0000001)""",
     'neural_hybrid_3':"""(item['_total_rel'] * item['_norm_aesthetics_score']) / ( item['_total_rel'] + item['_norm_aesthetics_score'] + 0.0000001)""",
     'annotation_mode':'annotation_mode',
 }
 
+
+import scipy.stats
 
 
 class ReRankingBasic():
@@ -103,6 +114,8 @@ class ReRankingBasic():
             ## Done this way, instead of default args on the function, so that mc_web can pass in `None` to indicate default:
             eq_name = default_eq_name
 
+        self.eq_name = eq_name
+            
         if verbose:
             print ('RERANK_EQUATION', first_pass_eq_name, eq_name)
         
@@ -146,6 +159,26 @@ class ReRankingBasic():
         """
         t0 = time()
 
+        ## Switch point scores:
+
+        if not (self.eq_name or '').startswith('pure_'):
+            switch_point = 1.70
+
+            if not items:
+                maxtfidf = 1.0 ##TODO??
+            else:
+                max_tfidf = max([x['_score'] for x in items]) or 0.000000001
+            for c, item in enumerate(items):
+                if item['_neural_rel_score'] > switch_point:
+                    item['_switch_score'] = item['_neural_rel_score']
+                    if c < 10:
+                        print ('NO_SWITCH',item['_switch_score'])
+                else:
+                    ## Gap puts all highly-relevant ahead of lower-relevant with good aesthetics:
+                    item['_switch_score'] = (item['_score'] or 0.0) * (switch_point / max_tfidf) - 0.2 
+                    if c < 10:
+                        print ('YES_SWITCH',item['_switch_score'], self.eq_name)
+                
         ## Skip incomplete
         if skip_incomplete:
             
@@ -171,15 +204,89 @@ class ReRankingBasic():
         
         ## Some default first-pass stuff:
 
+        #for item in items:
+        #    ## NEW, set aesthetics to at least 0.5:
+        #    if item['_source'].get('aesthetics', {}).get('score', False) is False:
+        #        item['_source']['aesthetics'] = {'score':0}
+        #    item['_source']['aesthetics']['score'] = max(0.5, item['_source']['aesthetics']['score'])
+
+        if True:
+            ## aesthetics rerank:
+            items_sorted = [b for a,b in sorted([((x['_source'].get('aesthetics',{}).get('score', 0), x.get('_score',0)), x) for x in items], reverse = True)]
+            
+            num_promoted = 0
+            rr = []
+            for item in items_sorted:
+                if ('aesthetics' in item['_source']) and ('score' in item['_source']['aesthetics']):
+                    if num_promoted >= 10:
+                            rr.append(item)
+                            continue
+                    
+                    if item['_source']['source_dataset'] in ['500px', 'pexels']:
+                        item['_source']['aesthetics']['score'] += 0.1
+                        num_promoted += 1
+                        
+                    if item['_source']['source_dataset'] in ['dpla']:
+                        item['_source']['aesthetics']['score'] -= 1.0
+
+                    rr.append(item)
+
+        if False:
+            ## aesthetics rerank:
+            """
+            1) Get aesthetics @ 20 for biggest source.
+            2) Re-size all others so their @20 is the same
+            3) Sort.
+            """
+            if len(items) > 15:
+                
+                use_score_at = 20
+                
+                items_sorted = [b for a,b in sorted([((x['_source'].get('aesthetics',{}).get('score', 0), x.get('_score',0)), x) for x in items], reverse = True)]
+                
+                sources = Counter([x['_source']['source_dataset'] for x in items_sorted])
+                top_source = sources.most_common(1)[0]
+                by_source = {x:[] for x in sources}
+                scores_at_20 = {}
+                
+                for item in items_sorted:
+                    by_source[item['_source']['source_dataset']].append(item)
+                
+                ## get score @ 20 of all sources, or closest to 20 as possible:
+                
+                top_score_20 = False
+                
+                for the_source_name, the_source in by_source.iteritems():
+                    for aa in range(use_score_at, use_score_at / 2, -1):
+                        xx = the_source[aa]
+                        if 'aesthetics' in xx:
+                            xscore = xx['_source']['aesthetics']['score']
+                            scores_at_20[the_source] = xscore
+                            if the_source == top_source:
+                                top_score_20 = xscore
+                            break
+                
+                if top_score_20 is not False:
+
+                    ## rerank all by score @ 20 of top:
+
+                    for the_source_name, the_source in by_source.iteritems():
+                        pass
+                    
+                    
+                    
+                    
+                        
         for item in items:
             item['_aesthetics_score'] = item['_source'].get('aesthetics',{}).get('score', 'EMPTY')
             item['_neural_rel_score'] = item.get('_neural_rel_score', 'EMPTY')
-        
+
+            
         for score_key in ['_score', '_neural_rel_score', '_aesthetics_score']:
             
             max_tfidf = -1000
             min_tfidf = 1000
-
+            
             got_any = False
             
             for item in items:
@@ -210,12 +317,12 @@ class ReRankingBasic():
                 #    new_min = 0.5
                 
                 if item[score_key] == 'EMPTY':
-                    item[score_key] = 0 #min_tfidf
+                    item[score_key] = False #min_tfidf
                 
                 #print ('AA', item[score_key], min_tfidf, max_tfidf)
                 
                 if (max_tfidf - min_tfidf) == 0:
-                    item['_norm' + score_key] = 1.0
+                    item['_norm' + score_key] = 0.0 # was 1.0
                 else:
                     item['_norm' + score_key] = (((item[score_key] - min_tfidf) * (new_max - new_min)) / (max_tfidf - min_tfidf)) + min_tfidf
 
@@ -249,7 +356,7 @@ class ReRankingBasic():
             ## 3) Filter dupes
                         
             rr4 = []
-            for xeq_name in ['tfidf', 'neural_hybrid', 'neural_relevance', 'aesthetics_pure']:
+            for xeq_name in ['tfidf', 'neural_hybrid', 'neural_relevance', 'pure_aesthetics']:
                 
                 xeq = ranking_prebuilt_equations[xeq_name]
                 
@@ -312,7 +419,9 @@ class ReRankingBasic():
             if verbose and (c <= 10):
                 #print ('RERANK', item['_old_score'], item['_source'].get('boosted'),item['_score'],item['_source'].get('native_id'),item['_source'].get('title'))
                 print ('RERANK',
+                       item['_id'],
                        'aes:', item['_source'].get('aesthetics', {}).get('score', None),
+                       'rel:', item['_neural_rel_score'],
                        'tfidf:', item['score_old'],
                        'width:', item['_source'].get('max_width'), #item['_source'].get('sizes') and item['_source'].get('sizes')[0].get('width',0),
                        'final:', item['_score'],

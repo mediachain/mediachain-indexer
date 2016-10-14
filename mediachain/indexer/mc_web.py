@@ -145,7 +145,7 @@ class BaseHandler(tornado.web.RequestHandler):
             
             with open(mc_config.MC_TYPEAHEAD_TSV_PATH) as f:
                 for c, line in enumerate(f):
-                    if c >= 20000:
+                    if c >= 1000:
                         break
                     
                     if not line:
@@ -154,7 +154,7 @@ class BaseHandler(tornado.web.RequestHandler):
                     score, query, _ = line.split('\t')
                     score = int(score)
 
-                    if c < 20000:
+                    if c < 1000:
                         rr.append((score, query))
                         total += score
 
@@ -291,6 +291,8 @@ class handle_ping(BaseHandler):
         
         self.write_json({'pong':1})
 
+from collections import Counter
+
 class handle_stats_annotation(BaseHandler):
     @tornado.gen.coroutine
     def get(self):
@@ -309,8 +311,6 @@ class handle_stats_annotation(BaseHandler):
         dir_in = '/datasets/datasets/annotate/search_relevance/'
         
         rh = {'users':{}}
-
-        from collections import Counter
 
         qc = Counter()
 
@@ -471,6 +471,7 @@ try:
     import mc_crawlers
     from mc_crawlers import get_neural_relevance, init_order_model, relevance_ann_query_to_concepts
 except Exception as e:
+    raise
     print ('IMPORT_ERROR',e)
     get_neural_relevance = False
     relevance_ann_query_to_concepts = False
@@ -704,6 +705,12 @@ class handle_list_facets(BaseHandler):
 from mc_generic import consistent_json_hash
 import hashlib
 
+source_names = {'500px.com':'500px',
+                'flickr.com':'flickr100mm',
+                'pexels.com':'pexels',
+                'dp.la':'dpla',
+                }
+
 source_urls = ['500px.com',
                'flickr.com',
                'pexels.com',
@@ -842,7 +849,7 @@ debug_options = [{'name':'q',
                   },
                  {'name':'rerank_eq',
                   'description':'Name of reranking equation, or custom reranking equation string.',
-                  'default':'neural_hybrid',#'aesthetics',
+                  'default':'neural_hybrid_switch',#'neural_hybrid',#'aesthetics',
                   'type':'text',
                   'options':['aesthetics'] + [x for x in ranking_prebuilt_equations if x != 'aesthetics'],
                  },
@@ -854,6 +861,12 @@ debug_options = [{'name':'q',
                   },
                  {'name':'token',
                   'description':'Token ID used to refer to previous search sessions.',
+                  'default':[],
+                  'type':'text',
+                  'options':None,
+                 },
+                 {'name':'pingback_token',
+                  'description':'Pingback token.',
                   'default':[],
                   'type':'text',
                   'options':None,
@@ -1020,6 +1033,8 @@ def query_correct(query, order_model, num = 4, cutoff = 0.5):
     Output:    
         [{"query":"brown hotdog", highlighted":[["brown ", 1],  ["hotdog ", 1], ]}]
     """
+
+    query = query.lower() ## ADDED
     
     from difflib import get_close_matches
     from editdistance import eval as eval_dist
@@ -1330,7 +1345,7 @@ class handle_search(BaseHandler):
         the_input['index_name'] = data.get('index_name', mc_config.MC_INDEX_NAME)
         the_input['doc_type'] = data.get('doc_type', mc_config.MC_DOC_TYPE)
         the_input['include_thumb'] = False
-        the_input['full_limit'] = 600
+        the_input['full_limit'] = 1200
         
         
         ## TODO: need multiple image upload support?:
@@ -1425,12 +1440,12 @@ class handle_search(BaseHandler):
             if the_input['offset'] + the_input['limit'] >= len(rr['results']):
                 rr['next_page'] = None
             else:
-                rr['next_page'] = {'token':the_token, 'offset':the_input['offset'] + the_input['limit'], 'limit':the_input['limit']}
+                rr['next_page'] = {'token':the_token, 'pingback_token':the_token, 'offset':the_input['offset'] + the_input['limit'], 'limit':the_input['limit']}
 
             if the_input['offset'] == 0:
                 rr['prev_page'] = None
             else:
-                rr['prev_page'] = {'token':the_token, 'offset':max(0, the_input['offset'] - the_input['limit']), 'limit':the_input['limit']}
+                rr['prev_page'] = {'token':the_token, 'pingback_token':the_token, 'offset':max(0, the_input['offset'] - the_input['limit']), 'limit':the_input['limit']}
 
             rr['results'] = rr['results'][the_input['offset']:the_input['offset'] + the_input['limit']]
 
@@ -1473,7 +1488,14 @@ class handle_search(BaseHandler):
                                       )
 
             
-            rr = json.loads(rr.body)
+            try:
+                rr = json.loads(rr.body)
+            except Exception as e:
+                #self.set_status(500)
+                self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
+                                 'error_message':'Elasticsearch down or timeout? - ' + repr(rr.body)[:1000],
+                                 })
+                return
 
             if 'error' in rr:
                 #self.set_status(500)
@@ -1487,7 +1509,7 @@ class handle_search(BaseHandler):
             rr = {'results':rr,
                   'next_page':None,
                   'prev_page':None,
-                  'results_count':('{:,}'.format(the_input['full_limit'])) + '+',
+                  'results_count':'>' + ('{:,}'.format(the_input['full_limit'])),
                   }
             
             if the_input['show_default_options']:
@@ -1548,9 +1570,17 @@ class handle_search(BaseHandler):
                                           source = {"query": {"constant_score":{"filter":{"term": terms}}}},
                                           )
                 print ('GOT_Q_ID_FILE_OR_Q_ID',repr(rr.body)[:100])
-                
-                rr = json.loads(rr.body)
-                
+
+                try:
+                    rr = json.loads(rr.body)
+                except Exception as e:
+                    #self.set_status(500)
+                    self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
+                                     'error_message':'Elasticsearch down or timeout? - ' + repr(rr.body)[:1000],
+                                     })
+                    return
+
+
                 if 'error' in rr:
                     #self.set_status(500)
                     self.write_json({'error':'ELASTICSEARCH_ERROR',
@@ -1580,12 +1610,58 @@ class handle_search(BaseHandler):
             
             ## text-based search:
             
-            query = {"query": {"multi_match": {"query":    the_q_text,
-                                               "fields": [ "*" ],
-                                               "type":     "cross_fields"
-                                               },
-                               },
-                     }
+            #query = {"query": {"multi_match": {"query":    the_q_text,
+            #                                   "fields": [ "*" ],
+            #                                   "type":     "cross_fields",
+            #                                   "minimum_should_match": "100%",
+            #                                   },
+            #                   },
+            #         }
+
+            query ={"query": {"function_score": {"query": {"multi_match": {"query":    the_q_text,
+                                                                           "fields": [ "*" ],
+                                                                           "type":     "cross_fields",
+                                                                           "minimum_should_match": "100%",
+                                                                           },
+                                                           },
+                                                 "functions": [{"field_value_factor": {"field": "aesthetics.score",
+                                                                                       "missing":0.1,
+                                                                                       }
+                                                                }]
+                                                 },
+                              },
+                    }
+
+            if the_input['filter_sources'] and ('ALL' not in the_input['filter_sources']) and (not is_id_search):
+                
+                print ('FILTER_SOURCES', the_input['filter_sources'])
+                
+                assert isinstance(the_input['filter_sources'], basestring)
+
+                if the_input['filter_sources'] in source_names:
+                    the_input['filter_sources'] = source_names[the_input['filter_sources']]
+                
+                inner_part = [{"multi_match": {"query":    the_q_text,
+                                              "fields": [ "*" ],
+                                              "type":     "cross_fields",
+                                              "minimum_should_match": "100%",
+                                              },
+                              }]
+                
+                inner_part += [{"term": {"source_dataset": the_input['filter_sources']}}]
+                
+                query = {"query": {"function_score": {"query": {"constant_score": {"filter": {"bool": {"must":inner_part}}}},
+                                                      "functions": [{"field_value_factor": {"field": "aesthetics.score",
+                                                                                            "missing":0.1,
+                                                                                            }
+                                                                }]
+                                                      },
+                                   
+                                   },
+                         }
+
+                #query["sort"] = [{"aesthetics.score" : {"order" : "desc"}}]
+
         
         remote_hits = []
         
@@ -1755,7 +1831,10 @@ class handle_search(BaseHandler):
         done = set()
         r2 = []
         for xx in rr:
-            if xx['_id'] in [u'pexels_85601']:
+            if xx['_id'] in [u'pexels_85601',
+                             'feb4186c66cd5255e34ba2fdce5a386c',
+                             'f148a4e1c3a985871a3e529755d93202',
+                             ]:
                 continue
             
             if xx['_id'] in done:
@@ -1903,17 +1982,23 @@ class handle_search(BaseHandler):
         ## Neural query relevance model:
 
         neural_rel_scores = False
+        score_at_1 = False
+        score_at_10 = False
         
         try:
             if (get_neural_relevance is not False) and the_input['q_text']: #is_debug_mode and
                 #assert mc_crawlers.order_model_cache[0], 'BAD_CCC'
                 xx = self.order_model_cache
-                neural_rel_scores, the_query_seg = get_neural_relevance(the_input['q_text'],
-                                                                        rr,
-                                                                        order_model = xx['order_model'],
-                                                                        )
+                neural_rel_scores, the_query_seg, score_at_1, score_at_10 = \
+                        get_neural_relevance(the_input['q_text'],
+                                             rr,
+                                             order_model = xx['order_model'],
+                                             )
                 
+                ## moved into get_neural_relevance:
                 for c, xx in enumerate(neural_rel_scores['result_scores']):
+                    #assert '_neural_rel_score' in rr[c], 'MISSING_KEY'
+                    #assert xx is not False, repr(xx)
                     rr[c]['_neural_rel_score'] = xx
                 
         except Exception as e2:
@@ -1925,7 +2010,7 @@ class handle_search(BaseHandler):
         for ii in rr:
             if 'xann' in ii['_source']:
                 ii['_source']['keywords'].extend(ii['_source'].get('xann',[]))
-        
+
         ## Re-rank:
 
         if not is_id_search:
@@ -1935,26 +2020,29 @@ class handle_search(BaseHandler):
 
             rrm = ReRankingBasic(eq_name = the_input['rerank_eq'])
             rr = rrm.rerank(rr, is_debug_mode)
-    
-        
+
+
         ## Diversity penalty:
 
         if (the_input['rerank_eq'] != 'annotation_mode') and (not is_id_search):
             
             print ('------DIVERSITY_PENALTY',the_input['rerank_eq'])
             
-            seen_artists = set()
+            seen_artists = Counter()
             r2 = []
             for cc, ii in enumerate(rr):
                 xx = ii['_source']['artist_name_orig']
                 if xx in seen_artists:
                     #print ('DIVERSITY_PENALTY', cc, xx)
-                    ii['_score'] *=  0.5
-                seen_artists.add(xx)
+                    ii['_score'] *=  (0.5 ** seen_artists[xx])
+                if xx and ('simply mad' in xx.lower()):
+                    #print ('FOUND BAD',xx, ii['_score'])
+                    ii['_score'] *=  0.001
+                seen_artists[xx] += 1
                 r2.append((ii['_score'], ii))
 
             rr = [y for x,y in sorted(r2, reverse = True)]
-        
+                        
         ## Debug stats on frontend:
         
         if is_debug_mode == 2:
@@ -1973,16 +2061,42 @@ class handle_search(BaseHandler):
                     xx2 = '(' + xx2 + ')'
 
                 #ii['_source']['artist_name'] = 'Score: ' + xx + ' TFIDF: ' + xx2
+                
+                yy = []
+                #for nm, kk in [('tfidf','_norm_score'), ('neur_rel','_norm_neural_rel_score'), ('aes','_norm_aesthetics_score')]:
+                #    yy.append(nm + (': %.3f' % ii.get(kk,-100)))
 
                 yy = []
-                for nm, kk in [('tfidf','_norm_score'), ('neur_rel','_norm_neural_rel_score'), ('aes','_norm_aesthetics_score')]:
-                    yy.append(nm + (': %.3f' % ii.get(kk,-100)))
-                yy = ', '.join(yy)
+                for kk,vv in [('tfidf', ii.get('_score',-100)),
+                              ('aes', ii.get('_aesthetics_score',-100)),
+                              ('neur_rel', ii.get('_neural_rel_score',-100)),
+                              ]:
+                            yy.append(kk + (': %.3f' % vv))
 
-                ii['_source']['artist_name'] = yy
-                    
+                ii['_source']['artist_name'] = ', '.join(yy)
 
+        
+        ## Status checkboxes in names:
+        if is_debug_mode == 2:
 
+            for ii in rr:
+
+                if ('_aesthetics_score' in ii): ## not present for id-based searches.
+
+                    if ('_aesthetics_score' in ii) and (ii['_aesthetics_score'] is not False):
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u" \u2713"
+                    else:
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u' \u2718'
+
+                    if ('_neural_rel_score' in ii) and (ii['_neural_rel_score'] is not False):
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') + u" \u2713"
+                    else:
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u' \u2718'
+
+                    if ii.get('_neural_rel_score',0) < 1.70:
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u' LR'
+
+                    #ii['_source']['artist_name'] += ' ' + ', '.join([('%s=%.2f' % (k,v)) for k,v in ii['_source'].get('aesthetics',{}).items() if type(v) == float])
         
         ## Note: swapping these for ES queries shortly:
 
@@ -2019,7 +2133,7 @@ class handle_search(BaseHandler):
 
         print ('filter_sources_in',the_input['filter_sources'])
 
-        if the_input['filter_sources'] and ('ALL' not in the_input['filter_sources']) and (not is_id_search):
+        if False: #the_input['filter_sources'] and ('ALL' not in the_input['filter_sources']) and (not is_id_search):
             filter_sources_s = set(the_input['filter_sources'])
             r2 = []
             for ii in rr:
@@ -2053,10 +2167,14 @@ class handle_search(BaseHandler):
         #assert 'q' in query_args, query_args.keys()
 
         rct = (results_count >= the_input['full_limit'] * 0.8) and \
-                               (('{:,}'.format(the_input['full_limit'])) + '+') or \
-                               ('{:,}'.format(results_count))
+              (('{:,}'.format(the_input['full_limit'])) + '+') or \
+              ('{:,}'.format(results_count))
 
-        if True: #is_debug_mode:
+        rct = (results_count >= the_input['full_limit'] * 0.8) and \
+              ('>' + ('{:,}'.format(the_input['full_limit']))) or \
+              ('{:,}'.format(results_count))
+
+        if is_debug_mode == 2:
             rct += the_query_seg
         
         rr = {'results':rr,
@@ -2080,12 +2198,12 @@ class handle_search(BaseHandler):
         if the_input['offset'] + the_input['limit'] >= len(rr['results']):
             rr['next_page'] = None
         else:
-            rr['next_page'] = {'token':the_token, 'offset':the_input['offset'] + the_input['limit'], 'limit':the_input['limit']}
+            rr['next_page'] = {'token':the_token, 'pingback_token':the_token, 'offset':the_input['offset'] + the_input['limit'], 'limit':the_input['limit']}
         
         if the_input['offset'] == 0:
             rr['prev_page'] = None
         else:
-            rr['prev_page'] = {'token':the_token, 'offset':max(0, offset - the_input['limit']), 'limit':the_input['limit']}
+            rr['prev_page'] = {'token':the_token, 'pingback_token':the_token, 'offset':max(0, offset - the_input['limit']), 'limit':the_input['limit']}
         
         ## Trim:
         
@@ -2386,7 +2504,7 @@ def web(port = 23456,
                                  xheaders=True,
                                  )
         http_server.bind(port)
-        http_server.start(1) # Forks multiple sub-processes
+        http_server.start(16) # Forks multiple sub-processes
         tornado.ioloop.IOLoop.instance().set_blocking_log_threshold(0.5)
         IOLoop.instance().start()
         

@@ -756,7 +756,8 @@ def _backfill_es_inner(do_models = [#('aesthetics','json','/datasets/datasets/ae
                        batch_size = 100,
                        index_name = mc_config.MC_INDEX_NAME,
                        doc_type = mc_config.MC_DOC_TYPE,
-                       only_datasets = [u'flickr100mm'],#'flickr100mm', u'500px'
+                       only_datasets = [u'flickr100mm'],#['500px'],#,#'flickr100mm', u'500px'
+                       REDO_REDO = False,
                        via_cli = False,
                        ):
     """
@@ -806,12 +807,16 @@ def _backfill_es_inner(do_models = [#('aesthetics','json','/datasets/datasets/ae
                     #                                      }
                     #                   }
                     #         }
-
-                    query = {"query": {"constant_score": {"filter": {"bool": {"must":[{"term": {"source_dataset": x}}
-                                                                                     for x
-                                                                                     in only_datasets
-                                                                                     ] + \
-                                                                                     [{"missing" : { "field" : field_name }}]
+                    
+                    inner_part = [{"term": {"source_dataset": x}}
+                                  for x
+                                  in only_datasets
+                                  ]
+                    
+                    if not REDO_REDO:
+                        inner_part += [{"missing" : { "field" : field_name }}]
+                    
+                    query = {"query": {"constant_score": {"filter": {"bool": {"must":inner_part
                                                                              }
                                                                      }
                                                           }

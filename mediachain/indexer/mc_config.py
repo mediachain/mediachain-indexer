@@ -76,7 +76,7 @@ cfg = {'1. Model Settings. NOTE - WIP. These settings are not enabled yet.':
            },
        '7. Annotation Settings':
            {'MC_ANNOTATE_DIR':('/datasets/datasets/annotate/', 'Location for query relevance annotation.'),
-            'MC_TYPEAHEAD_TSV_PATH':('/datasets/work/typeahead_v2.tsv', 'Typeahead queries location, used for `/random_query` endpoint.'),
+            'MC_TYPEAHEAD_TSV_PATH':('/datasets/datasets/retrain/deploy/order_model_3/typeahead_4.tsv', 'Typeahead queries location, used for `/random_query` endpoint.'),
             },
        '8. Slack API Settings':
            {'MC_SLACK_WEBHOOK':('','Slack API key for logging.'),
