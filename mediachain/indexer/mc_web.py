@@ -226,7 +226,7 @@ class BaseHandler(tornado.web.RequestHandler):
         
     def write_json(self,
                    hh,
-                   sort_keys = True,
+                   sort_keys = False,
                    indent = 4, #Set to None to do without newlines.
                    pretty = False,
                    max_indent_depth = False,
@@ -240,7 +240,7 @@ class BaseHandler(tornado.web.RequestHandler):
         self.set_header("Content-Type", "application/json")
 
         self.write(json.dumps(hh,
-                              sort_keys = True,
+                              sort_keys = sort_keys,
                               indent = 4,
                               ) + '\n')
         if False:
@@ -469,7 +469,7 @@ except:
 
 try:
     import mc_crawlers
-    from mc_crawlers import get_neural_relevance, init_order_model, relevance_ann_query_to_concepts
+    from mc_crawlers import get_neural_relevance, init_order_model, relevance_ann_query_to_concepts, reverse_image_lookup_index
 except Exception as e:
     raise
     print ('IMPORT_ERROR',e)
@@ -851,7 +851,7 @@ debug_options = [{'name':'q',
                   'description':'Name of reranking equation, or custom reranking equation string.',
                   'default':'neural_hybrid_switch',#'neural_hybrid',#'aesthetics',
                   'type':'text',
-                  'options':['aesthetics'] + [x for x in ranking_prebuilt_equations if x != 'aesthetics'],
+                  'options':['aesthetics'] + list(sorted([x for x in ranking_prebuilt_equations if x != 'aesthetics'])),
                  },
                  {'name':'enrich_tags',
                   'description':'Use external API for tag enrichment on individual image pages.',
@@ -876,7 +876,25 @@ debug_options = [{'name':'q',
                   'default':0,
                   'type':'number',
                   'options':[0, 1],
-                 }
+                 },
+                 {'name':'reverse_search_by_text',
+                  'description':'Reverse image search by text.',
+                  'default':'',
+                  'type':'text',
+                  'options':None,
+                 },
+                 {'name':'reverse_search_by_image_url',
+                  'description':'Reverse image search by image URL.',
+                  'default':'',
+                  'type':'text',
+                  'options':None,
+                 },
+                 {'name':'reverse_search_by_id',
+                  'description':'Reverse image search by ID.',
+                  'default':'',
+                  'type':'text',
+                  'options':None,
+                 },
                  ]
 
 from mc_generic import space_pad
@@ -1033,6 +1051,9 @@ def query_correct(query, order_model, num = 4, cutoff = 0.5):
     Output:    
         [{"query":"brown hotdog", highlighted":[["brown ", 1],  ["hotdog ", 1], ]}]
     """
+
+    if query.startswith('search_'):
+        return []
 
     query = query.lower() ## ADDED
     
@@ -1264,13 +1285,28 @@ class handle_search(BaseHandler):
             msg['3_connecting_ip'] = self.request.remote_ip
             msg['5_headers'] = dict(self.request.headers)
             msg = 'API_CALL:\n' + json.dumps(msg, indent=4, sort_keys=True)
+            
+            ## curl "http://api.mediachainlabs.com/search" -d '{"q":"cat", "limit": 20}' -H 'access-token: 075a3e36a0a52dcbc568c05788e8a713'
+
+            access_token = self.request.headers.get("Access-Token")
+            
+            if access_token:
+                msg = 'MEDIUM query: ' + repr(data.get('q')) + ' with key: '+ str(access_token) +'\n' + msg
+                
+                for xuser in ['tg', 'denisnazarov']:
+                    tornado.ioloop.IOLoop.current().spawn_callback(self.alerts.send_alert_tornado,
+                                                                   message = msg,
+                                                                   alert_key = ak,
+                                                                   channel = '@' + xuser
+                                                                   )
+
+                
             tornado.ioloop.IOLoop.current().spawn_callback(self.alerts.send_alert_tornado,
                                                            message = msg,
                                                            alert_key = ak,
                                                            )
         
         ###
-        
         
         if 'help' in data:
             ## TODO: switch to using the "options" further below instead:
@@ -1345,7 +1381,7 @@ class handle_search(BaseHandler):
         the_input['index_name'] = data.get('index_name', mc_config.MC_INDEX_NAME)
         the_input['doc_type'] = data.get('doc_type', mc_config.MC_DOC_TYPE)
         the_input['include_thumb'] = False
-        the_input['full_limit'] = 1200
+        the_input['full_limit'] = 500
         
         
         ## TODO: need multiple image upload support?:
@@ -1360,6 +1396,9 @@ class handle_search(BaseHandler):
             raise
         except:
             pass
+
+        if q_id_file:
+            the_input['q_id_file_hash'] = hashlib.md5(q_id_file).hexdigest()
         
         if q_id_file and the_input['q_id']:
             #self.set_status(500)
@@ -1367,8 +1406,8 @@ class handle_search(BaseHandler):
                              'error_message':'Use either q_id or HTTP image upload, but not both.',
                              })
             return                
-        
-        
+
+
         ## Remote ranking hints:
         
         remote_ids = []
@@ -1379,6 +1418,60 @@ class handle_search(BaseHandler):
                 remote_ids = get_remote_search(the_input['q_text'])
                 print ('REMOTE_IDS','time:',time()-t1,len(remote_ids))
 
+        ## Neural reverse image search by image / text / id:
+
+        neural_vectors_mode = False
+        
+        if the_input['reverse_search_by_text']:
+            neural_vectors_mode = True
+            rr = reverse_image_lookup_index(q_text = the_input['reverse_search_by_text'],
+                                            #num_k = the_input['limit'],
+                                            )
+            self.write_json({'ids':rr})
+            return
+
+        if (the_input['q_text'] or '').startswith('search_text:'):
+            neural_vectors_mode = True
+            rr = reverse_image_lookup_index(q_text = the_input['q_text'][len('search_text:'):],
+                                            #num_k = the_input['limit'],
+                                            )
+            remote_ids = rr        
+        
+        if the_input['reverse_search_by_id']:
+            neural_vectors_mode = True
+            rr = reverse_image_lookup_index(q_image_id = the_input['reverse_search_by_id'],
+                                            #num_k = the_input['limit'],
+                                            )
+            self.write_json({'ids':rr})
+            return
+
+        if the_input['q_text']:
+            the_input['q_text'] = the_input['q_text'].replace('search_id:', 'related:')
+        
+        if (the_input['q_text'] or '').startswith('related:'):
+            neural_vectors_mode = True
+            rr = reverse_image_lookup_index(q_image_id = the_input['q_text'][len('related:'):],
+                                            #num_k = the_input['limit'],
+                                            )
+            remote_ids = rr
+        
+        if False:#the_input['reverse_search_by_url']:
+            neural_vectors_mode = True
+            assert False, 'todo'
+            response = yield AsyncHTTPClient().fetch(the_input['reverse_search_by_url'],
+                                                     method = 'POST',
+                                                     connect_timeout = 10,
+                                                     request_timeout = 10,
+                                                     body = d,
+                                                     headers = dict(self.request.headers),
+                                                     #allow_nonstandard_methods = True,
+                                                     )
+            d3 = response.body
+            rr = reverse_image_lookup_index(q_image_bytes = d3,
+                                            #num_k = the_input['limit'],
+                                            )
+            self.write_json({'ids':rr})
+            return
         
         ## Cache & token lookup:
         
@@ -1550,52 +1643,64 @@ class handle_search(BaseHandler):
                 #Resolve ID(s) for query based on content.
                 #Note that this is similar to `/dupe_lookup` with `include_docs` = True:
                 
-                print ('CONTENT-BASED-SEARCH',)
-                
-                model = mc_models.VECTORS_MODEL_NAMES['baseline']()
-                
-                if the_input['q_id'] and  (the_input['q_id'].startswith(data_pat) or the_input['q_id'].startswith(data_pat_2)):
-                    print ('GOT_DATA_URI')
-                    terms = model.img_to_terms(img_data_uri = the_input['q_id'])
+                if True:
+                    print ('NEURAL-CONTENT-BASED-SEARCH',)
+
+                    rr = reverse_image_lookup_index(q_image_bytes = q_id_file,
+                                                    #num_k = the_input['limit'],
+                                                    )
+                    
+                    #query = {"query":{ "ids": { "values": rr } } }
+                    query = {}
+                    remote_ids = rr
+                    
                 else:
-                    print ('GOT_RAW_BYTES')
-                    assert q_id_file
-                    terms = model.img_to_terms(img_bytes = q_id_file)
-                
-                print ('TERMS',repr(terms)[:100])
-                
-                
-                rr = yield self.es.search(index = the_input['index_name'],
-                                          type = the_input['doc_type'],
-                                          source = {"query": {"constant_score":{"filter":{"term": terms}}}},
-                                          )
-                print ('GOT_Q_ID_FILE_OR_Q_ID',repr(rr.body)[:100])
+                    print ('OLD-CONTENT-BASED-SEARCH',)
+                    
+                    model = mc_models.VECTORS_MODEL_NAMES['baseline']()
 
-                try:
-                    rr = json.loads(rr.body)
-                except Exception as e:
-                    #self.set_status(500)
-                    self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
-                                     'error_message':'Elasticsearch down or timeout? - ' + repr(rr.body)[:1000],
-                                     })
-                    return
+                    if the_input['q_id'] and  (the_input['q_id'].startswith(data_pat) or the_input['q_id'].startswith(data_pat_2)):
+                        print ('GOT_DATA_URI')
+                        terms = model.img_to_terms(img_data_uri = the_input['q_id'])
+                    else:
+                        print ('GOT_RAW_BYTES')
+                        assert q_id_file
+                        terms = model.img_to_terms(img_bytes = q_id_file)
+
+                    print ('TERMS',repr(terms)[:100])
 
 
-                if 'error' in rr:
-                    #self.set_status(500)
-                    self.write_json({'error':'ELASTICSEARCH_ERROR',
-                                     'error_message':repr(rr)[:1000],
-                                     })
-                    return
+                    rr = yield self.es.search(index = the_input['index_name'],
+                                              type = the_input['doc_type'],
+                                              source = {"query": {"constant_score":{"filter":{"term": terms}}}},
+                                              )
+                    print ('GOT_Q_ID_FILE_OR_Q_ID',repr(rr.body)[:100])
 
-                
-                rr = [x['_id'] for x in rr['hits']['hits']]
-                
-                query = {"query":{ "ids": { "values": rr } } }
+                    try:
+                        rr = json.loads(rr.body)
+                    except Exception as e:
+                        #self.set_status(500)
+                        self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
+                                         'error_message':'Elasticsearch down or timeout? - ' + repr(rr.body)[:1000],
+                                         })
+                        return
+
+
+                    if 'error' in rr:
+                        #self.set_status(500)
+                        self.write_json({'error':'ELASTICSEARCH_ERROR',
+                                         'error_message':repr(rr)[:1000],
+                                         })
+                        return
+
+
+                    rr = [x['_id'] for x in rr['hits']['hits']]
+
+                    query = {"query":{ "ids": { "values": rr } } }
                 
             else:
                 #ID-based search:
-
+                
                 is_id_search = True
                 
                 print ('ID-BASED-SEARCH', the_input['q_id'])
@@ -1632,7 +1737,7 @@ class handle_search(BaseHandler):
                               },
                     }
 
-            if the_input['filter_sources'] and ('ALL' not in the_input['filter_sources']) and (not is_id_search):
+            if the_input['filter_sources'] and ('ALL' not in the_input['filter_sources']) and (not is_id_search) and (not neural_vectors_mode):
                 
                 print ('FILTER_SOURCES', the_input['filter_sources'])
                 
@@ -1668,13 +1773,16 @@ class handle_search(BaseHandler):
         #assert remote_ids,remote_ids
         if remote_ids:
             t1 = time()
+            
             rr = yield self.es.search(index = the_input['index_name'],
                                       type = the_input['doc_type'],
-                                      source = {"query":{ "ids": { "values": remote_ids } } },
+                                      source = {"query":{ "ids": { "values": remote_ids } },
+                                                "size": 50,
+                                                },
                                       )
-        
+            
             print ('GOT','time:',time() - t1,repr(rr.body)[:100])
-
+            
             hh = False
             
             try:
@@ -1682,9 +1790,10 @@ class handle_search(BaseHandler):
             except KeyboardInterrupt:
                 raise
             except Exception as e:
+                #print ('BAD_BODY',rr)
                 #self.set_status(500)
-                self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
-                                 'error_message':'Elasticsearch down or timeout? - ' + repr(rr.body)[:1000],
+                self.write_json({'error':'ELASTICSEARCH_JSON_ERROR_REMOTE_IDS',
+                                 'error_message':'Elasticsearch down or timeout? - remote_ids ' + repr(rr.body)[:1000],
                                  })
                 return
 
@@ -1698,7 +1807,17 @@ class handle_search(BaseHandler):
 
             remote_hits = hh['hits']['hits']
 
-            print ('GOT_REMOTE_HITS',len(remote_hits))
+            print ('GOT_REMOTE_HITS',len(remote_ids), '->', len(remote_hits), [x['_id'] for x in remote_hits[:10]])
+
+            ## Fix ordering...:
+            
+            tmp = {x['_id']:x for x in remote_hits}
+            r2 = []
+            for xx in remote_ids:
+                aa = tmp.get(xx)
+                if aa is not False:
+                    r2.append(aa)
+            remote_hits = r2
             
             for xx in remote_hits:
                 xx['_score'] = 10.0
@@ -1768,53 +1887,60 @@ class handle_search(BaseHandler):
                     ii['_score'] *= 0.1
                 
                 print ('XANN_GOT','time:',time() - t1, repr(rr.body)[:100])
-
+                
                 
         query['from'] = the_input['offset']
         query['size'] = the_input['full_limit']
+        query['timeout'] = '5s'   ## TODO - RETURNS PARTIALLY ACCUMULATED HITS WHEN TIMEOUT OCCURS
         
         print ('QUERY',query)
 
-        t1 = time()
-        rr = yield self.es.search(index = the_input['index_name'],
-                                  type = the_input['doc_type'],
-                                  source = query,
-                                  )
-        
-        print ('GOT','time:',time() - t1, repr(rr.body)[:100])
-        
-        hh = False
-        
-        try:
-            hh = json.loads(rr.body)
-        except KeyboardInterrupt:
-            raise
-        except Exception as e:
-            #self.set_status(500)
-            self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
-                             'error_message':'Elasticsearch down or timeout? - ' + repr(rr.body)[:1000],
-                             })
-            return
-        
-        if 'error' in hh:
-            #self.set_status(500)
-            self.write_json({'error':'ELASTICSEARCH_ERROR',
-                             'error_message':repr(hh)[:1000],
-                             })
-            return
-        
-        rr = hh['hits']['hits']
+        if neural_vectors_mode or q_id_file:
+            rr = []
 
-        if the_input['exclusive_to_ann']:
+        else:
+            t1 = time()
+            rr = yield self.es.search(index = the_input['index_name'],
+                                      type = the_input['doc_type'],
+                                      source = query,
+                                      )
+
+            print ('GOT','time:',time() - t1, repr(rr.body)[:100])
+
+            hh = False
+
+            try:
+                hh = json.loads(rr.body)
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                #self.set_status(500)
+                self.write_json({'error':'ELASTICSEARCH_JSON_ERROR',
+                                 'error_message':'Elasticsearch down or timeout? - ' + repr(rr.body)[:1000],
+                                 })
+                return
+
+            if 'error' in hh:
+                #self.set_status(500)
+                self.write_json({'error':'ELASTICSEARCH_ERROR',
+                                 'error_message':repr(hh)[:1000],
+                                 })
+                return
+
+            rr = hh['hits']['hits']
+
+        if neural_vectors_mode or q_id_file:
+            rr = remote_hits
+        elif the_input['exclusive_to_ann']:
             rr = xann_hits
         else:
             rr = xann_hits + remote_hits + rr
-
-        print ('HITS_A', len(rr))
+        
+        #print ('HITS_A', len(rr))
         
         ## NSFW filtering:
 
-        if not is_id_search:
+        if (not is_id_search) and (not neural_vectors_mode):
             if not the_input['allow_nsfw']:
 
                 r2 = []
@@ -1823,7 +1949,7 @@ class handle_search(BaseHandler):
                         r2.append(xx)
                 rr = r2
 
-        print ('HITS_B', len(rr))
+        #print ('HITS_B', len(rr))
 
         
         ## Prepend remote hits, filter ID dupes:
@@ -1834,6 +1960,9 @@ class handle_search(BaseHandler):
             if xx['_id'] in [u'pexels_85601',
                              'feb4186c66cd5255e34ba2fdce5a386c',
                              'f148a4e1c3a985871a3e529755d93202',
+                             '3aced17eabda5ac3afaf0e3e0cb7786e',
+                             'f0dda8781292b1e3f1ccbf764a9dee94',
+                             '1ab346ea9420f2bb62f0cae82bf9d32b',
                              ]:
                 continue
             
@@ -1843,7 +1972,7 @@ class handle_search(BaseHandler):
             r2.append(xx)
         rr = r2
 
-        print ('HITS_D', len(rr))
+        #print ('HITS_D', len(rr))
 
         ## Remove inline thumbnail data URIs:
         if not the_input['include_thumb']:
@@ -1929,7 +2058,7 @@ class handle_search(BaseHandler):
         
         rr = r2
         
-        print ('HITS_E', len(rr))
+        #print ('HITS_E', len(rr))
         
         ## Apply post-ingestion normalizers, if there are any:
                 
@@ -1977,7 +2106,7 @@ class handle_search(BaseHandler):
 
             the_input['q_text'] = ' '.join([(x.startswith('xann') and x.replace('xann','') or x) for x in the_input['q_text'].split()])
             
-        print ('HITS_C', len(rr))
+        #print ('HITS_C', len(rr))
 
         ## Neural query relevance model:
 
@@ -1986,7 +2115,7 @@ class handle_search(BaseHandler):
         score_at_10 = False
         
         try:
-            if (get_neural_relevance is not False) and the_input['q_text']: #is_debug_mode and
+            if (get_neural_relevance is not False) and the_input['q_text'] and (not neural_vectors_mode) and (not q_id_file): #is_debug_mode and
                 #assert mc_crawlers.order_model_cache[0], 'BAD_CCC'
                 xx = self.order_model_cache
                 neural_rel_scores, the_query_seg, score_at_1, score_at_10 = \
@@ -2006,14 +2135,16 @@ class handle_search(BaseHandler):
             print ('ERROR_NERUAL_RELEVANCE_OUTER',e2)
 
         ## Add xann to keywords:
-        
-        for ii in rr:
-            if 'xann' in ii['_source']:
-                ii['_source']['keywords'].extend(ii['_source'].get('xann',[]))
 
+        if DO_XANN:
+            for ii in rr:
+                if 'xann' in ii['_source']:
+                    ii['_source']['keywords'].extend(ii['_source'].get('xann',[]))
+
+                        
         ## Re-rank:
 
-        if not is_id_search:
+        if (not is_id_search) and (not neural_vectors_mode) and (not q_id_file):
             
             for ii in rr:
                 ii['_source']['artist_name_orig'] = ii['_source']['artist_name'] ## Back this up
@@ -2024,7 +2155,7 @@ class handle_search(BaseHandler):
 
         ## Diversity penalty:
 
-        if (the_input['rerank_eq'] != 'annotation_mode') and (not is_id_search):
+        if (the_input['rerank_eq'] != 'annotation_mode') and (not is_id_search) and (not neural_vectors_mode) and (not q_id_file):
             
             print ('------DIVERSITY_PENALTY',the_input['rerank_eq'])
             
@@ -2067,37 +2198,57 @@ class handle_search(BaseHandler):
                 #    yy.append(nm + (': %.3f' % ii.get(kk,-100)))
 
                 yy = []
-                for kk,vv in [('tfidf', ii.get('_score',-100)),
-                              ('aes', ii.get('_aesthetics_score',-100)),
-                              ('neur_rel', ii.get('_neural_rel_score',-100)),
+                for kk,vv in [('tfidf', ii.get('_score',False)),
+                              ('n', ii.get('_neural_rel_score',False)),
+                              ('a1', ii.get('_aesthetics_score',False)),
+                              ('a2', ii['_source'].get('score_aesthetics_2',False)),
+                              ('a3', ii['_source'].get('score_aesthetics_3',False)),
                               ]:
-                            yy.append(kk + (': %.3f' % vv))
+                            if vv is False:
+                                yy.append(kk + u': \u2718')
+                            else:
+                                yy.append(kk + (': %.3f' % vv))
 
-                ii['_source']['artist_name'] = ', '.join(yy)
+                ii['_source']['artist_name'] = ', '.join(yy) + '.'
 
         
         ## Status checkboxes in names:
-        if is_debug_mode == 2:
+        if False:#is_debug_mode == 2:
 
             for ii in rr:
 
                 if ('_aesthetics_score' in ii): ## not present for id-based searches.
 
                     if ('_aesthetics_score' in ii) and (ii['_aesthetics_score'] is not False):
-                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u" \u2713"
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u" a1=\u2713"
                     else:
-                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u' \u2718'
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u" a1=\u2718"
 
                     if ('_neural_rel_score' in ii) and (ii['_neural_rel_score'] is not False):
-                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') + u" \u2713"
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') + u" n=\u2713"
                     else:
-                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u' \u2718'
-
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u" n=\u2718"
+                    
+                    if ('score_aesthetics_2' in ii['_source']) and (ii['_source']['score_aesthetics_2'] is not False):
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u" a2=\u2713"
+                    else:
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u" a2=\u2718"
+                    
+                    if ('score_aesthetics_3' in ii['_source']) and (ii['_source']['score_aesthetics_3'] is not False):
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u" a3=\u2713"
+                    else:
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u" a3=\u2718"
+                    
                     if ii.get('_neural_rel_score',0) < 1.70:
-                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u' LR'
-
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u' n=LR'
+                    
                     #ii['_source']['artist_name'] += ' ' + ', '.join([('%s=%.2f' % (k,v)) for k,v in ii['_source'].get('aesthetics',{}).items() if type(v) == float])
-        
+
+        for ii in rr:
+            #ii['_source']['keywords'].append('related:' + ii['_id'])
+
+            ii['_source']['keywords'] = [x for x in ii['_source']['keywords'] if x.strip()]
+                 
         ## Note: swapping these for ES queries shortly:
 
         if isinstance(the_input['filter_licenses'], basestring):
@@ -2107,7 +2258,7 @@ class handle_search(BaseHandler):
 
         print ('filter_licenses_in',the_input['filter_licenses'])
         
-        if the_input['filter_licenses'] and ('ALL' not in the_input['filter_licenses']) and (not is_id_search):
+        if the_input['filter_licenses'] and ('ALL' not in the_input['filter_licenses']) and (not is_id_search) and (not neural_vectors_mode) and (not q_id_file):
             
             filter_licenses_s = set(the_input['filter_licenses'])
             r2 = []
@@ -2176,6 +2327,9 @@ class handle_search(BaseHandler):
 
         if is_debug_mode == 2:
             rct += the_query_seg
+
+
+        print ('HITS_G', len(rr))
         
         rr = {'results':rr,
               'results_count':rct,

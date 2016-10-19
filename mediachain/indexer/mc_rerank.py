@@ -61,7 +61,12 @@ ranking_prebuilt_equations = {
     'pure_rule_of_thirds':"(item['_source'].get('aesthetics', {}).get('rule_of_thirds', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
     'pure_symmetry':"(item['_source'].get('aesthetics', {}).get('symmetry', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
     'pure_vivid_color':"(item['_source'].get('aesthetics', {}).get('vivid_color', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
-    'pure_aesthetics':"(item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_aesthetics_1':"(item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_aesthetics_2':"(item['_source'].get('score_aesthetics_2', -1.0)) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_aesthetics_3':"(item['_source'].get('score_aesthetics_3', -1.0)) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)",
+    'pure_aesthetics_1+2':"((item['_source'].get('aesthetics', {}).get('score', 0.0)) * (item['_source'].get('score_aesthetics_2', -1.0))) + ((item['_source'].get('aesthetics', {}).get('score', 0.0)) + (item['_source'].get('score_aesthetics_2', -1.0)) + 0.0000001)",
+    'pure_aesthetics_1+3':"((item['_source'].get('aesthetics', {}).get('score', 0.0)) * (item['_source'].get('score_aesthetics_3', -1.0))) + ((item['_source'].get('aesthetics', {}).get('score', 0.0)) + (item['_source'].get('score_aesthetics_3', -1.0)) + 0.0000001)",
+    'pure_aesthetics_1+2+3':"((item['_source'].get('aesthetics', {}).get('score', 0.0)) * (item['_source'].get('score_aesthetics_2', 0.0)) * (item['_source'].get('score_aesthetics_3', 0.0))) / ((item['_source'].get('aesthetics', {}).get('score', 0.0)) + (item['_source'].get('score_aesthetics_2', 0.0)) + (item['_source'].get('score_aesthetics_3', 0.0)))",
     #'balance':"""(item['_source'].get('aesthetics', {}).get('balance', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
     #'color_harmony':"""(item['_source'].get('aesthetics', {}).get('color_harmony', -1.0) + 1) * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
     #'lighting':"""(item['_source'].get('aesthetics', {}).get('lighting', -1.0) + 1)  * ((item['_source'].get('max_width', 0) > 300) and 10 or 1)""",
@@ -76,12 +81,26 @@ ranking_prebuilt_equations = {
     'neural_relevance':"""item.get('_neural_rel_score', 0)""",
     'neural_hybrid':"""(item.get('_neural_rel_score', 0) * ((item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) / 2.0)) / (item.get('_neural_rel_score', 0) * 0.5 + ((item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) / 2.0) + 0.0000001) + (item['_score'] / 50)""",
     'neural_hybrid_switch':"""(item['_switch_score'] * ((item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) / 2.0)) / (item.get('_switch_score', 0) * 1.0 + ((item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) / 2.0) + 0.0000001)""",
+    'neural_hybrid_switch_1+2':"(item['_switch_score'] * (((item['_source'].get('aesthetics', {}).get('score', 0.0)) * (item['_source'].get('score_aesthetics_2', 0.0))) / ((item['_source'].get('aesthetics', {}).get('score', 0.0)) + (item['_source'].get('score_aesthetics_2', 0.0))))) / (item.get('_switch_score', 0) * 1.0 + (((item['_source'].get('aesthetics', {}).get('score', 0.0)) * (item['_source'].get('score_aesthetics_2', 0.0))) / ((item['_source'].get('aesthetics', {}).get('score', 0.0)) + (item['_source'].get('score_aesthetics_2', 0.0)))) + 0.0000001)",
+    'neural_hybrid_switch_1+3':"(item['_switch_score'] * (((item['_source'].get('aesthetics', {}).get('score', 0.0)) * (item['_source'].get('score_aesthetics_3', 0.0))) / ((item['_source'].get('aesthetics', {}).get('score', 0.0)) + (item['_source'].get('score_aesthetics_3', 0.0))))) / (item.get('_switch_score', 0) * 1.0 + (((item['_source'].get('aesthetics', {}).get('score', 0.0)) * (item['_source'].get('score_aesthetics_3', 0.0))) / ((item['_source'].get('aesthetics', {}).get('score', 0.0)) + (item['_source'].get('score_aesthetics_3', 0.0)))) + 0.0000001)",
     'neural_hybrid_2':"""(item['_norm_score'] * item['_norm_neural_rel_score'] * item['_norm_aesthetics_score']) / ( item['_norm_score'] + item['_norm_neural_rel_score'] + item['_norm_aesthetics_score'] + 0.0000001)""",
     'neural_hybrid_3':"""(item['_total_rel'] * item['_norm_aesthetics_score']) / ( item['_total_rel'] + item['_norm_aesthetics_score'] + 0.0000001)""",
     'annotation_mode':'annotation_mode',
 }
 
+"""
+((item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) / 2.0)
+((item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) / 2.0)
 
+(item['_switch_score'] * (xx)) / (item.get('_switch_score', 0) * 1.0 + (yy) + 0.0000001)
+
+(item['_switch_score'] * (((item['_source'].get('aesthetics', {}).get('score', 0.0)) * (item['_source'].get('score_aesthetics_2', 0.0))) / ((item['_source'].get('aesthetics', {}).get('score', 0.0)) + (item['_source'].get('score_aesthetics_2', 0.0))))) / (item.get('_switch_score', 0) * 1.0 + (((item['_source'].get('aesthetics', {}).get('score', 0.0)) * (item['_source'].get('score_aesthetics_2', 0.0))) / ((item['_source'].get('aesthetics', {}).get('score', 0.0)) + (item['_source'].get('score_aesthetics_2', 0.0)))) + 0.0000001)
+
+=======
+
+
+
+"""
 import scipy.stats
 
 
@@ -118,7 +137,7 @@ class ReRankingBasic():
             
         if verbose:
             print ('RERANK_EQUATION', first_pass_eq_name, eq_name)
-        
+
         if eq_name in ranking_prebuilt_equations:
             eq = ranking_prebuilt_equations[eq_name]
         else:
@@ -147,7 +166,7 @@ class ReRankingBasic():
                items,
                is_debug_mode = False,
                skip_incomplete = False,
-               verbose = True,
+               verbose = False,
                **kw):
         """
         Re-rank items according to new score output by `self.eq`.
@@ -161,23 +180,24 @@ class ReRankingBasic():
 
         ## Switch point scores:
 
-        if not (self.eq_name or '').startswith('pure_'):
-            switch_point = 1.70
+        if True:
+            if not (self.eq_name or '').startswith('pure_'):
+                switch_point = 1.70
 
-            if not items:
-                maxtfidf = 1.0 ##TODO??
-            else:
-                max_tfidf = max([x['_score'] for x in items]) or 0.000000001
-            for c, item in enumerate(items):
-                if item['_neural_rel_score'] > switch_point:
-                    item['_switch_score'] = item['_neural_rel_score']
-                    if c < 10:
-                        print ('NO_SWITCH',item['_switch_score'])
+                if not items:
+                    maxtfidf = 1.0 ##TODO??
                 else:
-                    ## Gap puts all highly-relevant ahead of lower-relevant with good aesthetics:
-                    item['_switch_score'] = (item['_score'] or 0.0) * (switch_point / max_tfidf) - 0.2 
-                    if c < 10:
-                        print ('YES_SWITCH',item['_switch_score'], self.eq_name)
+                    max_tfidf = max([x['_score'] for x in items]) or 0.000000001
+                for c, item in enumerate(items):
+                    if item.get('_neural_rel_score',0.0) > switch_point:
+                        item['_switch_score'] = item['_neural_rel_score']
+                        if verbose and (c < 10):
+                            print ('NO_SWITCH',item['_switch_score'])
+                    else:
+                        ## Gap puts all highly-relevant ahead of lower-relevant with good aesthetics:
+                        item['_switch_score'] = (item['_score'] or 0.0) * (switch_point / max_tfidf) - 0.2 
+                        if verbose and (c < 10):
+                            print ('YES_SWITCH',item['_switch_score'], self.eq_name)
                 
         ## Skip incomplete
         if skip_incomplete:
@@ -185,16 +205,19 @@ class ReRankingBasic():
             rr = []
             for item in items:
                 if '_neural_rel_score' not in item:
-                    print 'NO_REL'
+                    if verbose:
+                        print 'NO_REL'
                     continue
                 if 'score' not in item['_source'].get('aesthetics',{}):
-                    print 'NO_SCORE'
+                    if verbose:
+                        print 'NO_SCORE'
                     continue
                 #if 'max_width' not in item['_source']:
                 #    continue
                 rr.append(item)
-            
-            print ('SKIP_INCOMPLETE',len(items), '->', len(rr))
+
+            if verbose:
+                print ('SKIP_INCOMPLETE',len(items), '->', len(rr))
             
             items = rr
             
@@ -225,6 +248,11 @@ class ReRankingBasic():
                     if item['_source']['source_dataset'] in ['500px', 'pexels']:
                         item['_source']['aesthetics']['score'] += 0.1
                         num_promoted += 1
+                        
+                    if item['_source']['source']['name'] == 'unsplash.com':
+                        #print ('--------BOOST_UNSPLASH')
+                        item['_source']['aesthetics']['score'] += 0.1
+                        #num_promoted += 1
                         
                     if item['_source']['source_dataset'] in ['dpla']:
                         item['_source']['aesthetics']['score'] -= 1.0
@@ -389,11 +417,15 @@ class ReRankingBasic():
         else:
             
             ## Normal mode:
+
+            if self.eq_name == 'neural_hybrid_switch':                
+                rr = [((item['_switch_score'] * ((item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) / 2.0)) / (item.get('_switch_score', 0) * 1.0 + ((item['_source'].get('aesthetics', {}).get('score', -1.0) + 1) / 2.0) + 0.0000001), item) for item in items]
             
-            for item in items:
-                self.aeval.symtable['item'] = item
-                new_score = self.aeval(self.eq)
-                rr.append((new_score, item))
+            else:
+                for item in items:
+                    self.aeval.symtable['item'] = item
+                    new_score = self.aeval(self.eq)
+                    rr.append((new_score, item))
 
         rrr = []
 

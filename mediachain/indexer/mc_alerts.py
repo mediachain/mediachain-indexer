@@ -40,10 +40,10 @@ class MCAlerts:
         if not channel:
             channel = '#labs-tech-alerts'
 
-        if not channel.startswith('#'):
+        if (not channel.startswith('#')) and (not channel.startswith('@')):
             channel = '#' + channel
-                        
-        assert channel.startswith('#')
+        
+        #assert channel.startswith('#')
         
         hh = {"text": message,
               "username": user_name,
@@ -52,7 +52,7 @@ class MCAlerts:
               }
 
         repr_hh = repr(hh)
-        
+                
         body = urllib.urlencode({'payload': json.dumps(hh)}).encode('utf8')
 
         print ('SENDING_ALERT', body)

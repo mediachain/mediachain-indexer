@@ -237,6 +237,7 @@ def lookup_cached_image(_id,
                         image_hash_sha256 = False,
                         image_cache_dir = mc_config.MC_IMAGE_CACHE_DIR,
                         image_cache_host = mc_config.MC_IMAGE_CACHE_HOST,
+                        cache_key = 'v=1'
                         ):
     """
     Retrieves latest cached version of this image.
@@ -272,7 +273,7 @@ def lookup_cached_image(_id,
         
         dr2 = dr1 + _id[:3] + '/'
         
-        fn_cache = dr2 + _id + '.jpg'
+        fn_cache = dr2 + _id + '.jpg?' + cache_key
 
         ## TODO: handle cache misses here?
         

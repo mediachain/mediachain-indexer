@@ -1900,6 +1900,7 @@ def apply_normalizer_for_simpleclient(iter_json,
 
 def apply_post_ingestion_normalizers(rr,
                                      schema_variant = 'old',
+                                     cache_key = 'v=1',
                                      ):
     """
     Post-ingestion normalizers that are applied last-moment at indexer query time.
@@ -2042,7 +2043,7 @@ def apply_post_ingestion_normalizers(rr,
             else:
                 ii['_source']['origin'] = None
             
-            ii['_source']['image_url'] = ii['_source']['url_direct_cache']['url']
+            ii['_source']['image_url'] = ii['_source']['url_direct_cache']['url'] + '?' + cache_key
 
             ## Blockchain getty stuff:
             
