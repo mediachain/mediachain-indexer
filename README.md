@@ -1,4 +1,6 @@
 
+[<img src="https://raw.githubusercontent.com/mediachain/mediachain-indexer/diagram_1.png">](https://raw.githubusercontent.com/mediachain/mediachain-indexer/diagram_1.png)
+
 ## Search and Dedupe for Mediachain
 
 Entry Point                 |  Info
