@@ -1,5 +1,5 @@
 
-[<img src="https://github.com/mediachain/mediachain-indexer/raw/master/diagram_1.png">](https://github.com/mediachain/mediachain-indexer/raw/master/diagram_1.png)
+[<img src="https://github.com/mediachain/mediachain-indexer/raw/master/diagram_2.png">](https://github.com/mediachain/mediachain-indexer/raw/master/diagram_2.png)
 
 ## Search and Dedupe for Mediachain
 
