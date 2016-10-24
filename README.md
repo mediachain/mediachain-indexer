@@ -20,7 +20,7 @@ mediachain-indexer-test     | Tests and sanity checks.
 - Customizing:
     - [Customizing and Plugins](https://github.com/mediachain/mediachain-indexer#customizing-and-plugins)
 - Internals:
-    - [System Diagram](https://github.com/mediachain/mediachain-indexer#system-diagram)
+    - [Detailed System Diagram](https://github.com/mediachain/mediachain-indexer#system-diagram)
 
 ## Getting Started
 
@@ -286,7 +286,7 @@ TODO: WIP.
 
 The selection of model components and hyper-parameters can be customized.
 Note that since the architecture has fixed, pre-defined connections between components,
-as shown in the [System Diagram](https://github.com/mediachain/mediachain-indexer#system-diagram),
+as shown in the [Detailed System Diagram](https://github.com/mediachain/mediachain-indexer#system-diagram),
 only the hyper-parameters to the components can be adjusted, not the connections between components.
 This should not be a major limitation in practice.
 
@@ -356,7 +356,7 @@ External plugins may also be passed, by specifying the full import path for the 
 Note that some plugins may require separate pre-training on external data sources before they can be used by the Indexer.
 
 
-## System Diagram
+## Detailed System Diagram
 
 Modes of operation -versus- components involved in each mode of operation. Components links:
 [Indexer](https://github.com/mediachain/mediachain-indexer),
