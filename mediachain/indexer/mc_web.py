@@ -556,7 +556,7 @@ from time import time
 
    
 def query_cache_lookup(key,
-                       max_age = 60 * 60 * 12, # 12 hours
+                       max_age = 60 * 60 * 24 * 7, # 7 days
                        query_cache_dir = mc_config.MC_QUERY_CACHE_DIR,
                        skip_query_cache = False,
                        allow_skip_query_cache = mc_config.MC_ALLOW_SKIP_QUERY_CACHE_INT,
@@ -1088,8 +1088,12 @@ def query_correct(query, order_model, num = 4, cutoff = 0.5):
         return []
 
     print ('NOT_FOUND_ALL',query_s, cand)
-    
-    rr = do_beam(cand, max_beam = num)
+
+    try:
+        rr = do_beam(cand, max_beam = num)
+    except Exception as e:
+        print ('BEAM_ERROR', e)
+        rr = []
 
     yy3 = []
     for xx,yy in rr:
@@ -1117,7 +1121,7 @@ class handle_search(BaseHandler):
         pass
     
     @tornado.gen.coroutine
-    def post(self):
+    def post(self, verbose = False):
         """
         Search for images.
         
@@ -1158,12 +1162,14 @@ class handle_search(BaseHandler):
         tt0 = time()
         
         d = self.request.body
-        
+
         if d.startswith('{'):
-            print ('OLD PARAMETERS FORMAT',d[:20])
-            
+            if verbose:
+                print ('OLD PARAMETERS FORMAT',d[:20])
+
         else:
-            print ('NEW PARAMETERS FORMAT',)
+            if verbose:
+                print ('NEW PARAMETERS FORMAT',)
             d = self.get_argument('json','{}')            
         
         data = json.loads(d)
@@ -1239,7 +1245,8 @@ class handle_search(BaseHandler):
             
         if DO_FORWARDING:
             forward_url = mc_config.MC_DO_FORWARDING_URL
-            print ('FORWARDING', len(d), '->', forward_url,'headers:',dict(self.request.headers))
+            if verbose:
+                print ('FORWARDING', len(d), '->', forward_url,'headers:',dict(self.request.headers))
             response = yield AsyncHTTPClient().fetch(forward_url,
                                                      method = 'POST',
                                                      connect_timeout = 30,
@@ -1250,7 +1257,8 @@ class handle_search(BaseHandler):
                                                      )
             d2 = response.body
             h2 = json.loads(d2)
-            print ('FORWARDING_RECEIVED', len(d2))
+            if verbose:
+                print ('FORWARDING_RECEIVED', len(d2))
             #self.write(d2)
             #self.finish()
             self.write_json(h2)
@@ -1270,7 +1278,7 @@ class handle_search(BaseHandler):
         
         #is_debug_mode = intget(self.get_cookie('debug')) or intget(data.get('debug')) or intget(self.get_argument('debug','0'))
         
-        print ('DEBUG_MODE?', is_debug_mode)
+        #print ('DEBUG_MODE?', is_debug_mode)
         
         ###
 
@@ -1361,8 +1369,8 @@ class handle_search(BaseHandler):
             else:
                 the_input[arg['name']] = data.get(arg['name'], the_default)
             
-            if arg['name'] == 'rerank_eq':
-                print ('---------DEBUG_MODE_RANKING', the_input[arg['name']])
+            #if arg['name'] == 'rerank_eq':
+            #    print ('---------DEBUG_MODE_RANKING', the_input[arg['name']])
                 
             ## For convenience:
             
@@ -1381,7 +1389,7 @@ class handle_search(BaseHandler):
         the_input['index_name'] = data.get('index_name', mc_config.MC_INDEX_NAME)
         the_input['doc_type'] = data.get('doc_type', mc_config.MC_DOC_TYPE)
         the_input['include_thumb'] = False
-        the_input['full_limit'] = 500
+        the_input['full_limit'] = 1000
         
         
         ## TODO: need multiple image upload support?:
@@ -1416,7 +1424,8 @@ class handle_search(BaseHandler):
             if the_input['q_text'] and (get_remote_search is not False):
                 t1 = time()
                 remote_ids = get_remote_search(the_input['q_text'])
-                print ('REMOTE_IDS','time:',time()-t1,len(remote_ids))
+                if verbose:
+                    print ('REMOTE_IDS','time:',time()-t1,len(remote_ids))
 
         ## Neural reverse image search by image / text / id:
 
@@ -1445,7 +1454,10 @@ class handle_search(BaseHandler):
             self.write_json({'ids':rr})
             return
 
+        q_text_orig = ''
+        
         if the_input['q_text']:
+            q_text_orig = the_input['q_text'].strip()
             the_input['q_text'] = the_input['q_text'].replace('search_id:', 'related:')
         
         if (the_input['q_text'] or '').startswith('related:'):
@@ -1492,7 +1504,8 @@ class handle_search(BaseHandler):
 
         query_args['debug'] = intget(self.get_cookie('debug')) or intget(data.get('debug')) or intget(self.get_argument('debug','0'))
 
-        print ('QUERY_ARGS',query_args)
+        if verbose:
+            print ('QUERY_ARGS',query_args)
         
         ## ignore those with default args:
         for k,v in query_args.items():
@@ -1521,11 +1534,13 @@ class handle_search(BaseHandler):
         if rr is not False:
             
             # [u'query_info', u'results_count', u'results', 'cache_hit']
-            print ('QUERY_CACHE_LOOKUP', rr.keys())#['query_info']['query_args'])
+            if verbose:
+                print ('QUERY_CACHE_LOOKUP', rr.keys())#['query_info']['query_args'])
             #return
             #raw_input()
 
-            print ('CACHE_OR_TOKEN_HIT_QUERY','offset:', the_input['offset'], 'limit:', the_input['limit'], 'len(results)',len(rr['results']))
+            if verbose:
+                print ('CACHE_OR_TOKEN_HIT_QUERY','offset:', the_input['offset'], 'limit:', the_input['limit'], 'len(results)',len(rr['results']))
             
             
             results_count = len(rr['results'])
@@ -1555,8 +1570,9 @@ class handle_search(BaseHandler):
 
             #assert (the_input['q_text'] or the_input['q_id'] or q_id_file or the_input['canonical_id']), ('NO QUERY?', the_input)
             #assert (rr['query_info']['query_args']['q_text'] or rr['query_info']['query_args']['q_id'] or q_id_file or rr['query_info']['query_args']['canonical_id']), ('NO QUERY?', rr['query_info']['query_args'])
-            
-            print ('TOP_LEVEL_KEYS_1',rr.keys(), rr['query_info']['query_args'].get('q'))
+
+            if verbose:
+                print ('TOP_LEVEL_KEYS_1',rr.keys(), rr['query_info']['query_args'].get('q'))
             self.write_json(rr,
                             pretty = the_input['pretty'],
                             max_indent_depth = data.get('max_indent_depth', False),
@@ -1564,7 +1580,7 @@ class handle_search(BaseHandler):
             
             return
 
-        if rr:
+        if verbose and rr:
             print ('ZZZ',rr['query_info'])
         
             #assert (rr['query_info']['query_args']['q_text'] or rr['query_info']['query_args']['q_id'] or q_id_file or rr['query_info']['query_args']['canonical_id']), ('NO QUERY?', rr['query_info']['query_args'])
@@ -1616,7 +1632,8 @@ class handle_search(BaseHandler):
 
             rr['query_info'] = {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
 
-            print ('TOP_LEVEL_KEYS_2',rr.keys(), rr['query_info']['query_args'].get('q'))
+            if verbose:
+                print ('TOP_LEVEL_KEYS_2',rr.keys(), rr['query_info']['query_args'].get('q'))
             self.write_json(rr)
             return
 
@@ -1633,8 +1650,9 @@ class handle_search(BaseHandler):
             
             if the_input['canonical_id']:
                 ## Search by canonical_id:
-                
-                print ('CANONICAL_ID_SEARCH', the_input['canonical_id'])
+
+                if verbose:
+                    print ('CANONICAL_ID_SEARCH', the_input['canonical_id'])
                 
                 query = {"query": {"constant_score": {"filter": {"term": {"canonical_id": the_input['canonical_id']}}}}}
             
@@ -1644,7 +1662,8 @@ class handle_search(BaseHandler):
                 #Note that this is similar to `/dupe_lookup` with `include_docs` = True:
                 
                 if True:
-                    print ('NEURAL-CONTENT-BASED-SEARCH',)
+                    if verbose:
+                        print ('NEURAL-CONTENT-BASED-SEARCH',)
 
                     rr = reverse_image_lookup_index(q_image_bytes = q_id_file,
                                                     #num_k = the_input['limit'],
@@ -1655,26 +1674,31 @@ class handle_search(BaseHandler):
                     remote_ids = rr
                     
                 else:
-                    print ('OLD-CONTENT-BASED-SEARCH',)
+                    if verbose:
+                        print ('OLD-CONTENT-BASED-SEARCH',)
                     
                     model = mc_models.VECTORS_MODEL_NAMES['baseline']()
 
                     if the_input['q_id'] and  (the_input['q_id'].startswith(data_pat) or the_input['q_id'].startswith(data_pat_2)):
-                        print ('GOT_DATA_URI')
+                        if verbose:
+                            print ('GOT_DATA_URI')
                         terms = model.img_to_terms(img_data_uri = the_input['q_id'])
                     else:
-                        print ('GOT_RAW_BYTES')
+                        if verbose:
+                            print ('GOT_RAW_BYTES')
                         assert q_id_file
                         terms = model.img_to_terms(img_bytes = q_id_file)
 
-                    print ('TERMS',repr(terms)[:100])
+                    if verbose:
+                        print ('TERMS',repr(terms)[:100])
 
 
                     rr = yield self.es.search(index = the_input['index_name'],
                                               type = the_input['doc_type'],
                                               source = {"query": {"constant_score":{"filter":{"term": terms}}}},
                                               )
-                    print ('GOT_Q_ID_FILE_OR_Q_ID',repr(rr.body)[:100])
+                    if verbose:
+                        print ('GOT_Q_ID_FILE_OR_Q_ID',repr(rr.body)[:100])
 
                     try:
                         rr = json.loads(rr.body)
@@ -1702,8 +1726,9 @@ class handle_search(BaseHandler):
                 #ID-based search:
                 
                 is_id_search = True
-                
-                print ('ID-BASED-SEARCH', the_input['q_id'])
+
+                if verbose:
+                    print ('ID-BASED-SEARCH', the_input['q_id'])
                 query = {"query":{ "ids": { "values": [ the_input['q_id'] ] } } }
         
         
@@ -1723,13 +1748,18 @@ class handle_search(BaseHandler):
             #                   },
             #         }
 
+            if the_input['rerank_eq'] == 'neural_hybrid_switch_old':
+                factor_field = "aesthetics.score"
+            else:
+                factor_field = "score_global"
+                
             query ={"query": {"function_score": {"query": {"multi_match": {"query":    the_q_text,
                                                                            "fields": [ "*" ],
                                                                            "type":     "cross_fields",
                                                                            "minimum_should_match": "100%",
                                                                            },
                                                            },
-                                                 "functions": [{"field_value_factor": {"field": "aesthetics.score",
+                                                 "functions": [{"field_value_factor": {"field": factor_field,
                                                                                        "missing":0.1,
                                                                                        }
                                                                 }]
@@ -1737,9 +1767,18 @@ class handle_search(BaseHandler):
                               },
                     }
 
-            if the_input['filter_sources'] and ('ALL' not in the_input['filter_sources']) and (not is_id_search) and (not neural_vectors_mode):
+            if (len(q_text_orig) == 32) and (not set(q_text_orig).difference('0123456789abcdef')):
+
+                ## Auto-detect ID search:
                 
-                print ('FILTER_SOURCES', the_input['filter_sources'])
+                query = {"query":{ "ids": { "values": [q_text_orig] } },
+                         "size": 50,
+                         }
+            
+            elif the_input['filter_sources'] and ('ALL' not in the_input['filter_sources']) and (not is_id_search) and (not neural_vectors_mode):
+
+                if verbose:
+                    print ('FILTER_SOURCES', the_input['filter_sources'])
                 
                 assert isinstance(the_input['filter_sources'], basestring)
 
@@ -1754,9 +1793,14 @@ class handle_search(BaseHandler):
                               }]
                 
                 inner_part += [{"term": {"source_dataset": the_input['filter_sources']}}]
+
+                if the_input['rerank_eq'] == 'neural_hybrid_switch_old':
+                    factor_field = "aesthetics.score"
+                else:
+                    factor_field = "score_global"
                 
                 query = {"query": {"function_score": {"query": {"constant_score": {"filter": {"bool": {"must":inner_part}}}},
-                                                      "functions": [{"field_value_factor": {"field": "aesthetics.score",
+                                                      "functions": [{"field_value_factor": {"field": factor_field,
                                                                                             "missing":0.1,
                                                                                             }
                                                                 }]
@@ -1773,53 +1817,76 @@ class handle_search(BaseHandler):
         #assert remote_ids,remote_ids
         if remote_ids:
             t1 = time()
-            
-            rr = yield self.es.search(index = the_input['index_name'],
-                                      type = the_input['doc_type'],
-                                      source = {"query":{ "ids": { "values": remote_ids } },
-                                                "size": 50,
-                                                },
-                                      )
-            
-            print ('GOT','time:',time() - t1,repr(rr.body)[:100])
-            
-            hh = False
-            
-            try:
-                hh = json.loads(rr.body)
-            except KeyboardInterrupt:
-                raise
-            except Exception as e:
-                #print ('BAD_BODY',rr)
-                #self.set_status(500)
-                self.write_json({'error':'ELASTICSEARCH_JSON_ERROR_REMOTE_IDS',
-                                 'error_message':'Elasticsearch down or timeout? - remote_ids ' + repr(rr.body)[:1000],
-                                 })
-                return
 
-            if 'error' in hh:
-                #self.set_status(500)
-                self.write_json({'error':'ELASTICSEARCH_ERROR',
-                                 'error_message':repr(hh)[:1000],
-                                 })
-                return
+            rrr = []
+            remote_hits = []
+            
+            for ccc in xrange(10):
 
+                if verbose:
+                    print ('LOOP_REMOTE_HITS', ccc)
+                
+                xx_remote_ids = remote_ids[ccc * 50:(ccc + 1) * 50]
 
-            remote_hits = hh['hits']['hits']
+                if not xx_remote_ids:
+                    break
+                
+                rr = yield self.es.search(index = the_input['index_name'],
+                                          type = the_input['doc_type'],
+                                          source = {"query":{ "ids": { "values": xx_remote_ids } },
+                                                    "size": 50,
+                                                    },
+                                          )
+                if verbose:
+                    print ('GOT','time:',time() - t1,repr(rr.body)[:100])
 
-            print ('GOT_REMOTE_HITS',len(remote_ids), '->', len(remote_hits), [x['_id'] for x in remote_hits[:10]])
+                hh = False
+
+                try:
+                    hh = json.loads(rr.body)
+                except KeyboardInterrupt:
+                    raise
+                except Exception as e:
+                    #print ('BAD_BODY',rr)
+                    #self.set_status(500)
+                    self.write_json({'error':'ELASTICSEARCH_JSON_ERROR_REMOTE_IDS',
+                                     'error_message':'Elasticsearch down or timeout? - remote_ids ' + repr(rr.body)[:1000],
+                                     })
+                    return
+
+                if 'error' in hh:
+                    #self.set_status(500)
+                    self.write_json({'error':'ELASTICSEARCH_ERROR',
+                                     'error_message':repr(hh)[:1000],
+                                     })
+                    return
+
+                if verbose:
+                    print ('GOT_REMOTE_HITS', len(hh['hits']['hits']))
+
+                if hh['hits']['hits']:
+                    remote_hits.extend(hh['hits']['hits'])
+            
+
+            if verbose:
+                print ('GOT_REMOTE_HITS',len(remote_ids), '->', len(remote_hits), [x['_id'] for x in remote_hits[:10]])
 
             ## Fix ordering...:
+
+            remote_hits = [x for x in remote_hits if x]
+            
+            #print ('REMOTE_IDS', remote_ids)
             
             tmp = {x['_id']:x for x in remote_hits}
             r2 = []
             for xx in remote_ids:
                 aa = tmp.get(xx)
-                if aa is not False:
+                if (aa is not False) and (aa is not None):
                     r2.append(aa)
             remote_hits = r2
             
             for xx in remote_hits:
+                #print ('RHIT', xx)
                 xx['_score'] = 10.0
                 xx['_source']['boosted'] = 1
                 
@@ -1885,15 +1952,17 @@ class handle_search(BaseHandler):
 
                 for ii in xann_hits:
                     ii['_score'] *= 0.1
-                
-                print ('XANN_GOT','time:',time() - t1, repr(rr.body)[:100])
+
+                if verbose:
+                    print ('XANN_GOT','time:',time() - t1, repr(rr.body)[:100])
                 
                 
         query['from'] = the_input['offset']
         query['size'] = the_input['full_limit']
         query['timeout'] = '5s'   ## TODO - RETURNS PARTIALLY ACCUMULATED HITS WHEN TIMEOUT OCCURS
-        
-        print ('QUERY',query)
+
+        if verbose:
+            print ('QUERY',query)
 
         if neural_vectors_mode or q_id_file:
             rr = []
@@ -1905,7 +1974,8 @@ class handle_search(BaseHandler):
                                       source = query,
                                       )
 
-            print ('GOT','time:',time() - t1, repr(rr.body)[:100])
+            if verbose:
+                print ('GOT','time:',time() - t1, repr(rr.body)[:100])
 
             hh = False
 
@@ -1928,7 +1998,8 @@ class handle_search(BaseHandler):
                 return
 
             rr = hh['hits']['hits']
-
+            
+            
         if neural_vectors_mode or q_id_file:
             rr = remote_hits
         elif the_input['exclusive_to_ann']:
@@ -1940,7 +2011,7 @@ class handle_search(BaseHandler):
         
         ## NSFW filtering:
 
-        if (not is_id_search) and (not neural_vectors_mode):
+        if (not is_id_search):# and (not neural_vectors_mode):
             if not the_input['allow_nsfw']:
 
                 r2 = []
@@ -2006,9 +2077,11 @@ class handle_search(BaseHandler):
             
                 ii['debug_info']['native_id'] = ii['_source'].get('native_id', False)                
                 ii['debug_info']['width'] = ii['_source'].get('sizes') and ii['_source'].get('sizes')[0].get('width', False)
-            print ('YES_DEBUG', is_debug_mode)
+            if verbose:
+                print ('YES_DEBUG', is_debug_mode)
         else:
-            print ('NO_DEBUG', is_debug_mode)
+            if verbose:
+                print ('NO_DEBUG', is_debug_mode)
                 
 
         ## Add in frontend image cached preview images:
@@ -2041,7 +2114,8 @@ class handle_search(BaseHandler):
                 except KeyboardInterrupt:
                     raise
                 except:
-                    print ('ENRICH_TAGS_FAILED - API KEYS?',)
+                    if verbose:
+                        print ('ENRICH_TAGS_FAILED - API KEYS?',)
                 
                 if not ii['_source'].get('keywords'):
                     ii['_source']['keywords'] = []
@@ -2077,18 +2151,21 @@ class handle_search(BaseHandler):
         for ii in rr:
             for k,v in frontend_required:
                 if k not in ii['_source']:
-                    print ('ADDED_FOR_FRONTEND',k,'=',v)
+                    if verbose:
+                        print ('ADDED_FOR_FRONTEND',k,'=',v)
                     ii['_source'][k] = v
         
 
         ## Filter to only those exclusive to ann:
                     
         if the_input['exclusive_to_ann']:
-            print ('EXCLUSIVE_TO_ANN', len(rr))
+            if verbose:
+                print ('EXCLUSIVE_TO_ANN', len(rr))
             
             ann_tags = set(x.replace('xann','') for x in the_input['q_text'].split() if x.startswith('xann'))
 
-            print ('ANN_TAGS', ann_tags)
+            if verbose:
+                print ('ANN_TAGS', ann_tags)
             
             r2 = []
             for ii in rr:
@@ -2150,14 +2227,15 @@ class handle_search(BaseHandler):
                 ii['_source']['artist_name_orig'] = ii['_source']['artist_name'] ## Back this up
 
             rrm = ReRankingBasic(eq_name = the_input['rerank_eq'])
-            rr = rrm.rerank(rr, is_debug_mode)
+            rr = rrm.rerank(q_text_orig, rr, is_debug_mode)
 
 
         ## Diversity penalty:
 
         if (the_input['rerank_eq'] != 'annotation_mode') and (not is_id_search) and (not neural_vectors_mode) and (not q_id_file):
-            
-            print ('------DIVERSITY_PENALTY',the_input['rerank_eq'])
+
+            if verbose:
+                print ('------DIVERSITY_PENALTY',the_input['rerank_eq'])
             
             seen_artists = Counter()
             r2 = []
@@ -2165,7 +2243,7 @@ class handle_search(BaseHandler):
                 xx = ii['_source']['artist_name_orig']
                 if xx in seen_artists:
                     #print ('DIVERSITY_PENALTY', cc, xx)
-                    ii['_score'] *=  (0.5 ** seen_artists[xx])
+                    ii['_score'] *=  (0.0000001 ** seen_artists[xx])
                 if xx and ('simply mad' in xx.lower()):
                     #print ('FOUND BAD',xx, ii['_score'])
                     ii['_score'] *=  0.001
@@ -2198,8 +2276,11 @@ class handle_search(BaseHandler):
                 #    yy.append(nm + (': %.3f' % ii.get(kk,-100)))
 
                 yy = []
-                for kk,vv in [('tfidf', ii.get('_score',False)),
+                for kk,vv in [('score', ii.get('_score',False)),
+                              ('tfidf', ii.get('score_old',False)),
+                              ('ss', ii.get('_switch_score',False)),
                               ('n', ii.get('_neural_rel_score',False)),
+                              ('g', ii['_source'].get('score_global',False)),
                               ('a1', ii.get('_aesthetics_score',False)),
                               ('a2', ii['_source'].get('score_aesthetics_2',False)),
                               ('a3', ii['_source'].get('score_aesthetics_3',False)),
@@ -2229,6 +2310,11 @@ class handle_search(BaseHandler):
                     else:
                         ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u" n=\u2718"
                     
+                    if ('_switch_score' in ii):
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') + (u" ss=%.3f" % ii['_switch_score'])
+                    else:
+                        ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u" ss=\u2718"
+                    
                     if ('score_aesthetics_2' in ii['_source']) and (ii['_source']['score_aesthetics_2'] is not False):
                         ii['_source']['artist_name'] = (ii['_source']['artist_name'] or '') +  u" a2=\u2713"
                     else:
@@ -2256,9 +2342,12 @@ class handle_search(BaseHandler):
         if isinstance(the_input['filter_sources'], basestring):
             the_input['filter_sources'] = [the_input['filter_sources']]
 
-        print ('filter_licenses_in',the_input['filter_licenses'])
+        if verbose:
+            print ('filter_licenses_in',the_input['filter_licenses'])
         
         if the_input['filter_licenses'] and ('ALL' not in the_input['filter_licenses']) and (not is_id_search) and (not neural_vectors_mode) and (not q_id_file):
+
+            dl = Counter()
             
             filter_licenses_s = set(the_input['filter_licenses'])
             r2 = []
@@ -2278,11 +2367,15 @@ class handle_search(BaseHandler):
                 ## ANY match:
                 if filter_licenses_s.intersection(ii['_source'].get('license_tags',[])):
                     r2.append(ii)
-            
-            print ('FILTER_LICENSES', the_input['filter_licenses'], len(rr),'->',len(r2))
+                else:
+                    dl[ii['_source']['source']['name']] += 1
+
+            if verbose:
+                print ('FILTER_LICENSES', the_input['filter_licenses'], len(rr),'->',len(r2), dl.most_common())
             rr = r2
 
-        print ('filter_sources_in',the_input['filter_sources'])
+        if verbose:
+            print ('filter_sources_in',the_input['filter_sources'])
 
         if False: #the_input['filter_sources'] and ('ALL' not in the_input['filter_sources']) and (not is_id_search):
             filter_sources_s = set(the_input['filter_sources'])
@@ -2290,8 +2383,8 @@ class handle_search(BaseHandler):
             for ii in rr:
                 if filter_sources_s.intersection(ii['_source'].get('source_tags',[])):
                     r2.append(ii)
-            
-            print ('FILTER_SOURCES', the_input['filter_sources'], len(rr),'->',len(r2))
+            if verbose:
+                print ('FILTER_SOURCES', the_input['filter_sources'], len(rr),'->',len(r2))
             rr = r2
         
         
@@ -2329,7 +2422,8 @@ class handle_search(BaseHandler):
             rct += the_query_seg
 
 
-        print ('HITS_G', len(rr))
+        if verbose:
+            print ('HITS_G', len(rr))
         
         rr = {'results':rr,
               'results_count':rct,
@@ -2376,7 +2470,8 @@ class handle_search(BaseHandler):
 
         #rr['query_info'] = {'query_args':query_args, 'query_time':int(tt0), 'query_elapsed_ms': int((time() - tt0) * 1000)}
 
-        print ('TOP_LEVEL_KEYS_3',rr.keys(), rr['query_info']['query_args'].get('q'))
+        if verbose:
+            print ('TOP_LEVEL_KEYS_3',rr.keys(), rr['query_info']['query_args'].get('q'))
         self.write_json(rr,
                         pretty = the_input['pretty'],
                         max_indent_depth = data.get('max_indent_depth', False),
@@ -2417,7 +2512,7 @@ class handle_random_query(BaseHandler):
         user_id = self.get_argument('user_id', False)
         
         if False:#user_id:
-
+            
             print ('YES_USER_ID', user_id)
             
             fn = '/datasets/datasets/annotate/search_relevance_002/phase002_2-way.json'# % user_id

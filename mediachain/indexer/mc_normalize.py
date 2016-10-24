@@ -2063,7 +2063,16 @@ def apply_post_ingestion_normalizers(rr,
         if ii['_source'].get('sizes') and len(ii['_source'].get('sizes')):
             ii['_source']['max_width'] = max([x.get('width',0) for x in ii['_source']['sizes']])
 
-
+    """
+    flickr: QmZ6dckUhRouVr6AsBTpK6vMLVpcz1KAeJAJVQEZQ5gCek
+    everything else: QmeiY2eHMwK92Zt6X4kUUC3MsjMmVb2VnGZ17DhnhRPCEQ
+    """
+    for ii in rr:
+        if ii['_source']['source_dataset'] == 'flickr100mm':
+            ii['_source']['node_id'] = 'QmZ6dckUhRouVr6AsBTpK6vMLVpcz1KAeJAJVQEZQ5gCek'
+        else:
+            ii['_source']['node_id'] = 'QmeiY2eHMwK92Zt6X4kUUC3MsjMmVb2VnGZ17DhnhRPCEQ'
+            
     
 def dump_normalized_schemas(dir_in = '/datasets/datasets/compactsplit/',
                             fn_out = '/datasets/datasets/schemas_normalized.js',

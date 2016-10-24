@@ -15,4 +15,11 @@ mediachain-client>=0.1.14
 asteval==0.9.7
 ujson==1.33
 editdistance==0.3.1
-lmdb
+lmdb==0.89
+annoy==1.8.0
+Theano==0.9.0.dev1
+scikit-image==0.12.3
+scipy=0.17.1
+caffe=1.0.0-rc3
+scandir==1.3
+tensorflow==0.10.0rc0

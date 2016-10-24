@@ -26,9 +26,11 @@ class MCAlerts:
                            user_name = "bot-image-search",
                            channel = mc_config.MC_SLACK_CHANNEL,
                            slack_webhook_url = mc_config.MC_SLACK_WEBHOOK,
+                           verbose = False,
                            ):
-        
-        print ('PREPARING_ALERT', slack_webhook_url, '->', channel)
+
+        if verbose:
+            print ('PREPARING_ALERT', slack_webhook_url, '->', channel)
 
         alert_key = json.dumps(alert_key, sort_keys=True)
 
@@ -52,7 +54,8 @@ class MCAlerts:
               }
 
         repr_hh = repr(hh)
-                
+        
+        
         body = urllib.urlencode({'payload': json.dumps(hh)}).encode('utf8')
 
         print ('SENDING_ALERT', body)
