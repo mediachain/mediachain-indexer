@@ -14,7 +14,7 @@ mediachain-indexer-test     | Tests and sanity checks.
 
 ## Links
 
-    - [Install](https://github.com/mediachain/mediachain-indexer/INSTALL.md)
-    - [API Docs](http://mediachainlabs-api-docs.s3-website-us-east-1.amazonaws.com/)
-    - [Live API Demo](http://images.mediachain.io)
-    - [Live Frontend Demo](http://images.mediachain.io)
+- [Install](https://github.com/mediachain/mediachain-indexer/INSTALL.md)
+- [API Docs](http://mediachainlabs-api-docs.s3-website-us-east-1.amazonaws.com/)
+- [Live API Demo](http://images.mediachain.io)
+- [Live Frontend Demo](http://images.mediachain.io)
