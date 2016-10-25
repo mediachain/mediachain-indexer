@@ -1,5 +1,5 @@
 
-[<img src="https://github.com/mediachain/mediachain-indexer/raw/master/diagram_2.png">](https://github.com/mediachain/mediachain-indexer/raw/master/diagram_2.png)
+[<img src="https://github.com/mediachain/mediachain-indexer/raw/master/images_gh/diagram_2.png">](https://github.com/mediachain/mediachain-indexer/raw/master/images_gh/diagram_2.png)
 
 ## Search & Attribution for Mediachain
 
@@ -16,14 +16,14 @@ Mediachain Indexer Core uses state of the art ML to provide high-quality image s
 ### Aesthetics quality
 
 Mediachain neural aesthetics model predictions for high (top) and low (bottom) image aesthetics:
-![](http://imgur.com/oypH5hr.png)
-![](http://imgur.com/NEYWyiK.png)
+![](https://github.com/mediachain/mediachain-indexer/raw/master/images_gh/160819-0007.png)
+![](https://github.com/mediachain/mediachain-indexer/raw/master/images_gh/160819-0008.png)
 
 Achieving a human-like sense of aesthetics in a computer model is a major challenge. The Mediachain Search API achieves this using the latest end-to-end supervised trained deep neural networks. These aesthetics models are key to maintaining high search results quality while taking advantage of the huge un-curated Creative Commons resources, which have a lower typical image quality than much smaller curated collections.
 
-![](http://imgur.com/OhyIF9N.png)
-![](http://imgur.com/2PzKgN2.png)
-![](http://imgur.com/w6YrLQV.png)
+![](https://github.com/mediachain/mediachain-indexer/raw/master/images_gh/160819-0002.png)
+![](https://github.com/mediachain/mediachain-indexer/raw/master/images_gh/160819-0001.png)
+![](https://github.com/mediachain/mediachain-indexer/raw/master/images_gh/160819-0003.png)
 
 
 ### Query Relevance
