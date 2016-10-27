@@ -604,6 +604,8 @@ def query_cache_save(key,
     Simple file-based cache.
     """
 
+    from random import randint
+    
     #assert hh['query_info']['query_args'].get('q'), hh['query_info']['query_args'].keys()
     
     dir_out_2 = join(query_cache_dir,
@@ -622,11 +624,13 @@ def query_cache_save(key,
     rh = {'data':hh,
           'time':int(time()),
           }
-        
-    with open(fn_out + '.temp', 'w') as f:
-        f.write(json.dumps(rh))
+
+    fn_out_temp = fn_out + '.temp' + str(randint(1,10000000))
     
-    rename(fn_out + '.temp',
+    with open(fn_out_temp, 'w') as f:
+        f.write(json.dumps(rh))
+
+    rename(fn_out_temp,
            fn_out,
            )
 
@@ -1823,8 +1827,7 @@ class handle_search(BaseHandler):
             
             for ccc in xrange(10):
 
-                if verbose:
-                    print ('LOOP_REMOTE_HITS', ccc)
+                print ('LOOP_REMOTE_HITS', ccc)
                 
                 xx_remote_ids = remote_ids[ccc * 50:(ccc + 1) * 50]
 
@@ -1837,8 +1840,7 @@ class handle_search(BaseHandler):
                                                     "size": 50,
                                                     },
                                           )
-                if verbose:
-                    print ('GOT','time:',time() - t1,repr(rr.body)[:100])
+                #print ('GOT_REMOTE_HITS','time:',time() - t1,repr(rr.body)[:100])
 
                 hh = False
 
@@ -1861,8 +1863,7 @@ class handle_search(BaseHandler):
                                      })
                     return
 
-                if verbose:
-                    print ('GOT_REMOTE_HITS', len(hh['hits']['hits']))
+                print ('GOT_REMOTE_HITS', time() - t1, len(hh['hits']['hits']))
 
                 if hh['hits']['hits']:
                     remote_hits.extend(hh['hits']['hits'])
